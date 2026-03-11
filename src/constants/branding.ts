@@ -3,7 +3,7 @@
  */
 export const SIDEBAR_HEADER = {
   /** 公司／產品名稱 */
-  companyName: 'Construction Dashboard',
+  companyName: 'Construction Inc.',
   /** 副標（例如：Dashboard template） */
   tagline: '工程儀表板',
   /**

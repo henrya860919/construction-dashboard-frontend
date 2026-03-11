@@ -2,6 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import StateCard from '@/components/dashboard/StateCard.vue'
+import TimeDisplay from '@/components/dashboard/TimeDisplay.vue'
 import AlertCard from '@/components/dashboard/AlertCard.vue'
 import AnimatedNumber from '@/components/common/AnimatedNumber.vue'
 import { useDashboardKpi } from '@/composables/useDashboardKpi'
@@ -14,9 +15,12 @@ const { alerts } = useDashboardAlerts()
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-xl font-semibold text-foreground">儀表板</h1>
+    <header class="flex flex-wrap items-center justify-between gap-4">
+      <h1 class="text-xl font-semibold text-foreground">儀表板</h1>
+      <TimeDisplay />
+    </header>
 
-    <!-- KPI 三卡：第二張圖風格（簡潔、圖示 + 數值 + 標籤 + 變化說明） -->
+    <!-- KPI 三卡 -->
     <section class="grid gap-4 md:grid-cols-3">
       <StateCard title="累計天數">
         <template #icon>

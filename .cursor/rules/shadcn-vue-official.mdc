@@ -1,0 +1,26 @@
+---
+description: shadcn-vue 元件一律依官網規範，用 CLI 加入／覆寫
+alwaysApply: true
+---
+
+# shadcn-vue 與官網規範一致
+
+## 新增元件
+
+- **一律用 CLI**：`npx shadcn-vue@latest add <元件名>`
+- 不要手動複製貼上或改寫 `src/components/ui/*` 的 CVA variants、size 規格，以免與官網不一致
+
+## 已存在元件要對齊官網
+
+- 執行：`npx shadcn-vue@latest add <元件名> --overwrite`
+- 會用 registry 最新版覆寫該元件的 index.ts / *.vue，規格與官網一致
+
+## 不該改的內容
+
+- `*/*/index.ts` 裡的 `buttonVariants`、`inputVariants` 等 CVA 的 **base 字串、variants、defaultVariants** 不要手動改
+- 若覺得尺寸或樣式不對，先查 [shadcn-vue 官網](https://www.shadcn-vue.com/docs/components) 該元件說明，再考慮用 `--overwrite` 重新拉官網版
+
+## 可改的內容
+
+- 頁面或業務元件內用 `class` 覆蓋單一實例樣式
+- 主題變數在 `src/assets/main.css` 的 `:root` / `@theme`（不影響元件結構）

@@ -1,0 +1,28 @@
+---
+description: 前端呼叫 API 的格式與錯誤處理約定
+alwaysApply: true
+---
+
+# API 契約（前端視角）
+
+## 請求
+
+- Base URL: 從 `import.meta.env.VITE_API_URL` 讀取
+- 認證: 所有需登入的請求帶 Header `Authorization: Bearer <accessToken>`
+- Content-Type: `application/json`（body 為 JSON 時）
+
+## 成功回應
+
+- 結構: `{ data, meta? }`
+- 取資料用 `response.data.data`，分頁等用 `response.data.meta`
+
+## 錯誤回應
+
+- 結構: `{ error: { code: string, message: string } }`
+- 顯示錯誤訊息用 `error.message`，依 `error.code` 做分支（如 401 導向登入）
+- HTTP 401: token 過期或無效 → 清除 token、導向登入頁或觸發 refresh
+
+## 前端職責
+
+- 呼叫前不重複造輪，使用專案內統一的 API client（axios/fetch 封裝）
+- 統一在 client 處理 401、網路錯誤，避免每個呼叫點重複寫

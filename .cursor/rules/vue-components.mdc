@@ -1,0 +1,38 @@
+---
+description: Vue 3 元件與 shadcn-vue 使用約定
+globs: "**/*.vue"
+alwaysApply: false
+---
+
+# Vue 元件規範
+
+## 基本
+
+- 使用 `<script setup>` + Composition API
+- 元件名: PascalCase；檔名與專案約定一致（PascalCase 或 kebab-case）
+
+## Props / Emits
+
+- 使用 `defineProps`、`defineEmits`，必要時搭配 TypeScript 型別
+- Props 盡量明確型別，避免 `as any`
+
+## UI 元件（shadcn-vue）
+
+- 優先使用 shadcn-vue 元件，不重複造輪
+- **一律用 CLI 加入**：`npx shadcn-vue@latest add <元件名>`，以符合官網規格（見 shadcn-vue-official.mdc）
+- 自訂樣式與 shadcn-vue 變數/主題一致，保持視覺統一
+
+## 範例結構
+
+```vue
+<script setup lang="ts">
+defineProps<{ title: string }>()
+const emit = defineEmits<{ submit: [] }>()
+</script>
+
+<template>
+  <div>
+    <!-- 使用 shadcn-vue 元件 -->
+  </div>
+</template>
+```

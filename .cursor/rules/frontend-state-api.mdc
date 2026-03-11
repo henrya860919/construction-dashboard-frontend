@@ -1,0 +1,23 @@
+---
+description: Pinia stores 與 API client 約定
+globs: "**/*.ts"
+alwaysApply: false
+---
+
+# 狀態與 API（前端）
+
+## API Client
+
+- 單一 axios（或 fetch）instance，baseURL: `import.meta.env.VITE_API_URL`
+- 請求攔截: 從 Pinia 或 localStorage 讀取 token，寫入 `Authorization: Bearer <token>`
+- 回應攔截: 401 時清除 token 並導向登入（或觸發 refresh），其他錯誤統一轉成 `{ error: { code, message } }` 給上層
+
+## Pinia
+
+- 使用者、登入狀態、可選的「當前專案/工地」等放 store
+- 儀表板篩選、列表分頁等可放 store 或 component state，專案內統一即可
+- Store 內呼叫 API 時使用上述 API client，不直接寫 fetch URL
+
+## 環境變數
+
+- 僅使用 `VITE_*`，勿在前端程式碼引用非 VITE_ 的 env（不會暴露）

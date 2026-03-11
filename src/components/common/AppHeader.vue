@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Menu, User, Bell } from 'lucide-vue-next'
+import { Menu, User, Bell, Sun, Moon } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -11,8 +11,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useSidebarStore } from '@/stores/sidebar'
+import { useThemeStore } from '@/stores/theme'
 
 const sidebarStore = useSidebarStore()
+const themeStore = useThemeStore()
 
 const props = withDefaults(
   defineProps<{ isMobile?: boolean }>(),
@@ -46,6 +48,15 @@ function handleMenuClick() {
       <span class="truncate font-semibold text-foreground">Construction Dashboard</span>
     </div>
     <div class="flex shrink-0 items-center gap-2">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="切換深色／淺色模式"
+        @click="themeStore.toggle()"
+      >
+        <Sun v-if="themeStore.isDark" class="size-5" />
+        <Moon v-else class="size-5" />
+      </Button>
       <Button variant="ghost" size="icon" class="relative" aria-label="通知">
         <Bell class="size-5" />
         <Badge

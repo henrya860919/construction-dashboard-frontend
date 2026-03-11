@@ -1,0 +1,42 @@
+---
+description: 深色／淺色主題支援規範，所有功能開發皆須遵守
+alwaysApply: true
+---
+
+# 主題支援規範（深色／淺色）
+
+## 原則
+
+- **所有新功能與 UI 必須同時支援淺色與深色模式**，不得僅在單一主題下可讀或美觀。
+- 主題由 `useThemeStore()` 控制，切換時在 `<html>` 上切換 `.dark` class；樣式透過 CSS 變數區分。
+
+## 實作要點
+
+1. **一律使用主題變數**
+   - 背景、文字、邊框等使用 `main.css` 已定義的變數：`--background`、`--foreground`、`--card`、`--border`、`--muted`、`--primary` 等。
+   - Tailwind 類名使用語意化 token：`bg-background`、`text-foreground`、`border-border`、`bg-card`、`text-muted-foreground` 等，**勿**使用固定色如 `bg-white`、`text-gray-900`、`border-gray-200`。
+
+2. **禁止硬編碼顏色**
+   - 不在元件內寫死 `#fff`、`#000`、`rgb(...)` 或 Tailwind 固定色（如 `gray-500`、`slate-800`）作為主要背景／文字／邊框，除非是品牌色或圖表等需固定對比的情境，並在註解說明原因。
+
+3. **新增或覆寫樣式時**
+   - 新元件、頁面、卡片、表格、表單等，優先使用現有 shadcn-vue 元件（已接主題變數）。
+   - 自訂樣式請用 `var(--...)` 或 Tailwind 語意類名，並在開發時切換一次深色／淺色確認顯示正常。
+
+4. **圖表與特殊元件**
+   - 若使用 vue-echarts 或自繪圖表，顏色盡量從主題變數或 `--chart-1`～`--chart-5` 取得，或依 `useThemeStore().isDark` 切換配色，避免在深色模式下出現淺色底、淺色線導致不可讀。
+
+5. **圖片與裝飾**
+   - 若有 SVG 或圖片內嵌顏色，需考慮深色模式（例如使用 `currentColor` 或提供 dark 版本）。
+
+## 相關檔案
+
+- 主題變數定義：`src/assets/main.css`（`:root` 淺色、`.dark` 深色）
+- 主題狀態與切換：`src/stores/theme.ts`、`src/lib/theme.ts`
+- 切換按鈕位置：`AppHeader.vue`（鈴鐺旁）
+
+## 檢查清單（開發新功能時）
+
+- [ ] 未使用硬編碼背景／文字／邊框色
+- [ ] 使用 `bg-background`、`text-foreground`、`border-border` 等語意類名或對應 CSS 變數
+- [ ] 在淺色與深色模式下皆已手動切換並確認可讀性與對比

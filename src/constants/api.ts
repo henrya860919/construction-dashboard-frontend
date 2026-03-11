@@ -10,4 +10,8 @@ export const API_PATH = {
   AUTH_ME: `${API_V1}/auth/me`,
   PROJECTS: `${API_V1}/projects`,
   SITES: `${API_V1}/sites`,
+  /** 監測：下載 Excel 樣板（GET，回傳檔案） */
+  MONITORING_TEMPLATE: `${API_V1}/monitoring/template`,
+  /** 監測：上傳 Excel 填寫資料（POST multipart/form-data） */
+  MONITORING_UPLOAD: `${API_V1}/monitoring/upload`,
 } as const

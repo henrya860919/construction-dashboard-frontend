@@ -25,6 +25,40 @@ const router = createRouter({
           component: () => import('@/views/LayoutVerifyView.vue'),
         },
         {
+          path: 'monitoring',
+          redirect: { name: ROUTE_NAME.MONITORING_METRICS },
+        },
+        {
+          path: 'monitoring/metrics',
+          name: ROUTE_NAME.MONITORING_METRICS,
+          component: () => import('@/views/monitoring/MonitoringMetricsView.vue'),
+        },
+        {
+          path: 'monitoring/devices',
+          name: ROUTE_NAME.MONITORING_DEVICES,
+          component: () => import('@/views/monitoring/MonitoringDevicesView.vue'),
+        },
+        {
+          path: 'monitoring/devices/:deviceId',
+          name: ROUTE_NAME.MONITORING_DEVICE_DETAIL,
+          component: () => import('@/views/monitoring/MonitoringDeviceDetailView.vue'),
+        },
+        {
+          path: 'monitoring/media',
+          name: ROUTE_NAME.MONITORING_MEDIA,
+          component: () => import('@/views/monitoring/MonitoringMediaView.vue'),
+        },
+        {
+          path: 'monitoring/reports',
+          name: ROUTE_NAME.MONITORING_REPORTS,
+          component: () => import('@/views/monitoring/MonitoringReportsView.vue'),
+        },
+        {
+          path: 'monitoring/upload',
+          name: ROUTE_NAME.MONITORING_UPLOAD,
+          component: () => import('@/views/monitoring/MonitoringUploadView.vue'),
+        },
+        {
           path: 'projects',
           name: ROUTE_NAME.PROJECTS,
           component: () => import('@/views/ProjectsView.vue'),

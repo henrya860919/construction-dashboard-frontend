@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
   LayoutDashboard,
@@ -8,12 +7,17 @@ import {
   ClipboardCheck,
   Table2,
   Building2,
+  Activity,
+  Cpu,
+  Image,
+  FileText,
+  Upload,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { SIDEBAR_NAV_ITEMS } from '@/constants/navigation'
+import { SIDEBAR_ENTRIES } from '@/constants/navigation'
 import { SIDEBAR_HEADER } from '@/constants/branding'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +27,11 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FolderKanban,
   ClipboardCheck,
   Table2,
+  Activity,
+  Cpu,
+  Image,
+  FileText,
+  Upload,
 }
 
 withDefaults(
@@ -34,13 +43,9 @@ withDefaults(
 
 const route = useRoute()
 
-const navItems = computed(() =>
-  SIDEBAR_NAV_ITEMS.map((item) => ({
-    ...item,
-    icon: ICON_MAP[item.icon] ?? LayoutDashboard,
-    isActive: route.path === item.path || (item.path !== '/' && route.path.startsWith(item.path)),
-  }))
-)
+function isItemActive(path: string) {
+  return route.path === path || (path !== '/' && route.path.startsWith(path))
+}
 </script>
 
 <template>
@@ -73,53 +78,111 @@ const navItems = computed(() =>
         </div>
       </header>
       <nav class="flex flex-col gap-2 p-2" :class="collapsed ? 'items-center' : ''">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.id"
-          v-slot="{ navigate }"
-          :to="item.path"
-          custom
-        >
-          <div
-            class="flex min-h-9 items-center rounded-md"
-            :class="collapsed ? 'justify-center' : ''"
+        <template v-for="entry in SIDEBAR_ENTRIES" :key="entry.type === 'item' ? entry.item.id : entry.group.id">
+          <!-- 單一導航項目 -->
+          <RouterLink
+            v-if="entry.type === 'item'"
+            v-slot="{ navigate }"
+            :to="entry.item.path"
+            custom
           >
-            <Tooltip v-if="collapsed">
-              <TooltipTrigger as-child>
+            <div
+              class="flex min-h-9 items-center rounded-md"
+              :class="collapsed ? 'justify-center' : ''"
+            >
+              <Tooltip v-if="collapsed">
+                <TooltipTrigger as-child>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    :class="
+                      cn(
+                        'h-9 w-9 shrink-0 justify-center rounded-md',
+                        isItemActive(entry.item.path) && 'bg-accent text-accent-foreground'
+                      )
+                    "
+                    @click="navigate"
+                  >
+                    <component :is="ICON_MAP[entry.item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {{ entry.item.label }}
+                </TooltipContent>
+              </Tooltip>
+              <Button
+                v-else
+                variant="ghost"
+                :class="
+                  cn(
+                    'h-9 w-full justify-start gap-3 rounded-md px-3',
+                    isItemActive(entry.item.path) && 'bg-accent text-accent-foreground'
+                  )
+                "
+                @click="navigate"
+              >
+                <component :is="ICON_MAP[entry.item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                <span class="truncate">{{ entry.item.label }}</span>
+              </Button>
+            </div>
+          </RouterLink>
+          <!-- 分組：標題 + 子項目 -->
+          <div v-else class="space-y-1">
+            <div
+              v-show="!collapsed"
+              class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              {{ entry.group.label }}
+            </div>
+            <RouterLink
+              v-for="child in entry.group.children"
+              :key="child.id"
+              v-slot="{ navigate }"
+              :to="child.path"
+              custom
+            >
+              <div
+                class="flex min-h-9 items-center rounded-md"
+                :class="collapsed ? 'justify-center' : 'pl-3'"
+              >
+                <Tooltip v-if="collapsed">
+                  <TooltipTrigger as-child>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      :class="
+                        cn(
+                          'h-9 w-9 shrink-0 justify-center rounded-md',
+                          isItemActive(child.path) && 'bg-accent text-accent-foreground'
+                        )
+                      "
+                      @click="navigate"
+                    >
+                      <component :is="ICON_MAP[child.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {{ child.label }}
+                  </TooltipContent>
+                </Tooltip>
                 <Button
+                  v-else
                   variant="ghost"
-                  size="icon"
                   :class="
                     cn(
-                      'h-9 w-9 shrink-0 justify-center rounded-md',
-                      item.isActive && 'bg-accent text-accent-foreground'
+                      'h-9 w-full justify-start gap-3 rounded-md px-3',
+                      isItemActive(child.path) && 'bg-accent text-accent-foreground'
                     )
                   "
                   @click="navigate"
                 >
-                  <component :is="item.icon" class="size-4 shrink-0" />
+                  <component :is="ICON_MAP[child.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                  <span class="truncate">{{ child.label }}</span>
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {{ item.label }}
-              </TooltipContent>
-            </Tooltip>
-            <Button
-              v-else
-              variant="ghost"
-              :class="
-                cn(
-                  'h-9 w-full justify-start gap-3 rounded-md px-3',
-                  item.isActive && 'bg-accent text-accent-foreground'
-                )
-              "
-              @click="navigate"
-            >
-              <component :is="item.icon" class="size-4 shrink-0" />
-              <span class="truncate">{{ item.label }}</span>
-            </Button>
+              </div>
+            </RouterLink>
           </div>
-        </RouterLink>
+        </template>
       </nav>
     </ScrollArea>
   </TooltipProvider>

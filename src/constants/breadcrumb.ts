@@ -7,6 +7,12 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   '/dashboard': '儀表板',
   '/dashboard/monitoring': '監測數據',
   '/dashboard/execution': '施工執行',
+  '/monitoring': '監測',
+  '/monitoring/metrics': '歷史數據',
+  '/monitoring/devices': '設備',
+  '/monitoring/media': '影像',
+  '/monitoring/reports': '報表',
+  '/monitoring/upload': '數據上傳',
   '/projects': '專案列表',
   '/layout-verify': 'Layout 驗證',
 }

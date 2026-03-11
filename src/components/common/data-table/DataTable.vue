@@ -33,11 +33,14 @@ const props = withDefaults(
     /** 要顯示篩選的欄位 id，設定後顯示搜尋框 */
     filterColumnId?: string
     filterPlaceholder?: string
+    /** 是否顯示欄位顯示/隱藏開關按鈕 */
+    showViewOptions?: boolean
     /** 預設每頁筆數 */
     pageSize?: number
   }>(),
   {
     filterPlaceholder: '搜尋...',
+    showViewOptions: true,
     pageSize: 10,
   },
 )
@@ -86,11 +89,13 @@ const table = useVueTable({
 
 <template>
   <div class="space-y-4">
-    <!-- Toolbar: 搜尋（可選）+ 欄位切換 -->
+    <!-- Toolbar: 搜尋（可選）+ 欄位切換（可選） -->
     <DataTableToolbar
+      v-if="filterColumnId || showViewOptions"
       :table="table"
       :filter-column-id="filterColumnId"
       :filter-placeholder="filterPlaceholder"
+      :show-view-options="showViewOptions"
     />
 
     <!-- 表格 -->

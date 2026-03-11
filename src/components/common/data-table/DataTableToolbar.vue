@@ -9,10 +9,13 @@ interface Props {
   filterColumnId?: string
   /** 搜尋框 placeholder */
   filterPlaceholder?: string
+  /** 是否顯示欄位顯示/隱藏開關按鈕 */
+  showViewOptions?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   filterPlaceholder: '搜尋...',
+  showViewOptions: true,
 })
 </script>
 
@@ -25,6 +28,6 @@ withDefaults(defineProps<Props>(), {
       class="max-w-sm"
       @update:model-value="table.getColumn(filterColumnId)?.setFilterValue($event)"
     />
-    <DataTableViewOptions :table="table" />
+    <DataTableViewOptions v-if="showViewOptions" :table="table" />
   </div>
 </template>

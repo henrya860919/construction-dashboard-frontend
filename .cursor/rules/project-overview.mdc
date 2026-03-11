@@ -8,24 +8,37 @@ alwaysApply: true
 ## 技術棧
 
 - **框架**: Vue 3 + Vite
-- **UI 元件**: shadcn-vue
+- **UI 元件**: shadcn-vue (new-york style)
 - **圖表**: vue-echarts（工程儀表板圖表）
 - **狀態管理**: Pinia
 - **部署**: Vercel（CI/CD 由 GitHub 觸發）
 
-## 目錄結構約定
+## 目錄結構
 
-- `src/components/` - 可重用元件（依功能分子目錄）
-- `src/views/` 或 `src/pages/` - 頁面級元件
+- `src/api/` - 後端 API 呼叫（client、auth、依領域分檔）
+- `src/assets/` - 靜態資源、全域 CSS
+- `src/components/` - 可重用元件
+  - `ui/` - shadcn-vue（用 CLI 加，勿手動改 CVA）
+  - `common/` - 自訂共用元件（Logo、Loading、Empty 等）
+- `src/composables/` - 共用邏輯（useAuth、usePagination 等）
+- `src/constants/` - 路由、API 路徑、選項等常數，避免 magic string
+- `src/layouts/` - 版面（DefaultLayout、AuthLayout），router 套用
+- `src/lib/` - 工具（cn 等）
+- `src/router/` - 路由設定，使用 constants 的 ROUTE_PATH / ROUTE_NAME
 - `src/stores/` - Pinia stores
-- `src/api/` 或 `src/services/` - API 呼叫封裝
-- `src/composables/` - 共用 composables
-- `src/assets/` - 靜態資源
+- `src/types/` - 共用 TypeScript 型別（API、auth、領域）
+- `src/views/` - 頁面級元件，對應路由
+
+## 依賴方向
+
+- views 可 import：components、stores、composables、api、router、constants、types、lib
+- components 不直接 call API，透過 props / stores / composables 拿資料
+- stores 可 import api、lib、types
+- api 只依賴 client、constants、types
 
 ## 環境變數
 
-- 僅使用 `VITE_` 前綴（Vite 會暴露給 client）
-- API base URL: `VITE_API_URL`（dev / preview / production 各環境不同）
+- 僅使用 `VITE_` 前綴；API base URL: `VITE_API_URL`
 - 勿在前端存放 secret 或 API key
 
 ## 命名
@@ -33,4 +46,4 @@ alwaysApply: true
 - 元件檔名: PascalCase 或 kebab-case（專案內擇一統一）
 - 元件名: PascalCase
 - 變數/函式: camelCase
-- 常數: UPPER_SNAKE_CASE 或 camelCase
+- 常數: UPPER_SNAKE_CASE（constants/ 內）

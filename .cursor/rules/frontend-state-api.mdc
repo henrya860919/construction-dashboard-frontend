@@ -16,7 +16,12 @@ alwaysApply: false
 
 - 使用者、登入狀態、可選的「當前專案/工地」等放 store
 - 儀表板篩選、列表分頁等可放 store 或 component state，專案內統一即可
-- Store 內呼叫 API 時使用上述 API client，不直接寫 fetch URL
+- Store 內呼叫 API 時使用 `api/` 模組（用 apiClient），API 路徑從 `@/constants` 取
+
+## 常數與型別
+
+- API 路徑用 `constants/api.ts` 的 `API_PATH`，路由用 `constants/routes.ts` 的 `ROUTE_PATH`、`ROUTE_NAME`
+- 請求/回應型別用 `types/`，與後端契約對齊（ApiResponse、LoginResponse 等）
 
 ## 環境變數
 

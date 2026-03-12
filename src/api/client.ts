@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { useAdminStore } from '@/stores/admin'
 
 const baseURL = import.meta.env.VITE_API_URL ?? ''
 
@@ -24,8 +25,12 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const auth = useAuthStore()
+      const adminStore = useAdminStore()
       auth.clearAuth()
-      // 可在此導向登入頁: router.push('/login')
+      adminStore.clearSelectedTenantId()
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }

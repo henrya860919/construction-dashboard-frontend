@@ -23,7 +23,8 @@ import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
-import { RouterLink } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
+import { buildProjectPath } from '@/constants/routes'
 import {
   Thermometer,
   Droplets,
@@ -34,7 +35,6 @@ import {
   Download,
   Upload,
 } from 'lucide-vue-next'
-import { ROUTE_PATH } from '@/constants'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent])
 
@@ -48,6 +48,7 @@ const METRICS = [
   { key: 'waterLevel', label: '水位', unit: 'm', icon: Waves },
 ] as const
 
+const route = useRoute()
 const selectedKey = ref<string>(METRICS[0].key)
 const selectedYear = ref<string>('2025')
 const selectedMonth = ref<string>('3')
@@ -235,7 +236,7 @@ function downloadCurrentData() {
         class="gap-2"
         as-child
       >
-        <RouterLink :to="ROUTE_PATH.MONITORING_UPLOAD">
+        <RouterLink :to="buildProjectPath((route.params.projectId as string) ?? '', '/monitoring/upload')">
           <Upload class="size-4" />
           上傳數據
         </RouterLink>

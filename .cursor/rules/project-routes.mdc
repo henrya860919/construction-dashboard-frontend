@@ -1,0 +1,53 @@
+---
+description: 多專案路由架構（URL 帶 projectId）— 專案內路徑與導航規範
+alwaysApply: true
+---
+
+# 專案內路由與導航規範（方案 A：URL 帶 projectId）
+
+本專案採用 **專案列表為入口、專案內工作區 URL 帶 projectId** 的架構，所有專案內頁面路徑皆為 `/p/:projectId/...`。
+
+## 路由結構
+
+- **`/`**：首頁，redirect 至 `/projects`
+- **`/projects`**：專案列表（獨立頁），選專案後進入 `/p/:projectId/dashboard`
+- **`/p/:projectId`**：redirect 至 `/p/:projectId/dashboard`
+- **`/p/:projectId/dashboard`**：該專案儀表板
+- **`/p/:projectId/overview/events`**、**`/p/:projectId/overview/milestones`**：概況
+- **`/p/:projectId/monitoring/*`**：監測（歷史數據、上傳、設備、影像、報表）
+- **`/p/:projectId/contract/*`**：契約（專案資訊、工期調整、契約管理）
+
+## 常數與 helper
+
+- **`src/constants/routes.ts`**
+  - `buildProjectPath(projectId: string, subPath: string): string` — 組出專案內完整 path，例：`buildProjectPath('proj1', '/dashboard')` → `/p/proj1/dashboard`
+  - `ROUTE_PATH.PROJECTS`、`ROUTE_PATH.LOGIN` 等；專案內為「路徑後綴」常數（如 `ROUTE_PATH.PROJECT_DASHBOARD` = `'/dashboard'`），實際連結一律用 `buildProjectPath(projectId, ROUTE_PATH.PROJECT_XXX)` 或 `buildProjectPath(projectId, '/monitoring/upload')`
+  - `ROUTE_NAME.PROJECT_*` — 專案內具名路由，`router.push({ name: ROUTE_NAME.PROJECT_MONITORING_DEVICES, params: { projectId } })`
+
+## 側欄導航
+
+- **專案內**（`/p/:projectId/...`）：側欄顯示「當前專案」、切換專案、概況／監測／契約（path 由 `buildProjectPath(route.params.projectId, pathSuffix)` 組成）、專案列表
+- **非專案內**（`/projects` 等）：側欄僅顯示專案列表等全域項目
+- 導航定義在 **`src/constants/navigation.ts`**：`PROJECT_SIDEBAR_GROUPS`（pathSuffix）、`GLOBAL_SIDEBAR_ENTRIES`（靜態 path）
+
+## 專案內 View 撰寫要點
+
+1. **取得當前 projectId**：`const route = useRoute(); const projectId = route.params.projectId as string`
+2. **站內連結**：專案內連結一律帶 projectId  
+   - `buildProjectPath(projectId, '/monitoring/upload')` 或  
+   - `router.push({ name: ROUTE_NAME.PROJECT_MONITORING_METRICS, params: { projectId } })`
+3. **API 呼叫**：之後串 API 時，專案內資料請帶 `projectId`（query 或 body），由後端依權限過濾
+4. **麵包屑**：`useBreadcrumb()` 已處理 `/p/:projectId/...`，專案名稱來自 `useProjectStore().currentProjectName`
+
+## Store
+
+- **`useProjectStore()`**：`currentProjectId`、`currentProjectName`、`setProjectName(projectId, name)`；projectId 由 layout/route 同步，專案名稱可從專案列表 API 或 mock 寫入
+
+## 新增專案內頁面時
+
+1. 在 **`src/constants/routes.ts`** 新增 `ROUTE_PATH.PROJECT_XXX`（路徑後綴）與 `ROUTE_NAME.PROJECT_XXX`
+2. 在 **`src/router/index.ts`** 新增 `path: 'p/:projectId/...'` 對應 component
+3. 若需出現在側欄，在 **`src/constants/navigation.ts`** 的 `PROJECT_SIDEBAR_GROUPS` 對應群組下新增 `{ id, label, pathSuffix, icon }`
+4. 在 **`src/constants/breadcrumb.ts`** 的 `BREADCRUMB_PROJECT_SUFFIX_LABELS` 新增路徑後綴與顯示名稱
+
+詳細流程與多租戶／權限規劃見 **`docs/multi-project-multi-tenant-planning.md`**。

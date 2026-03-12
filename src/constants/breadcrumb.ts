@@ -1,25 +1,31 @@
 /**
  * 麵包屑：路由 path 對應的顯示名稱
- * 新增路由時請在此補上 label，麵包屑會依 path 層級自動組出
+ * 專案內路徑（/p/:projectId/...）的「後綴」對應見 BREADCRUMB_PROJECT_SUFFIX_LABELS
  */
 export const BREADCRUMB_LABELS: Record<string, string> = {
   '/': '首頁',
+  '/projects': '專案列表',
+  '/admin': '後台',
+  '/admin/projects': '專案管理',
+  '/admin/members': '成員管理',
+  '/admin/settings': '公司設定',
+  '/platform-admin': '平台管理',
+  '/platform-admin/tenants': '租戶管理',
+  '/platform-admin/projects': '專案總覽',
+  '/platform-admin/users': '使用者總覽',
+}
+
+/** 專案內路徑後綴（/p/:projectId 之後）對應的麵包屑名稱 */
+export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/dashboard': '儀表板',
-  '/overview': '概況',
   '/overview/events': '大事記',
   '/overview/milestones': '里程碑',
-  '/dashboard/monitoring': '監測數據',
-  '/dashboard/execution': '施工執行',
-  '/monitoring': '監測',
   '/monitoring/metrics': '歷史數據',
   '/monitoring/devices': '設備',
   '/monitoring/media': '影像',
   '/monitoring/reports': '報表',
   '/monitoring/upload': '數據上傳',
-  '/contract': '契約',
   '/contract/project-info': '專案資訊',
   '/contract/schedule': '工期調整',
   '/contract/management': '契約管理',
-  '/projects': '專案列表',
-  '/layout-verify': 'Layout 驗證',
 }

@@ -19,10 +19,10 @@ npx shadcn-vue@latest add <元件名> --overwrite
 ## 環境
 
 1. 複製 `.env.example` 為 `.env`
-2. 設定 `VITE_API_URL` 為後端 API 網址（本機開發可為 `http://localhost:3002`）
+2. 設定 `VITE_API_URL` 為後端 API 網址（本機開發可為 `http://localhost:3003`）
 
 ## 指令
 
-- `npm run dev` - 開發（port 5175，/api 會 proxy 到後端 3002）
+- `npm run dev` - 開發（port 5175，/api 會 proxy 到後端 3003）
 - `npm run build` - 建置
 - `npm run preview` - 預覽建置結果

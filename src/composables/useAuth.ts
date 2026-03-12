@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth'
+import { useAdminStore } from '@/stores/admin'
 import { useRouter } from 'vue-router'
 import { ROUTE_PATH } from '@/constants'
 
@@ -7,10 +8,12 @@ import { ROUTE_PATH } from '@/constants'
  */
 export function useAuth() {
   const auth = useAuthStore()
+  const adminStore = useAdminStore()
   const router = useRouter()
 
   function logout() {
     auth.clearAuth()
+    adminStore.clearSelectedTenantId()
     router.push(ROUTE_PATH.LOGIN)
   }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Card,
   CardContent,
@@ -10,9 +10,10 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Download, Upload, FileSpreadsheet, ArrowRight, AlertCircle } from 'lucide-vue-next'
-import { ROUTE_PATH } from '@/constants'
+import { buildProjectPath } from '@/constants/routes'
 import { API_PATH } from '@/constants/api'
 
+const route = useRoute()
 const router = useRouter()
 
 /** 選定的檔案（待上傳），之後可接實際上傳 API */
@@ -90,7 +91,8 @@ function clearFile() {
 
 /** 前往歷史數據頁查看 */
 function goToMetrics() {
-  router.push(ROUTE_PATH.MONITORING_METRICS)
+  const projectId = route.params.projectId as string
+  if (projectId) router.push(buildProjectPath(projectId, '/monitoring/metrics'))
 }
 </script>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Menu, User, Bell, Sun, Moon } from 'lucide-vue-next'
+import { RouterLink } from 'vue-router'
+import { Menu, User, Bell, Sun, Moon, Settings } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -12,9 +13,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useThemeStore } from '@/stores/theme'
+import { useAuthStore } from '@/stores/auth'
+import { useAuth } from '@/composables/useAuth'
+import { ROUTE_PATH } from '@/constants'
 
 const sidebarStore = useSidebarStore()
 const themeStore = useThemeStore()
+const authStore = useAuthStore()
+const { logout } = useAuth()
 
 const props = withDefaults(
   defineProps<{ isMobile?: boolean }>(),
@@ -48,6 +54,19 @@ function handleMenuClick() {
       <span class="truncate font-semibold text-foreground">Construction Dashboard</span>
     </div>
     <div class="flex shrink-0 items-center gap-2">
+      <DropdownMenu v-if="authStore.canAccessAdmin && !authStore.isPlatformAdmin">
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="sm" class="gap-1.5">
+            <Settings class="size-4" />
+            後台
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-48">
+          <DropdownMenuItem as-child>
+            <RouterLink :to="ROUTE_PATH.ADMIN_PROJECTS">單租後台</RouterLink>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Button
         variant="ghost"
         size="icon"
@@ -73,10 +92,9 @@ function handleMenuClick() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" class="w-48">
-          <DropdownMenuLabel>我的帳戶</DropdownMenuLabel>
+          <DropdownMenuLabel>{{ authStore.user?.name || authStore.user?.email }}</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>個人設定</DropdownMenuItem>
-          <DropdownMenuItem>登出</DropdownMenuItem>
+          <DropdownMenuItem @click="logout">登出</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

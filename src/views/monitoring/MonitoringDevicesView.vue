@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Video } from 'lucide-vue-next'
 import { ROUTE_NAME } from '@/constants'
@@ -22,6 +22,7 @@ interface DeviceItem {
   category: string
 }
 
+const route = useRoute()
 const router = useRouter()
 
 const cctvDevices: DeviceItem[] = [
@@ -31,7 +32,13 @@ const cctvDevices: DeviceItem[] = [
 ]
 
 function goToDevice(deviceId: string) {
-  router.push({ name: ROUTE_NAME.MONITORING_DEVICE_DETAIL, params: { deviceId } })
+  const projectId = route.params.projectId as string
+  if (projectId) {
+    router.push({
+      name: ROUTE_NAME.PROJECT_MONITORING_DEVICE_DETAIL,
+      params: { projectId, deviceId },
+    })
+  }
 }
 </script>
 

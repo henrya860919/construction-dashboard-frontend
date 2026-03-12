@@ -47,7 +47,10 @@ onUnmounted(() => {
 })
 
 function goBack() {
-  router.push({ name: ROUTE_NAME.MONITORING_DEVICES })
+  const projectId = route.params.projectId as string
+  if (projectId) {
+    router.push({ name: ROUTE_NAME.PROJECT_MONITORING_DEVICES, params: { projectId } })
+  }
 }
 </script>
 

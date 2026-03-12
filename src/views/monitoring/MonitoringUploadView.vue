@@ -9,22 +9,31 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Download, Upload, FileSpreadsheet, ArrowRight, AlertCircle } from 'lucide-vue-next'
+import { Download, Upload, FileSpreadsheet, ArrowRight, AlertCircle, X } from 'lucide-vue-next'
 import { buildProjectPath } from '@/constants/routes'
 import { API_PATH } from '@/constants/api'
+import { useUploadQueue } from '@/composables/useUploadQueue'
 
 const route = useRoute()
 const router = useRouter()
+const projectId = computed(() => (route.params.projectId as string) ?? '')
+const { enqueueAndRun } = useUploadQueue()
 
-/** 選定的檔案（待上傳），之後可接實際上傳 API */
-const selectedFile = ref<File | null>(null)
-/** 是否正在上傳（之後接 API 時設為 true/false） */
+/** 選定的檔案（待上傳，可多選） */
+const selectedFiles = ref<File[]>([])
+/** 是否正在上傳 */
 const isUploading = ref(false)
-/** 上傳結果訊息（之後接 API 成功/失敗時設定） */
+/** 上傳結果訊息（本頁顯示用；進度與清單請至 Header「檔案上傳進度」查看） */
 const uploadMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
 
-const hasFile = computed(() => !!selectedFile.value)
-const fileName = computed(() => selectedFile.value?.name ?? '')
+const hasFiles = computed(() => selectedFiles.value.length > 0)
+const fileName = computed(() =>
+  selectedFiles.value.length === 1
+    ? selectedFiles.value[0].name
+    : selectedFiles.value.length > 1
+      ? `已選 ${selectedFiles.value.length} 個檔案`
+      : ''
+)
 
 const acceptAttr = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv'
 
@@ -36,12 +45,18 @@ function handleDownloadTemplate() {
   console.log('下載樣板', API_PATH.MONITORING_TEMPLATE)
 }
 
-/** 選擇檔案 */
+const acceptRegex = /\.(xlsx|xls|csv)$/i
+
+function filterAccepted(files: FileList | File[]): File[] {
+  return Array.from(files).filter((f) => acceptRegex.test(f.name))
+}
+
+/** 選擇檔案（可多選） */
 function onFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (file) {
-    selectedFile.value = file
+  const newFiles = input.files ? filterAccepted(input.files) : []
+  if (newFiles.length) {
+    selectedFiles.value = [...selectedFiles.value, ...newFiles]
     uploadMessage.value = null
   }
   input.value = ''
@@ -53,46 +68,71 @@ function onDragOver(e: DragEvent) {
   e.stopPropagation()
 }
 
-/** 拖曳放下 */
+/** 拖曳放下（可多檔） */
 function onDrop(e: DragEvent) {
   e.preventDefault()
   e.stopPropagation()
-  const file = e.dataTransfer?.files?.[0]
-  if (file && /\.(xlsx|xls|csv)$/i.test(file.name)) {
-    selectedFile.value = file
+  const dropped = e.dataTransfer?.files ? filterAccepted(e.dataTransfer.files) : []
+  if (dropped.length) {
+    selectedFiles.value = [...selectedFiles.value, ...dropped]
     uploadMessage.value = null
   }
 }
 
-/** 上傳：之後接 POST API_PATH.MONITORING_UPLOAD (FormData) */
+function removeSelectedFile(index: number) {
+  selectedFiles.value = selectedFiles.value.filter((_, i) => i !== index)
+}
+
+/** 上傳：多檔並行，經由統一上傳佇列，進度顯示於 Header「檔案上傳進度」 */
 async function handleUpload() {
-  if (!selectedFile.value) return
+  const files = selectedFiles.value
+  if (!files.length || !projectId.value) return
   isUploading.value = true
   uploadMessage.value = null
-  try {
-    // TODO: 串接 API，例如：
-    // const formData = new FormData(); formData.append('file', selectedFile.value);
-    // await apiClient.post(API_PATH.MONITORING_UPLOAD, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-    await new Promise((r) => setTimeout(r, 800))
-    uploadMessage.value = { type: 'success', text: '上傳成功，歷史數據已更新。' }
-    selectedFile.value = null
-  } catch {
-    uploadMessage.value = { type: 'error', text: '上傳失敗，請檢查檔案格式後重試。' }
-  } finally {
-    isUploading.value = false
+  const runOne = async (onProgress: (p: number) => void) => {
+    // TODO: 改為實際 API，例如 apiClient.post(API_PATH.MONITORING_UPLOAD, formData, { onUploadProgress: (e) => e.total && onProgress(Math.round((e.loaded / e.total) * 100)) })
+    onProgress(0)
+    await new Promise((r) => setTimeout(r, 400))
+    onProgress(50)
+    await new Promise((r) => setTimeout(r, 400))
+    onProgress(100)
   }
+  const results = await Promise.allSettled(
+    files.map((file) =>
+      enqueueAndRun(
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          projectId: projectId.value,
+          source: 'monitoring',
+        },
+        runOne
+      )
+    )
+  )
+  const succeeded = results.filter((r) => r.status === 'fulfilled').length
+  const failed = results.filter((r) => r.status === 'rejected').length
+  selectedFiles.value = []
+  if (failed === 0) {
+    uploadMessage.value = { type: 'success', text: '上傳成功，歷史數據已更新。' }
+  } else {
+    uploadMessage.value = {
+      type: 'error',
+      text: succeeded > 0 ? `${succeeded} 個成功，${failed} 個失敗，請至「檔案上傳進度」查看。` : '上傳失敗，請檢查檔案格式後重試。',
+    }
+  }
+  isUploading.value = false
 }
 
 /** 清除已選檔案 */
-function clearFile() {
-  selectedFile.value = null
+function clearFiles() {
+  selectedFiles.value = []
   uploadMessage.value = null
 }
 
 /** 前往歷史數據頁查看 */
 function goToMetrics() {
-  const projectId = route.params.projectId as string
-  if (projectId) router.push(buildProjectPath(projectId, '/monitoring/metrics'))
+  if (projectId.value) router.push(buildProjectPath(projectId.value, '/monitoring/metrics'))
 }
 </script>
 
@@ -137,41 +177,66 @@ function goToMetrics() {
           步驟二：上傳填寫後的資料
         </CardTitle>
         <CardDescription>
-          上傳前請確認已依樣板格式填寫，支援 .xlsx、.xls、.csv 格式。
+          上傳前請確認已依樣板格式填寫，支援 .xlsx、.xls、.csv，可多選檔案一次上傳。
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
-        <!-- 拖曳 / 選擇檔案區 -->
+        <!-- 拖曳 / 選擇檔案區（可多選） -->
         <div
           class="relative flex min-h-[160px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-6 transition-colors hover:bg-muted/50"
-          :class="{ 'border-primary bg-primary/5': hasFile }"
+          :class="{ 'border-primary bg-primary/5': hasFiles }"
           @dragover="onDragOver"
           @drop="onDrop"
         >
           <input
             type="file"
             :accept="acceptAttr"
+            multiple
             class="absolute inset-0 cursor-pointer opacity-0"
             @change="onFileSelect"
           >
           <Upload class="size-10 shrink-0 text-muted-foreground" />
           <p class="mt-2 text-sm font-medium text-foreground">
-            {{ hasFile ? fileName : '拖曳檔案到這裡，或點擊選擇檔案' }}
+            {{ hasFiles ? fileName : '拖曳檔案到這裡，或點擊選擇檔案（可多選）' }}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             支援 .xlsx、.xls、.csv
           </p>
           <Button
-            v-if="hasFile"
+            v-if="hasFiles"
             type="button"
             variant="ghost"
             size="sm"
             class="mt-3"
-            @click.stop="clearFile"
+            @click.stop="clearFiles"
           >
-            清除
+            清除全部
           </Button>
         </div>
+
+        <!-- 已選檔案清單 -->
+        <ul
+          v-if="selectedFiles.length"
+          class="space-y-1 rounded-md border border-border bg-muted/30 p-2 max-h-40 overflow-y-auto"
+        >
+          <li
+            v-for="(f, idx) in selectedFiles"
+            :key="idx"
+            class="flex items-center justify-between gap-2 text-sm text-foreground"
+          >
+            <span class="truncate">{{ f.name }}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              class="size-7 shrink-0"
+              aria-label="移除"
+              @click="removeSelectedFile(idx)"
+            >
+              <X class="size-4" />
+            </Button>
+          </li>
+        </ul>
 
         <!-- 上傳按鈕與結果訊息 -->
         <div class="flex flex-wrap items-center gap-3">
@@ -179,17 +244,17 @@ function goToMetrics() {
             type="button"
             variant="default"
             class="gap-2"
-            :disabled="!hasFile || isUploading"
+            :disabled="!hasFiles || isUploading"
             @click="handleUpload"
           >
             <Upload class="size-4" />
-            {{ isUploading ? '上傳中…' : '上傳' }}
+            {{ isUploading ? '上傳中…' : hasFiles ? `上傳 ${selectedFiles.length} 個檔案` : '上傳' }}
           </Button>
           <Button
-            v-if="hasFile"
+            v-if="hasFiles"
             type="button"
             variant="outline"
-            @click="clearFile"
+            @click="clearFiles"
           >
             取消
           </Button>

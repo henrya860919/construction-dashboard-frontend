@@ -1,5 +1,6 @@
 export { useAuth } from './useAuth'
 export { usePagination } from './usePagination'
+export { useUploadQueue } from './useUploadQueue'
 export { useIsMobile } from './useBreakpoint'
 export { useBreadcrumb } from './useBreadcrumb'
 export type { UsePaginationOptions } from './usePagination'

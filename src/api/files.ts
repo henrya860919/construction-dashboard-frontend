@@ -76,6 +76,38 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadFileRe
   return data.data
 }
 
+export interface UploadFileWithProgressParams extends UploadFileParams {}
+
+export interface UploadFileWithProgressOptions {
+  onProgress?: (percent: number) => void
+}
+
+/**
+ * 上傳檔案並支援進度回呼（用於佇列進度 UI）
+ */
+export async function uploadFileWithProgress(
+  params: UploadFileWithProgressParams,
+  options?: UploadFileWithProgressOptions
+): Promise<UploadFileResult> {
+  const form = new FormData()
+  form.append('file', params.file)
+  form.append('projectId', params.projectId)
+  form.append('fileName', params.file.name)
+  if (params.category) form.append('category', params.category)
+  if (params.businessId) form.append('businessId', params.businessId)
+
+  const { data } = await apiClient.post<ApiResponse<UploadFileResult>>(API_PATH.FILES_UPLOAD, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (e.total != null && e.total > 0 && options?.onProgress) {
+        const percent = Math.round((e.loaded / e.total) * 100)
+        options.onProgress(percent)
+      }
+    },
+  })
+  return data.data
+}
+
 export async function deleteFile(id: string): Promise<void> {
   await apiClient.delete(API_PATH.FILES_DELETE(id))
 }

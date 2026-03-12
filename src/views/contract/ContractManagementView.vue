@@ -59,10 +59,12 @@ import {
   Trash2,
   Plus,
 } from 'lucide-vue-next'
-import { listProjectFiles, uploadFile as apiUploadFile, deleteFile, getFileBlob } from '@/api/files'
+import { listProjectFiles, deleteFile, getFileBlob } from '@/api/files'
+import { useUploadQueue } from '@/composables/useUploadQueue'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const { enqueueAndUpload } = useUploadQueue()
 
 /** 單一分類項目（key、顯示名稱、圖示） */
 interface CategoryItem {
@@ -175,10 +177,10 @@ const uploadDialogOpen = ref(false)
 const uploadLoading = ref(false)
 const uploadError = ref<string | null>(null)
 
-/** 上傳表單 */
+/** 上傳表單（支援多檔） */
 const uploadForm = ref({
   category: 'main',
-  file: null as File | null,
+  files: [] as File[],
 })
 
 /** 選中的分類（供上傳用，排除「全部」） */
@@ -186,35 +188,46 @@ const uploadCategoryOptions = computed(() =>
   categories.value.filter((c) => c.key !== 'all').map((c) => ({ value: c.key, label: c.label }))
 )
 
-/** 送出上傳（呼叫 API） */
+/** 送出上傳（多檔並行，經由上傳佇列，進度顯示於 Header 上傳進度） */
 async function submitUpload() {
-  if (!uploadForm.value.file || !projectId.value) return
+  const files = uploadForm.value.files
+  if (!files.length || !projectId.value) return
   uploadLoading.value = true
   uploadError.value = null
-  try {
-    await apiUploadFile({
-      file: uploadForm.value.file,
-      projectId: projectId.value,
-      category: uploadForm.value.category,
-    })
-    const firstKey = customCategories.value[0]?.key ?? 'other'
-    uploadForm.value = { category: firstKey, file: null }
-    uploadDialogOpen.value = false
-    await fetchFileList()
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { error?: { message?: string } } }; message?: string }
+  const results = await Promise.allSettled(
+    files.map((file) =>
+      enqueueAndUpload({
+        file,
+        projectId: projectId.value,
+        category: uploadForm.value.category,
+        source: 'contract',
+      })
+    )
+  )
+  const succeeded = results.filter((r) => r.status === 'fulfilled').length
+  const failed = results.filter((r) => r.status === 'rejected').length
+  const firstKey = customCategories.value[0]?.key ?? 'other'
+  uploadForm.value = { category: firstKey, files: [] }
+  uploadDialogOpen.value = false
+  await fetchFileList()
+  if (failed > 0) {
     uploadError.value =
-      err.response?.data?.error?.message ?? err.message ?? '上傳失敗，請稍後再試'
-  } finally {
-    uploadLoading.value = false
+      succeeded > 0
+        ? `${succeeded} 個成功，${failed} 個失敗，請至「檔案上傳進度」查看詳情`
+        : '上傳失敗，請至「檔案上傳進度」查看詳情'
   }
+  uploadLoading.value = false
 }
 
 function closeUploadDialog() {
   const firstKey = customCategories.value[0]?.key ?? 'other'
-  uploadForm.value = { category: firstKey, file: null }
+  uploadForm.value = { category: firstKey, files: [] }
   uploadError.value = null
   uploadDialogOpen.value = false
+}
+
+function removeUploadFile(index: number) {
+  uploadForm.value.files = uploadForm.value.files.filter((_, i) => i !== index)
 }
 
 /** 表格：排序與選取 */
@@ -346,7 +359,8 @@ async function batchDelete() {
 
 function onFileSelect(e: Event) {
   const input = e.target as HTMLInputElement
-  uploadForm.value.file = input.files?.[0] ?? null
+  const newFiles = input.files ? Array.from(input.files) : []
+  uploadForm.value.files = [...uploadForm.value.files, ...newFiles]
   input.value = ''
 }
 </script>
@@ -470,17 +484,37 @@ function onFileSelect(e: Event) {
                   </Select>
                 </div>
                 <div class="grid gap-2">
-                  <label class="text-sm font-medium text-foreground">檔案</label>
+                  <label class="text-sm font-medium text-foreground">檔案（可多選）</label>
                   <div class="flex items-center gap-2">
                     <Input
                       type="file"
                       class="flex-1"
                       accept=".pdf,.doc,.docx"
+                      multiple
                       @change="onFileSelect"
                     />
                   </div>
-                  <p v-if="uploadForm.file" class="text-xs text-muted-foreground">
-                    已選：{{ uploadForm.file.name }}
+                  <ul v-if="uploadForm.files.length" class="mt-1 space-y-1 rounded-md border border-border bg-muted/30 p-2 max-h-32 overflow-y-auto">
+                    <li
+                      v-for="(f, idx) in uploadForm.files"
+                      :key="idx"
+                      class="flex items-center justify-between gap-2 text-xs text-foreground"
+                    >
+                      <span class="truncate">{{ f.name }}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="size-6 shrink-0"
+                        aria-label="移除"
+                        @click="removeUploadFile(idx)"
+                      >
+                        <Trash2 class="size-3.5" />
+                      </Button>
+                    </li>
+                  </ul>
+                  <p v-if="uploadForm.files.length" class="text-xs text-muted-foreground">
+                    已選 {{ uploadForm.files.length }} 個檔案
                   </p>
                 </div>
               </div>
@@ -492,10 +526,10 @@ function onFileSelect(e: Event) {
                   取消
                 </Button>
                 <Button
-                  :disabled="!uploadForm.file || uploadLoading"
+                  :disabled="!uploadForm.files.length || uploadLoading"
                   @click="submitUpload"
                 >
-                  {{ uploadLoading ? '上傳中…' : '上傳' }}
+                  {{ uploadLoading ? '上傳中…' : uploadForm.files.length ? `上傳 ${uploadForm.files.length} 個檔案` : '上傳' }}
                 </Button>
               </DialogFooter>
             </DialogContent>

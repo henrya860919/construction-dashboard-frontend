@@ -12,6 +12,7 @@ export const API_PATH = {
   /** 單租後台（需 admin 角色） */
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,
   ADMIN_USERS: `${API_V1}/admin/users`,
+  ADMIN_TENANT_INFO: `${API_V1}/admin/tenant-info`,
   /** 多租後台（需 platform_admin） */
   PLATFORM_TENANTS: `${API_V1}/platform-admin/tenants`,
   PLATFORM_PROJECTS: `${API_V1}/platform-admin/projects`,

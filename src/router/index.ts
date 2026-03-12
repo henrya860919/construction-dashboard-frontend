@@ -94,6 +94,11 @@ const router = createRouter({
         // 單租後台（共用 DefaultLayout，sidebar 依路由切換為後台選單）
         { path: 'admin', redirect: ROUTE_PATH.ADMIN_PROJECTS },
         {
+          path: 'admin/tenant-info',
+          name: ROUTE_NAME.ADMIN_TENANT_INFO,
+          component: () => import('@/views/admin/AdminTenantInfoView.vue'),
+        },
+        {
           path: 'admin/projects',
           name: ROUTE_NAME.ADMIN_PROJECTS,
           component: () => import('@/views/admin/AdminProjectsView.vue'),

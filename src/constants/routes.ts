@@ -35,6 +35,7 @@ export const ROUTE_PATH = {
 
   /** 單租後台（租戶自管） */
   ADMIN: '/admin',
+  ADMIN_TENANT_INFO: '/admin/tenant-info',
   ADMIN_PROJECTS: '/admin/projects',
   ADMIN_MEMBERS: '/admin/members',
   ADMIN_SETTINGS: '/admin/settings',
@@ -65,6 +66,7 @@ export const ROUTE_NAME = {
   PROJECT_CONTRACT_SCHEDULE: 'project-contract-schedule',
   PROJECT_CONTRACT_MANAGEMENT: 'project-contract-management',
   ADMIN: 'admin',
+  ADMIN_TENANT_INFO: 'admin-tenant-info',
   ADMIN_PROJECTS: 'admin-projects',
   ADMIN_MEMBERS: 'admin-members',
   ADMIN_SETTINGS: 'admin-settings',

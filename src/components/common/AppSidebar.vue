@@ -22,6 +22,7 @@ import {
   Users,
   Settings,
   ShieldCheck,
+  Info,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -60,6 +61,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Users,
   Settings,
   ShieldCheck,
+  Info,
 }
 
 withDefaults(

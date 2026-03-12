@@ -10,7 +10,7 @@ import type { ApiResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -166,28 +166,26 @@ function goToProject(projectId: string) {
       </p>
     </div>
 
-    <Card class="border-border bg-card">
-      <CardHeader class="pb-3">
-        <div class="flex flex-wrap items-center justify-between gap-4">
-          <div class="flex flex-wrap items-center gap-3">
-            <Select v-model="statusFilter">
-              <SelectTrigger class="w-[140px] bg-background">
-                <SelectValue placeholder="狀態" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="ALL_STATUS_VALUE">全部狀態</SelectItem>
-                <SelectItem value="active">使用中</SelectItem>
-                <SelectItem value="archived">已封存</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Dialog :open="dialogOpen" @update:open="onOpenChange">
-            <DialogTrigger as-child>
-              <Button class="gap-2">
-                <Plus class="size-4" />
-                新增專案
-              </Button>
-            </DialogTrigger>
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <Select v-model="statusFilter">
+          <SelectTrigger class="w-[140px] bg-background">
+            <SelectValue placeholder="狀態" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="ALL_STATUS_VALUE">全部狀態</SelectItem>
+            <SelectItem value="active">使用中</SelectItem>
+            <SelectItem value="archived">已封存</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Dialog :open="dialogOpen" @update:open="onOpenChange">
+        <DialogTrigger as-child>
+          <Button class="gap-2">
+            <Plus class="size-4" />
+            新增專案
+          </Button>
+        </DialogTrigger>
             <DialogContent class="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>新增專案</DialogTitle>
@@ -238,8 +236,9 @@ function goToProject(projectId: string) {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
-      </CardHeader>
+    </div>
+
+    <Card class="border-border bg-card">
       <CardContent class="p-4">
         <div v-if="loading" class="flex items-center justify-center py-16">
           <Loader2 class="size-8 animate-spin text-muted-foreground" />

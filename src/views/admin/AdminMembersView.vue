@@ -8,7 +8,7 @@ import type { ApiResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -199,28 +199,26 @@ function onOpenChange(open: boolean) {
       </p>
     </div>
 
-    <Card class="border-border bg-card">
-      <CardHeader class="pb-3">
-        <div class="flex flex-wrap items-center justify-between gap-4">
-          <div class="flex flex-wrap items-center gap-3">
-            <Select v-model="memberTypeFilter" @update:model-value="loadMembers">
-              <SelectTrigger class="w-[140px] bg-background">
-                <SelectValue placeholder="全部成員" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="ALL_MEMBERS_VALUE">全部成員</SelectItem>
-                <SelectItem value="internal">內部成員</SelectItem>
-                <SelectItem value="external">外部成員</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Dialog :open="dialogOpen" @update:open="onOpenChange">
-            <DialogTrigger as-child>
-              <Button class="gap-2">
-                <Plus class="size-4" />
-                新增成員
-              </Button>
-            </DialogTrigger>
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <Select v-model="memberTypeFilter" @update:model-value="loadMembers">
+          <SelectTrigger class="w-[140px] bg-background">
+            <SelectValue placeholder="全部成員" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem :value="ALL_MEMBERS_VALUE">全部成員</SelectItem>
+            <SelectItem value="internal">內部成員</SelectItem>
+            <SelectItem value="external">外部成員</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Dialog :open="dialogOpen" @update:open="onOpenChange">
+        <DialogTrigger as-child>
+          <Button class="gap-2">
+            <Plus class="size-4" />
+            新增成員
+          </Button>
+        </DialogTrigger>
             <DialogContent class="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>新增成員</DialogTitle>
@@ -305,9 +303,7 @@ function onOpenChange(open: boolean) {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
-      </CardHeader>
-    </Card>
+    </div>
 
     <Card class="border-border bg-card">
       <CardContent class="p-4">

@@ -6,6 +6,7 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   '/': '首頁',
   '/projects': '專案列表',
   '/admin': '後台',
+  '/admin/tenant-info': '租戶資訊',
   '/admin/projects': '專案管理',
   '/admin/members': '成員管理',
   '/admin/settings': '公司設定',

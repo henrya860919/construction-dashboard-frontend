@@ -53,6 +53,7 @@ export const GLOBAL_SIDEBAR_ENTRIES: NavItem[] = [
 
 /** 單租後台側欄（廠商管理員點「後台管理」後顯示） */
 export const ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
+  { id: 'admin-tenant-info', label: '租戶資訊', path: '/admin/tenant-info', icon: 'Info' },
   { id: 'admin-projects', label: '專案管理', path: '/admin/projects', icon: 'FolderKanban' },
   { id: 'admin-members', label: '成員管理', path: '/admin/members', icon: 'Users' },
   { id: 'admin-settings', label: '公司設定', path: '/admin/settings', icon: 'Settings' },

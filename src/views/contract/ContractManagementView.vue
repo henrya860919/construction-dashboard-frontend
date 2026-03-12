@@ -8,7 +8,8 @@ import {
   useVueTable,
 } from '@tanstack/vue-table'
 import { FlexRender } from '@tanstack/vue-table'
-import { ref, computed, h, watch } from 'vue'
+import { ref, computed, h, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { valueUpdater } from '@/lib/utils'
 import type { SortingState } from '@tanstack/vue-table'
 import {
@@ -58,6 +59,10 @@ import {
   Trash2,
   Plus,
 } from 'lucide-vue-next'
+import { listProjectFiles, uploadFile as apiUploadFile, deleteFile, getFileBlob } from '@/api/files'
+
+const route = useRoute()
+const projectId = computed(() => (route.params.projectId as string) ?? '')
 
 /** 單一分類項目（key、顯示名稱、圖示） */
 interface CategoryItem {
@@ -112,8 +117,52 @@ watch(addCategoryDialogOpen, (open) => {
   if (open) newCategoryLabel.value = ''
 })
 
-/** 契約檔案列表（之後改 API 取得） */
+/** 契約檔案列表（由 API 取得） */
 const fileList = ref<ContractFileRow[]>([])
+const listLoading = ref(false)
+const listError = ref<string | null>(null)
+
+function toContractRow(item: {
+  id: string
+  fileName: string
+  createdAt: string
+  uploaderName: string | null
+  category: string | null
+  url?: string
+}): ContractFileRow {
+  return {
+    id: item.id,
+    fileName: item.fileName,
+    uploadDate: item.createdAt.slice(0, 10),
+    uploader: item.uploaderName ?? '—',
+    category: item.category ?? 'other',
+    url: item.url,
+  }
+}
+
+async function fetchFileList() {
+  if (!projectId.value) return
+  listLoading.value = true
+  listError.value = null
+  try {
+    const { data } = await listProjectFiles({
+      projectId: projectId.value,
+      limit: 500,
+    })
+    fileList.value = data.map(toContractRow)
+  } catch (e: unknown) {
+    const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : '無法載入檔案列表'
+    listError.value = msg
+    fileList.value = []
+  } finally {
+    listLoading.value = false
+  }
+}
+
+onMounted(() => fetchFileList())
+watch(projectId, (id) => {
+  if (id) fetchFileList()
+})
 
 /** 依選擇分類篩選 */
 const filteredList = computed(() => {
@@ -123,6 +172,8 @@ const filteredList = computed(() => {
 
 /** 上傳 Dialog 開關 */
 const uploadDialogOpen = ref(false)
+const uploadLoading = ref(false)
+const uploadError = ref<string | null>(null)
 
 /** 上傳表單 */
 const uploadForm = ref({
@@ -135,27 +186,34 @@ const uploadCategoryOptions = computed(() =>
   categories.value.filter((c) => c.key !== 'all').map((c) => ({ value: c.key, label: c.label }))
 )
 
-/** 送出上傳（之後改 API） */
-function submitUpload() {
-  if (!uploadForm.value.file) return
-  fileList.value = [
-    ...fileList.value,
-    {
-      id: String(Date.now()),
-      fileName: uploadForm.value.file.name,
-      uploadDate: new Date().toISOString().slice(0, 10),
-      uploader: '目前使用者',
+/** 送出上傳（呼叫 API） */
+async function submitUpload() {
+  if (!uploadForm.value.file || !projectId.value) return
+  uploadLoading.value = true
+  uploadError.value = null
+  try {
+    await apiUploadFile({
+      file: uploadForm.value.file,
+      projectId: projectId.value,
       category: uploadForm.value.category,
-    },
-  ]
-  const firstKey = customCategories.value[0]?.key ?? 'other'
-  uploadForm.value = { category: firstKey, file: null }
-  uploadDialogOpen.value = false
+    })
+    const firstKey = customCategories.value[0]?.key ?? 'other'
+    uploadForm.value = { category: firstKey, file: null }
+    uploadDialogOpen.value = false
+    await fetchFileList()
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { error?: { message?: string } } }; message?: string }
+    uploadError.value =
+      err.response?.data?.error?.message ?? err.message ?? '上傳失敗，請稍後再試'
+  } finally {
+    uploadLoading.value = false
+  }
 }
 
 function closeUploadDialog() {
   const firstKey = customCategories.value[0]?.key ?? 'other'
   uploadForm.value = { category: firstKey, file: null }
+  uploadError.value = null
   uploadDialogOpen.value = false
 }
 
@@ -205,15 +263,36 @@ const columns = computed<ColumnDef<ContractFileRow, unknown>[]>(() => [
       h('div', { class: 'flex' }, [
         h(ContractFileRowActions, {
           row: row.original,
-          onDownload: (r) => { /* TODO: 下載 */ console.log('下載', r) },
-          onDelete: (r) => {
-            fileList.value = fileList.value.filter((x) => x.id !== r.id)
-          },
+          onDownload: (r) => handleDownload(r),
+          onDelete: (r) => handleDelete(r),
         }),
       ]),
     enableSorting: false,
   },
 ])
+
+async function handleDownload(row: ContractFileRow) {
+  try {
+    const { blob, fileName } = await getFileBlob(row.id, { download: true, fileName: row.fileName })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    // 可選：toast 錯誤
+  }
+}
+
+async function handleDelete(row: ContractFileRow) {
+  try {
+    await deleteFile(row.id)
+    fileList.value = fileList.value.filter((x) => x.id !== row.id)
+  } catch {
+    // 可選：toast 錯誤
+  }
+}
 
 const table = useVueTable({
   get data() {
@@ -252,9 +331,16 @@ function batchDownload() {
 }
 
 /** 批次刪除 */
-function batchDelete() {
-  const ids = new Set(selectedRows.value.map((r) => r.original.id))
-  fileList.value = fileList.value.filter((x) => !ids.has(x.id))
+async function batchDelete() {
+  const rows = selectedRows.value.map((r) => r.original)
+  for (const row of rows) {
+    try {
+      await deleteFile(row.id)
+      fileList.value = fileList.value.filter((x) => x.id !== row.id)
+    } catch {
+      // 單筆失敗可略過或 toast
+    }
+  }
   rowSelection.value = {}
 }
 
@@ -398,12 +484,18 @@ function onFileSelect(e: Event) {
                   </p>
                 </div>
               </div>
+              <p v-if="uploadError" class="text-sm text-destructive">
+                {{ uploadError }}
+              </p>
               <DialogFooter>
                 <Button variant="outline" @click="closeUploadDialog">
                   取消
                 </Button>
-                <Button :disabled="!uploadForm.file" @click="submitUpload">
-                  上傳
+                <Button
+                  :disabled="!uploadForm.file || uploadLoading"
+                  @click="submitUpload"
+                >
+                  {{ uploadLoading ? '上傳中…' : '上傳' }}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -412,7 +504,13 @@ function onFileSelect(e: Event) {
       </CardHeader>
       <CardContent>
         <div class="space-y-4">
-          <div class="rounded-md border border-border">
+          <p v-if="listError" class="text-sm text-destructive">
+            {{ listError }}
+          </p>
+          <p v-if="listLoading" class="text-sm text-muted-foreground">
+            載入中…
+          </p>
+          <div v-else class="rounded-md border border-border">
             <Table>
               <TableHeader>
                 <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">

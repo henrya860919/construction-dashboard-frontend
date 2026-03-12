@@ -21,4 +21,12 @@ export const API_PATH = {
   MONITORING_TEMPLATE: `${API_V1}/monitoring/template`,
   /** 監測：上傳 Excel 填寫資料（POST multipart/form-data） */
   MONITORING_UPLOAD: `${API_V1}/monitoring/upload`,
+  /** 檔案：傳統上傳（POST multipart: file, projectId, category?） */
+  FILES_UPLOAD: `${API_V1}/files/upload`,
+  /** 檔案：取得／下載（GET，?download=true 下載） */
+  FILES_GET: (id: string) => `${API_V1}/files/${id}`,
+  /** 檔案：刪除 */
+  FILES_DELETE: (id: string) => `${API_V1}/files/${id}`,
+  /** 專案附件列表（GET，query: page, limit, category?） */
+  PROJECT_FILES: (projectId: string) => `${API_V1}/projects/${projectId}/files`,
 } as const

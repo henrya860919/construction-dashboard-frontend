@@ -102,6 +102,9 @@ const sidebarTitle = computed(() => {
 const hasLogo = computed(() => tenantBrandingStore.hasLogo)
 const { objectUrl: tenantLogoUrl } = useTenantLogoUrl(hasLogo)
 
+/** 無租戶 logo 時顯示預設圖示（平台方與一般租戶皆適用） */
+const showDefaultLogoIcon = computed(() => !tenantLogoUrl.value)
+
 /** 登入且有租戶時拉取品牌；登出時清空 */
 watch(
   () => authStore.isAuthenticated && authStore.user?.tenantId,
@@ -188,6 +191,7 @@ function isProjectChildActive(pathSuffix: string): boolean {
         class="flex shrink-0 items-center gap-3 border-border bg-muted/30 px-3 py-4"
         :class="collapsed ? 'justify-center px-2' : ''"
       >
+        <!-- 租戶 Logo 或平台方預設 Logo -->
         <div
           v-if="tenantLogoUrl"
           class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-zinc-200 shadow-sm"
@@ -198,6 +202,13 @@ function isProjectChildActive(pathSuffix: string): boolean {
             alt=""
             class="size-full object-cover"
           />
+        </div>
+        <div
+          v-else-if="showDefaultLogoIcon"
+          class="flex size-7 shrink-0 items-center justify-center rounded-full bg-white dark:bg-zinc-200 shadow-sm text-muted-foreground"
+          aria-hidden
+        >
+          <Building2 class="size-4" />
         </div>
         <div v-show="!collapsed" class="min-w-0 flex-1">
           <p class="truncate text-sm font-semibold text-foreground">

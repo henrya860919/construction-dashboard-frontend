@@ -3,17 +3,26 @@ import { defineStore } from 'pinia'
 import {
   getThemeMode,
   setThemeMode,
+  getAccent,
+  setAccent as setAccentStorage,
   applyTheme,
   subscribeToSystemPreference,
 } from '@/lib/theme'
-import type { ThemeMode } from '@/constants/theme'
+import type { ThemeMode, AccentScheme } from '@/constants/theme'
 
 export const useThemeStore = defineStore('theme', () => {
   const mode = ref<ThemeMode>(getThemeMode())
+  const accent = ref<AccentScheme>(getAccent())
 
   function setMode(value: ThemeMode) {
     mode.value = value
     setThemeMode(value)
+    applyTheme()
+  }
+
+  function setAccent(value: AccentScheme) {
+    accent.value = value
+    setAccentStorage(value)
     applyTheme()
   }
 
@@ -36,5 +45,5 @@ export const useThemeStore = defineStore('theme', () => {
     return unsub
   })
 
-  return { mode, isDark, setMode, toggle }
+  return { mode, accent, isDark, setMode, setAccent, toggle }
 })

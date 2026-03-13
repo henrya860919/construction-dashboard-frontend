@@ -1,9 +1,26 @@
-import { THEME_STORAGE_KEY, type ThemeMode } from '@/constants/theme'
+import {
+  THEME_STORAGE_KEY,
+  ACCENT_STORAGE_KEY,
+  type ThemeMode,
+  type AccentScheme,
+} from '@/constants/theme'
+
+const VALID_ACCENTS: AccentScheme[] = ['default', 'blue', 'green', 'orange', 'violet']
 
 function getStored(): ThemeMode | null {
   try {
     const v = localStorage.getItem(THEME_STORAGE_KEY)
     if (v === 'light' || v === 'dark' || v === 'system') return v
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function getStoredAccent(): AccentScheme | null {
+  try {
+    const v = localStorage.getItem(ACCENT_STORAGE_KEY)
+    if (v && VALID_ACCENTS.includes(v as AccentScheme)) return v as AccentScheme
   } catch {
     /* ignore */
   }
@@ -22,6 +39,24 @@ export function setThemeMode(mode: ThemeMode): void {
   }
 }
 
+export function getAccent(): AccentScheme {
+  return getStoredAccent() ?? 'default'
+}
+
+export function setAccent(scheme: AccentScheme): void {
+  try {
+    localStorage.setItem(ACCENT_STORAGE_KEY, scheme)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function applyAccent(): void {
+  if (typeof document === 'undefined') return
+  const scheme = getAccent()
+  document.documentElement.setAttribute('data-accent', scheme)
+}
+
 export function getEffectiveIsDark(): boolean {
   const mode = getThemeMode()
   if (mode === 'dark') return true
@@ -33,6 +68,7 @@ export function applyTheme(): void {
   if (typeof document === 'undefined') return
   const isDark = getEffectiveIsDark()
   document.documentElement.classList.toggle('dark', isDark)
+  applyAccent()
 }
 
 /** 訂閱系統偏好變更（僅在 mode 為 system 時有意義），回傳取消訂閱函式 */

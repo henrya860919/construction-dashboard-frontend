@@ -53,7 +53,6 @@ export const ROUTE_PATH = {
   PLATFORM_ADMIN_ANNOUNCEMENTS: '/platform-admin/announcements',
   PLATFORM_ADMIN_SETTINGS: '/platform-admin/settings',
   PLATFORM_ADMIN_SYSTEM: '/platform-admin/system',
-  /** 非專案內（全域） */
 } as const
 
 export const ROUTE_NAME = {

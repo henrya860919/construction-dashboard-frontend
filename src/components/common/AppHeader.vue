@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useThemeStore } from '@/stores/theme'
@@ -20,9 +21,11 @@ import { useUploadQueueStore } from '@/stores/uploadQueue'
 import { useAuth } from '@/composables/useAuth'
 import UploadQueuePanel from '@/components/common/UploadQueuePanel.vue'
 import AnnouncementPanel from '@/components/common/AnnouncementPanel.vue'
+import PersonalSettingsModal from '@/components/common/PersonalSettingsModal.vue'
 import { useAnnouncementStore } from '@/stores/announcements'
 
 const route = useRoute()
+const personalSettingsOpen = ref(false)
 const sidebarStore = useSidebarStore()
 const projectStore = useProjectStore()
 const themeStore = useThemeStore()
@@ -142,9 +145,13 @@ function handleMenuClick() {
         <DropdownMenuContent align="end" class="w-48">
           <DropdownMenuLabel>{{ authStore.user?.name || authStore.user?.email }}</DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem class="cursor-pointer" @click="personalSettingsOpen = true">
+            個人設定
+          </DropdownMenuItem>
           <DropdownMenuItem @click="logout">登出</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <PersonalSettingsModal v-model:open="personalSettingsOpen" />
     </div>
   </header>
 </template>

@@ -8,6 +8,7 @@ export const API_PATH = {
   AUTH_LOGOUT: `${API_V1}/auth/logout`,
   AUTH_REFRESH: `${API_V1}/auth/refresh`,
   AUTH_ME: `${API_V1}/auth/me`,
+  AUTH_CHANGE_PASSWORD: `${API_V1}/auth/me/password`,
   PROJECTS: `${API_V1}/projects`,
   /** 單租後台（需 admin 角色） */
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,

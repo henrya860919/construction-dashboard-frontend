@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Menu, User, Bell, Sun, Moon, Upload, Megaphone } from 'lucide-vue-next'
+import { Menu, User, Bell, Upload, Megaphone } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -14,7 +14,6 @@ import {
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSidebarStore } from '@/stores/sidebar'
-import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectStore } from '@/stores/project'
 import { useUploadQueueStore } from '@/stores/uploadQueue'
@@ -28,7 +27,6 @@ const route = useRoute()
 const personalSettingsOpen = ref(false)
 const sidebarStore = useSidebarStore()
 const projectStore = useProjectStore()
-const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const uploadQueueStore = useUploadQueueStore()
 const announcementStore = useAnnouncementStore()
@@ -76,15 +74,6 @@ function handleMenuClick() {
       <span class="truncate font-semibold text-foreground">{{ headerTitle }}</span>
     </div>
     <div class="flex shrink-0 items-center gap-2">
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="切換深色／淺色模式"
-        @click="themeStore.toggle()"
-      >
-        <Sun v-if="themeStore.isDark" class="size-5" />
-        <Moon v-else class="size-5" />
-      </Button>
       <Button variant="ghost" size="icon" class="relative" aria-label="通知">
         <Bell class="size-5" />
         <Badge

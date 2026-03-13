@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import type { ThemeMode, AccentScheme } from '@/constants/theme'
+import { changePassword } from '@/api/auth'
 import {
   Dialog,
   DialogContent,
@@ -10,6 +12,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -17,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { User } from 'lucide-vue-next'
+import { User, Lock, Loader2 } from 'lucide-vue-next'
 
 defineProps<{
   open: boolean
@@ -28,6 +32,55 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+
+const passwordForm = ref({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+const passwordLoading = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
+
+watch(() => passwordForm.value, () => {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+}, { deep: true })
+
+async function submitChangePassword() {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  const { currentPassword, newPassword, confirmPassword } = passwordForm.value
+  if (!currentPassword.trim()) {
+    passwordError.value = '請輸入目前密碼'
+    return
+  }
+  if (!newPassword) {
+    passwordError.value = '請輸入新密碼'
+    return
+  }
+  if (newPassword.length < 6) {
+    passwordError.value = '新密碼至少 6 碼'
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    passwordError.value = '兩次輸入的新密碼不一致'
+    return
+  }
+  passwordLoading.value = true
+  try {
+    await changePassword({ currentPassword, newPassword })
+    passwordSuccess.value = '密碼已變更'
+    passwordForm.value = { currentPassword: '', newPassword: '', confirmPassword: '' }
+  } catch (err: unknown) {
+    const msg = err && typeof err === 'object' && 'response' in err
+      ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
+      : '變更密碼失敗'
+    passwordError.value = msg || '變更密碼失敗'
+  } finally {
+    passwordLoading.value = false
+  }
+}
 
 const themeOptions: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: '淺色' },
@@ -82,6 +135,61 @@ const accentOptions: { value: AccentScheme; label: string }[] = [
                 {{ authStore.user?.systemRole === 'platform_admin' ? '平台管理員' : authStore.user?.systemRole === 'tenant_admin' ? '租戶管理員' : '專案使用者' }}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader class="pb-3">
+            <CardTitle class="flex items-center gap-2 text-base">
+              <Lock class="size-4" />
+              變更密碼
+            </CardTitle>
+            <CardDescription>修改登入密碼，請使用至少 6 碼</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4 pt-0">
+            <div class="grid gap-2">
+              <label for="current-password" class="text-sm font-medium text-foreground">目前密碼</label>
+              <Input
+                id="current-password"
+                v-model="passwordForm.currentPassword"
+                type="password"
+                placeholder="請輸入目前密碼"
+                class="bg-background"
+                autocomplete="current-password"
+              />
+            </div>
+            <div class="grid gap-2">
+              <label for="new-password" class="text-sm font-medium text-foreground">新密碼</label>
+              <Input
+                id="new-password"
+                v-model="passwordForm.newPassword"
+                type="password"
+                placeholder="至少 6 碼"
+                class="bg-background"
+                autocomplete="new-password"
+              />
+            </div>
+            <div class="grid gap-2">
+              <label for="confirm-password" class="text-sm font-medium text-foreground">確認新密碼</label>
+              <Input
+                id="confirm-password"
+                v-model="passwordForm.confirmPassword"
+                type="password"
+                placeholder="再輸入一次新密碼"
+                class="bg-background"
+                autocomplete="new-password"
+              />
+            </div>
+            <p v-if="passwordError" class="text-sm text-destructive">{{ passwordError }}</p>
+            <p v-if="passwordSuccess" class="text-sm text-foreground">{{ passwordSuccess }}</p>
+            <Button
+              type="button"
+              :disabled="passwordLoading"
+              @click="submitChangePassword"
+            >
+              <Loader2 v-if="passwordLoading" class="mr-2 size-4 animate-spin" />
+              變更密碼
+            </Button>
           </CardContent>
         </Card>
 

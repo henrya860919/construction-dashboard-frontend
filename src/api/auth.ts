@@ -21,3 +21,15 @@ export async function refreshToken() {
   )
   return data.data.accessToken
 }
+
+export interface ChangePasswordPayload {
+  currentPassword: string
+  newPassword: string
+}
+
+export async function changePassword(payload: ChangePasswordPayload) {
+  await apiClient.patch<ApiResponse<{ ok: true }>>(
+    API_PATH.AUTH_CHANGE_PASSWORD,
+    payload
+  )
+}

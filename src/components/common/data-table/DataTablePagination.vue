@@ -1,3 +1,4 @@
+
 <script setup lang="ts" generic="TData">
 import type { Table } from '@tanstack/vue-table'
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-vue-next'
@@ -12,17 +13,20 @@ import {
 
 interface Props {
   table: Table<TData>
+  /** 無勾選列時隱藏「列已選」區塊（如登入紀錄、稽核日誌） */
+  hideSelectionInfo?: boolean
 }
 
-defineProps<Props>()
+withDefaults(defineProps<Props>(), { hideSelectionInfo: false })
 </script>
 
 <template>
   <div class="flex items-center justify-between px-2">
-    <div class="flex-1 text-sm text-muted-foreground">
-      {{ table.getFilteredSelectedRowModel().rows.length }} / 
+    <div v-if="!hideSelectionInfo" class="flex-1 text-sm text-muted-foreground">
+      {{ table.getFilteredSelectedRowModel().rows.length }} /
       {{ table.getFilteredRowModel().rows.length }} 列已選
     </div>
+    <div v-else class="flex-1" />
     <div class="flex items-center gap-6 lg:gap-8">
       <div class="flex items-center gap-2">
         <p class="text-sm font-medium">每頁筆數</p>

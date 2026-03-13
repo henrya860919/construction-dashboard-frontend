@@ -9,6 +9,14 @@ alwaysApply: true
 
 ---
 
+## 零、元件使用原則
+
+- **有元件就用，勿重做**：專案內已有之共用元件（如 **DataTablePagination**、ButtonGroup、DataTable 等）應**優先使用**，勿在頁面內重做相同功能或樣式。
+- **表格分頁**：有分頁的表格一律使用 **DataTablePagination**（搭配 `useVueTable` 與 `:table="table"`）；無勾選列時傳入 `hide-selection-info` 隱藏「列已選」區塊。勿自寫上一頁／下一頁或每頁筆數選單。
+- **差異需求**：若需求與既有元件略有差異，應透過 **props**（如 `hideSelectionInfo`）或**擴充既有元件**來滿足，而非在頁面內另寫一套相同 UI。
+
+---
+
 ## 一、版面與導航
 
 ### 1.1 Header（AppHeader）
@@ -88,3 +96,4 @@ alwaysApply: true
 - [ ] **按鈕**：未特別需求時不覆寫 size（預設 sm）；多選列使用 ButtonGroup。
 - [ ] **主題**：未使用硬編碼色、淺色／深色皆已檢查可讀性。
 - [ ] **API**：使用專案內 API client、錯誤依 api-contract 處理（如 401 導向登入）。
+- [ ] **元件**：有對應共用元件時一律使用（如分頁用 DataTablePagination），未在頁面內重做相同 UI。

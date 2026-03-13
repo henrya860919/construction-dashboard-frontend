@@ -115,7 +115,9 @@ async function handleDownload(row: FormTemplateItem) {
 }
 
 /** 僅專案樣板可刪除；用於判斷選取項是否可批次刪除 */
-const deletableIds = computed(() => new Set(list.value.filter((r) => r.isDefault !== true).map((r) => r.id)))
+const deletableIds = computed(
+  () => new Set(list.value.filter((r) => r.isDefault !== true).map((r) => r.id))
+)
 
 const sorting = ref<SortingState>([])
 const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => [
@@ -152,10 +154,14 @@ const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => [
     accessorKey: 'description',
     header: '描述',
     cell: ({ row }) =>
-      h('div', {
-        class: 'max-w-[220px] truncate text-muted-foreground',
-        title: row.original.description ?? '',
-      }, row.original.description || '—'),
+      h(
+        'div',
+        {
+          class: 'max-w-[220px] truncate text-muted-foreground',
+          title: row.original.description ?? '',
+        },
+        row.original.description || '—'
+      ),
   },
   {
     accessorKey: 'fileSize',
@@ -167,10 +173,14 @@ const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => [
     accessorKey: 'isDefault',
     header: '類型',
     cell: ({ row }) =>
-      h(Badge, {
-        variant: row.original.isDefault ? 'secondary' : 'default',
-        class: 'text-xs',
-      }, () => row.original.isDefault ? '預設樣板' : '專案樣板'),
+      h(
+        Badge,
+        {
+          variant: row.original.isDefault ? 'secondary' : 'default',
+          class: 'text-xs',
+        },
+        () => (row.original.isDefault ? '預設樣板' : '專案樣板')
+      ),
   },
   {
     accessorKey: 'updatedAt',
@@ -258,9 +268,11 @@ async function submitAdd() {
     addForm.value = { name: '', description: '', file: null }
     await fetchList()
   } catch (err: unknown) {
-    const msg = err && typeof err === 'object' && 'response' in err
-      ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-      : '新增失敗'
+    const msg =
+      err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+            ?.message
+        : '新增失敗'
     addError.value = msg ?? '新增失敗'
   } finally {
     addLoading.value = false
@@ -346,9 +358,7 @@ async function batchDownload() {
       <template v-if="hasSelection">
         <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
         <ButtonGroup>
-          <Button variant="outline" @click="clearSelection">
-            取消選取
-          </Button>
+          <Button variant="outline" @click="clearSelection"> 取消選取 </Button>
           <Button
             variant="outline"
             size="sm"
@@ -377,7 +387,6 @@ async function batchDownload() {
       </Button>
     </div>
 
-    <p class="text-sm text-muted-foreground">預設樣板與本專案自訂樣板，可下載使用；僅專案樣板可刪除</p>
     <div class="rounded-lg border border-border bg-card p-4">
       <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
         <Loader2 class="size-8 animate-spin" />
@@ -443,11 +452,7 @@ async function batchDownload() {
           </div>
           <div class="grid gap-2">
             <label class="text-sm font-medium text-foreground">名稱</label>
-            <Input
-              v-model="addForm.name"
-              placeholder="例：專案專用表單"
-              class="bg-background"
-            />
+            <Input v-model="addForm.name" placeholder="例：專案專用表單" class="bg-background" />
           </div>
           <div class="grid gap-2">
             <label class="text-sm font-medium text-foreground">描述</label>
@@ -479,7 +484,9 @@ async function batchDownload() {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" :disabled="deleteLoading" @click="deleteDialogOpen = false">取消</Button>
+          <Button variant="outline" :disabled="deleteLoading" @click="deleteDialogOpen = false"
+            >取消</Button
+          >
           <Button variant="destructive" :disabled="deleteLoading" @click="confirmDelete">
             <Loader2 v-if="deleteLoading" class="mr-2 size-4 animate-spin" />
             刪除
@@ -498,7 +505,9 @@ async function batchDownload() {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete">取消</Button>
+          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete"
+            >取消</Button
+          >
           <Button variant="destructive" :disabled="batchDeleteLoading" @click="confirmBatchDelete">
             <Loader2 v-if="batchDeleteLoading" class="mr-2 size-4 animate-spin" />
             刪除

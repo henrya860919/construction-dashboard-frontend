@@ -12,6 +12,89 @@ import type {
 
 export type { TenantItem, CreateTenantPayload, UpdateTenantPayload, PlatformProjectItem, PlatformUserItem }
 
+// ---------- 監控與用量 ----------
+
+export interface MonitoringStats {
+  login: { todayTotal: number; todaySuccess: number; todayFailed: number; last7DaysTotal: number; last7DaysFailed: number }
+  activeUsers: { last24h: number; last7d: number }
+  audit: { todayCount: number; last7DaysCount: number }
+}
+
+export async function fetchMonitoringStats(): Promise<MonitoringStats> {
+  const { data } = await apiClient.get<ApiResponse<MonitoringStats>>(API_PATH.PLATFORM_MONITORING_STATS)
+  return data.data
+}
+
+export interface LoginLogItem {
+  id: string
+  userId: string | null
+  email: string
+  success: boolean
+  ipAddress: string | null
+  userAgent: string | null
+  failureReason: string | null
+  createdAt: string
+  user: { id: string; name: string | null; systemRole: string; tenantId: string | null } | null
+}
+
+export async function fetchLoginLogs(params?: {
+  page?: number
+  limit?: number
+  email?: string
+  success?: boolean
+  from?: string
+  to?: string
+}) {
+  const { data } = await apiClient.get<PaginatedResponse<LoginLogItem>>(API_PATH.PLATFORM_MONITORING_LOGIN_LOGS, { params })
+  return { list: data.data, meta: data.meta }
+}
+
+export interface AuditLogItem {
+  id: string
+  userId: string | null
+  action: string
+  resourceType: string
+  resourceId: string | null
+  tenantId: string | null
+  details: unknown
+  ipAddress: string | null
+  userAgent: string | null
+  createdAt: string
+  user: { id: string; email: string; name: string | null } | null
+}
+
+export async function fetchAuditLogs(params?: {
+  page?: number
+  limit?: number
+  userId?: string
+  action?: string
+  resourceType?: string
+  tenantId?: string
+  from?: string
+  to?: string
+}) {
+  const { data } = await apiClient.get<PaginatedResponse<AuditLogItem>>(API_PATH.PLATFORM_MONITORING_AUDIT_LOGS, { params })
+  return { list: data.data, meta: data.meta }
+}
+
+export interface TenantUsageItem {
+  id: string
+  name: string
+  slug: string | null
+  status: string
+  userCount: number
+  projectCount: number
+  storageUsageBytes: number
+  userLimit: number | null
+  storageQuotaMb: number | null
+  expiresAt: string | null
+}
+
+export async function fetchUsage(): Promise<TenantUsageItem[]> {
+  const { data } = await apiClient.get<ApiResponse<TenantUsageItem[]>>(API_PATH.PLATFORM_USAGE)
+  return data.data
+}
+
 export async function fetchTenants(params?: { page?: number; limit?: number; status?: string }) {
   const { data } = await apiClient.get<PaginatedResponse<TenantItem>>(
     API_PATH.PLATFORM_TENANTS,
@@ -78,5 +161,102 @@ export async function resetUserPassword(userId: string, newPassword: string) {
     `${API_PATH.PLATFORM_USERS}/${userId}/password`,
     { newPassword }
   )
+  return data.data
+}
+
+// ---------- 平台公告 ----------
+
+export interface PlatformAnnouncementItem {
+  id: string
+  title: string
+  body: string
+  publishedAt: string | null
+  expiresAt: string | null
+  targetTenantIds: string[] | null
+  createdAt: string
+  updatedAt: string
+}
+
+export async function fetchPlatformAnnouncements(params?: { page?: number; limit?: number }) {
+  const { data } = await apiClient.get<PaginatedResponse<PlatformAnnouncementItem>>(
+    API_PATH.PLATFORM_ANNOUNCEMENTS,
+    { params }
+  )
+  return { list: data.data, meta: data.meta }
+}
+
+export async function getPlatformAnnouncement(id: string) {
+  const { data } = await apiClient.get<ApiResponse<PlatformAnnouncementItem>>(
+    `${API_PATH.PLATFORM_ANNOUNCEMENTS}/${id}`
+  )
+  return data.data
+}
+
+export async function createPlatformAnnouncement(payload: {
+  title: string
+  body: string
+  publishedAt?: string | null
+  expiresAt?: string | null
+  targetTenantIds?: string[] | null
+}) {
+  const { data } = await apiClient.post<ApiResponse<PlatformAnnouncementItem>>(
+    API_PATH.PLATFORM_ANNOUNCEMENTS,
+    payload
+  )
+  return data.data
+}
+
+export async function updatePlatformAnnouncement(
+  id: string,
+  payload: Partial<{
+    title: string
+    body: string
+    publishedAt: string | null
+    expiresAt: string | null
+    targetTenantIds: string[] | null
+  }>
+) {
+  const { data } = await apiClient.patch<ApiResponse<PlatformAnnouncementItem>>(
+    `${API_PATH.PLATFORM_ANNOUNCEMENTS}/${id}`,
+    payload
+  )
+  return data.data
+}
+
+export async function deletePlatformAnnouncement(id: string) {
+  await apiClient.delete(`${API_PATH.PLATFORM_ANNOUNCEMENTS}/${id}`)
+}
+
+// ---------- 平台設定 ----------
+
+export interface PlatformSettings {
+  maintenanceMode: boolean
+  defaultUserLimit: number | null
+  defaultStorageQuotaMb: number | null
+  defaultFileSizeLimitMb: number | null
+}
+
+export async function fetchPlatformSettings(): Promise<PlatformSettings> {
+  const { data } = await apiClient.get<ApiResponse<PlatformSettings>>(API_PATH.PLATFORM_SETTINGS)
+  return data.data
+}
+
+export async function updatePlatformSettings(payload: Partial<PlatformSettings>) {
+  const { data } = await apiClient.patch<ApiResponse<PlatformSettings>>(
+    API_PATH.PLATFORM_SETTINGS,
+    payload
+  )
+  return data.data
+}
+
+// ---------- 系統狀態 ----------
+
+export interface SystemStatus {
+  database: { status: string; latencyMs: number }
+  storage: { status: string; latencyMs?: number }
+}
+
+export async function fetchSystemStatus(): Promise<SystemStatus> {
+  const { data } = await apiClient.get<ApiResponse<SystemStatus>>(API_PATH.PLATFORM_SYSTEM_STATUS)
   return data.data
 }

@@ -59,11 +59,56 @@ export const ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
   { id: 'admin-settings', label: '公司設定', path: '/admin/settings', icon: 'Settings' },
 ]
 
-/** 多租後台側欄（平台方登入後直接顯示） */
+/** 多租後台側欄（平台方登入後直接顯示）— 扁平列表，供未分組時使用 */
 export const PLATFORM_ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
   { id: 'platform-tenants', label: '租戶管理', path: '/platform-admin/tenants', icon: 'Building2' },
   { id: 'platform-projects', label: '專案總覽', path: '/platform-admin/projects', icon: 'FolderKanban' },
   { id: 'platform-users', label: '使用者總覽', path: '/platform-admin/users', icon: 'Users' },
+  { id: 'platform-monitoring', label: '監控儀表板', path: '/platform-admin/monitoring', icon: 'Activity' },
+  { id: 'platform-login-logs', label: '登入紀錄', path: '/platform-admin/monitoring/login-logs', icon: 'LogIn' },
+  { id: 'platform-audit-logs', label: '稽核日誌', path: '/platform-admin/monitoring/audit-logs', icon: 'FileText' },
+  { id: 'platform-usage', label: '用量總覽', path: '/platform-admin/usage', icon: 'BarChart3' },
+  { id: 'platform-announcements', label: '平台公告', path: '/platform-admin/announcements', icon: 'Megaphone' },
+  { id: 'platform-settings', label: '平台設定', path: '/platform-admin/settings', icon: 'Settings' },
+  { id: 'platform-system', label: '系統狀態', path: '/platform-admin/system', icon: 'Server' },
+]
+
+/** 多租後台側欄群組（文件 §7.9 建議）：租戶與組織、監控、營運、系統 */
+export const PLATFORM_ADMIN_SIDEBAR_GROUPS: NavGroup[] = [
+  {
+    id: 'org',
+    label: '租戶與組織',
+    children: [
+      { id: 'platform-tenants', label: '租戶管理', path: '/platform-admin/tenants', icon: 'Building2' },
+      { id: 'platform-projects', label: '專案總覽', path: '/platform-admin/projects', icon: 'FolderKanban' },
+      { id: 'platform-users', label: '使用者總覽', path: '/platform-admin/users', icon: 'Users' },
+    ],
+  },
+  {
+    id: 'monitoring',
+    label: '監控',
+    children: [
+      { id: 'platform-monitoring', label: '監控儀表板', path: '/platform-admin/monitoring', icon: 'Activity' },
+      { id: 'platform-login-logs', label: '登入紀錄', path: '/platform-admin/monitoring/login-logs', icon: 'LogIn' },
+      { id: 'platform-audit-logs', label: '稽核日誌', path: '/platform-admin/monitoring/audit-logs', icon: 'FileText' },
+    ],
+  },
+  {
+    id: 'ops',
+    label: '營運',
+    children: [
+      { id: 'platform-usage', label: '用量總覽', path: '/platform-admin/usage', icon: 'BarChart3' },
+      { id: 'platform-announcements', label: '平台公告', path: '/platform-admin/announcements', icon: 'Megaphone' },
+    ],
+  },
+  {
+    id: 'system',
+    label: '系統',
+    children: [
+      { id: 'platform-settings', label: '平台設定', path: '/platform-admin/settings', icon: 'Settings' },
+      { id: 'platform-system', label: '系統狀態', path: '/platform-admin/system', icon: 'Server' },
+    ],
+  },
 ]
 
 /** @deprecated 使用 PROJECT_SIDEBAR_GROUPS + GLOBAL_SIDEBAR_ENTRIES；保留供相容 */

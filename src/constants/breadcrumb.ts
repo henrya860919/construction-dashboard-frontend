@@ -14,6 +14,13 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   '/platform-admin/tenants': '租戶管理',
   '/platform-admin/projects': '專案總覽',
   '/platform-admin/users': '使用者總覽',
+  '/platform-admin/monitoring': '監控儀表板',
+  '/platform-admin/monitoring/login-logs': '登入紀錄',
+  '/platform-admin/monitoring/audit-logs': '稽核日誌',
+  '/platform-admin/usage': '用量總覽',
+  '/platform-admin/announcements': '平台公告',
+  '/platform-admin/settings': '平台設定',
+  '/platform-admin/system': '系統狀態',
 }
 
 /** 專案內路徑後綴（/p/:projectId 之後）對應的麵包屑名稱 */

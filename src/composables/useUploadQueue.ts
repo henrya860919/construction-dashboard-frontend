@@ -88,7 +88,7 @@ export function useUploadQueue() {
       fileSize: meta.fileSize,
       projectId: meta.projectId,
       category: meta.category ?? null,
-      source: meta.source ?? null,
+      source: meta.source ?? undefined,
     })
     store.setStatus(id, 'uploading')
     try {

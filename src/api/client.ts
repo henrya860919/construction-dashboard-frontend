@@ -32,6 +32,10 @@ apiClient.interceptors.response.use(
         window.location.href = '/login'
       }
     }
+    // 維護模式：503 + code MAINTENANCE 時保留 API 回傳訊息供畫面顯示
+    if (error.response?.status === 503 && error.response?.data?.error?.code === 'MAINTENANCE') {
+      error.message = error.response?.data?.error?.message ?? '系統維護中，請稍後再試。'
+    }
     return Promise.reject(error)
   }
 )

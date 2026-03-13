@@ -46,6 +46,13 @@ export const ROUTE_PATH = {
   PLATFORM_ADMIN_TENANT_MANAGE: '/platform-admin/tenants/:tenantId',
   PLATFORM_ADMIN_PROJECTS: '/platform-admin/projects',
   PLATFORM_ADMIN_USERS: '/platform-admin/users',
+  PLATFORM_ADMIN_MONITORING: '/platform-admin/monitoring',
+  PLATFORM_ADMIN_LOGIN_LOGS: '/platform-admin/monitoring/login-logs',
+  PLATFORM_ADMIN_AUDIT_LOGS: '/platform-admin/monitoring/audit-logs',
+  PLATFORM_ADMIN_USAGE: '/platform-admin/usage',
+  PLATFORM_ADMIN_ANNOUNCEMENTS: '/platform-admin/announcements',
+  PLATFORM_ADMIN_SETTINGS: '/platform-admin/settings',
+  PLATFORM_ADMIN_SYSTEM: '/platform-admin/system',
   /** 非專案內（全域） */
 } as const
 
@@ -75,6 +82,13 @@ export const ROUTE_NAME = {
   PLATFORM_ADMIN_TENANT_MANAGE: 'platform-admin-tenant-manage',
   PLATFORM_ADMIN_PROJECTS: 'platform-admin-projects',
   PLATFORM_ADMIN_USERS: 'platform-admin-users',
+  PLATFORM_ADMIN_MONITORING: 'platform-admin-monitoring',
+  PLATFORM_ADMIN_LOGIN_LOGS: 'platform-admin-login-logs',
+  PLATFORM_ADMIN_AUDIT_LOGS: 'platform-admin-audit-logs',
+  PLATFORM_ADMIN_USAGE: 'platform-admin-usage',
+  PLATFORM_ADMIN_ANNOUNCEMENTS: 'platform-admin-announcements',
+  PLATFORM_ADMIN_SETTINGS: 'platform-admin-settings',
+  PLATFORM_ADMIN_SYSTEM: 'platform-admin-system',
 } as const
 
 /** 組出單一租戶管理頁 path */

@@ -23,6 +23,10 @@ import {
   Settings,
   ShieldCheck,
   Info,
+  LogIn,
+  BarChart3,
+  Megaphone,
+  Server,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -32,7 +36,7 @@ import {
   PROJECT_SIDEBAR_GROUPS,
   GLOBAL_SIDEBAR_ENTRIES,
   ADMIN_SIDEBAR_ENTRIES,
-  PLATFORM_ADMIN_SIDEBAR_ENTRIES,
+  PLATFORM_ADMIN_SIDEBAR_GROUPS,
 } from '@/constants/navigation'
 import { SIDEBAR_HEADER } from '@/constants/branding'
 import { buildProjectPath, ROUTE_PATH } from '@/constants/routes'
@@ -62,6 +66,10 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Settings,
   ShieldCheck,
   Info,
+  LogIn,
+  BarChart3,
+  Megaphone,
+  Server,
 }
 
 withDefaults(
@@ -111,6 +119,11 @@ function isItemActive(path: string) {
   return route.path === path || (path !== '/' && route.path.startsWith(path))
 }
 
+/** 平台後台側欄：僅精確比對 path，避免父路徑（如 /monitoring）與子路徑（如 /monitoring/audit-logs）同時亮起 */
+function isPlatformItemActive(path: string) {
+  return route.path === path
+}
+
 /** 專案內子項的完整 path */
 function projectChildPath(pathSuffix: string): string {
   return projectId.value ? buildProjectPath(projectId.value, pathSuffix) : '/projects'
@@ -147,52 +160,62 @@ function projectChildPath(pathSuffix: string): string {
       </header>
 
       <nav class="flex flex-col gap-2 p-2" :class="collapsed ? 'items-center' : ''">
-        <!-- 多租後台（平台方）：租戶管理、專案總覽、使用者總覽 -->
+        <!-- 多租後台（平台方）：依群組顯示（租戶與組織、監控、營運、系統） -->
         <template v-if="isPlatformAdminScope">
-          <div
-            v-for="item in PLATFORM_ADMIN_SIDEBAR_ENTRIES"
-            :key="item.id"
-            class="flex min-h-9 items-center rounded-md"
-            :class="collapsed ? 'justify-center' : ''"
-          >
-            <RouterLink v-slot="{ navigate }" :to="item.path" custom>
-              <Tooltip v-if="collapsed">
-                <TooltipTrigger as-child>
+          <template v-for="group in PLATFORM_ADMIN_SIDEBAR_GROUPS" :key="group.id">
+            <div class="space-y-1">
+              <div
+                v-show="!collapsed"
+                class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+              >
+                {{ group.label }}
+              </div>
+              <div
+                v-for="item in group.children"
+                :key="item.id"
+                class="flex min-h-9 items-center rounded-md"
+                :class="collapsed ? 'justify-center' : ''"
+              >
+                <RouterLink v-slot="{ navigate }" :to="item.path" custom>
+                  <Tooltip v-if="collapsed">
+                    <TooltipTrigger as-child>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        :class="
+                          cn(
+                            'h-9 w-9 shrink-0 justify-center rounded-md',
+                            isPlatformItemActive(item.path) && 'bg-accent text-accent-foreground'
+                          )
+                        "
+                        @click="navigate"
+                      >
+                        <component
+                          :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                          class="size-4 shrink-0"
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{{ item.label }}</TooltipContent>
+                  </Tooltip>
                   <Button
+                    v-else
                     variant="ghost"
-                    size="icon"
                     :class="
                       cn(
-                        'h-9 w-9 shrink-0 justify-center rounded-md',
-                        isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                        'h-9 w-full justify-start gap-3 rounded-md px-3',
+                        isPlatformItemActive(item.path) && 'bg-accent text-accent-foreground'
                       )
                     "
                     @click="navigate"
                   >
-                    <component
-                      :is="ICON_MAP[item.icon] ?? LayoutDashboard"
-                      class="size-4 shrink-0"
-                    />
+                    <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                    <span class="truncate">{{ item.label }}</span>
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">{{ item.label }}</TooltipContent>
-              </Tooltip>
-              <Button
-                v-else
-                variant="ghost"
-                :class="
-                  cn(
-                    'h-9 w-full justify-start gap-3 rounded-md px-3',
-                    isItemActive(item.path) && 'bg-accent text-accent-foreground'
-                  )
-                "
-                @click="navigate"
-              >
-                <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
-                <span class="truncate">{{ item.label }}</span>
-              </Button>
-            </RouterLink>
-          </div>
+                </RouterLink>
+              </div>
+            </div>
+          </template>
         </template>
 
         <!-- 單租後台（廠商管理員）：專案列表返回 + 專案管理、成員管理、公司設定 -->

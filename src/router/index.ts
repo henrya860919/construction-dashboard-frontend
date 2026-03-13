@@ -135,6 +135,41 @@ const router = createRouter({
           name: ROUTE_NAME.PLATFORM_ADMIN_USERS,
           component: () => import('@/views/platform-admin/PlatformUsersView.vue'),
         },
+        {
+          path: 'platform-admin/monitoring',
+          name: ROUTE_NAME.PLATFORM_ADMIN_MONITORING,
+          component: () => import('@/views/platform-admin/PlatformMonitoringView.vue'),
+        },
+        {
+          path: 'platform-admin/monitoring/login-logs',
+          name: ROUTE_NAME.PLATFORM_ADMIN_LOGIN_LOGS,
+          component: () => import('@/views/platform-admin/PlatformLoginLogsView.vue'),
+        },
+        {
+          path: 'platform-admin/monitoring/audit-logs',
+          name: ROUTE_NAME.PLATFORM_ADMIN_AUDIT_LOGS,
+          component: () => import('@/views/platform-admin/PlatformAuditLogsView.vue'),
+        },
+        {
+          path: 'platform-admin/usage',
+          name: ROUTE_NAME.PLATFORM_ADMIN_USAGE,
+          component: () => import('@/views/platform-admin/PlatformUsageView.vue'),
+        },
+        {
+          path: 'platform-admin/announcements',
+          name: ROUTE_NAME.PLATFORM_ADMIN_ANNOUNCEMENTS,
+          component: () => import('@/views/platform-admin/PlatformAnnouncementsView.vue'),
+        },
+        {
+          path: 'platform-admin/settings',
+          name: ROUTE_NAME.PLATFORM_ADMIN_SETTINGS,
+          component: () => import('@/views/platform-admin/PlatformSettingsView.vue'),
+        },
+        {
+          path: 'platform-admin/system',
+          name: ROUTE_NAME.PLATFORM_ADMIN_SYSTEM,
+          component: () => import('@/views/platform-admin/PlatformSystemView.vue'),
+        },
       ],
     },
   ],

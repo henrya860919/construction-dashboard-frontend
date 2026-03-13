@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, watch, onMounted } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard,
   LayoutGrid,
@@ -43,6 +43,9 @@ import { SIDEBAR_HEADER } from '@/constants/branding'
 import { buildProjectPath, ROUTE_PATH } from '@/constants/routes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
+import { useTenantBrandingStore } from '@/stores/tenantBranding'
+import { useTenantLogoUrl } from '@/composables/useTenantLogoUrl'
+import { getProject } from '@/api/project'
 import { cn } from '@/lib/utils'
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -82,8 +85,43 @@ withDefaults(
 )
 
 const route = useRoute()
+const router = useRouter()
 const projectStore = useProjectStore()
 const authStore = useAuthStore()
+const tenantBrandingStore = useTenantBrandingStore()
+
+/** Sidebar 標題：專案內 = 專案名稱，未進專案 = 公司名稱（無則 Construction Dashboard） */
+const sidebarTitle = computed(() => {
+  if (isProjectScope.value && projectStore.currentProjectName) {
+    return projectStore.currentProjectName
+  }
+  return tenantBrandingStore.name || 'Construction Dashboard'
+})
+
+/** 租戶 Logo：僅在有設定時顯示，無則不顯示任何圖片 */
+const hasLogo = computed(() => tenantBrandingStore.hasLogo)
+const { objectUrl: tenantLogoUrl } = useTenantLogoUrl(hasLogo)
+
+/** 登入且有租戶時拉取品牌；登出時清空 */
+watch(
+  () => authStore.isAuthenticated && authStore.user?.tenantId,
+  (shouldLoad) => {
+    if (!shouldLoad) {
+      tenantBrandingStore.clear()
+      return
+    }
+    if (!tenantBrandingStore.loaded) {
+      tenantBrandingStore.fetch()
+    }
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  if (authStore.isAuthenticated && authStore.user?.tenantId && !tenantBrandingStore.loaded) {
+    tenantBrandingStore.fetch()
+  }
+})
 
 /** 是否在專案內（URL 為 /p/:projectId/...） */
 const projectId = computed(() => route.params.projectId as string | undefined)
@@ -113,6 +151,12 @@ watch(
   projectId,
   (id) => {
     projectStore.setCurrentProjectId(id ?? null)
+    // 重新整理後 projectNameMap 為空，依 projectId 拉專案名稱避免標題顯示 id
+    if (id && !projectStore.projectNameMap[id]) {
+      getProject(id).then((project) => {
+        if (project?.name) projectStore.setProjectName(id, project.name)
+      })
+    }
   },
   { immediate: true }
 )
@@ -145,22 +189,21 @@ function isProjectChildActive(pathSuffix: string): boolean {
         :class="collapsed ? 'justify-center px-2' : ''"
       >
         <div
-          class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground"
+          v-if="tenantLogoUrl"
+          class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-zinc-200 shadow-sm"
           aria-hidden
         >
           <img
-            v-if="SIDEBAR_HEADER.logoUrl"
-            :src="SIDEBAR_HEADER.logoUrl"
-            :alt="SIDEBAR_HEADER.companyName"
+            :src="tenantLogoUrl"
+            alt=""
             class="size-full object-cover"
           />
-          <Building2 v-else class="size-5" />
         </div>
         <div v-show="!collapsed" class="min-w-0 flex-1">
           <p class="truncate text-sm font-semibold text-foreground">
-            {{ SIDEBAR_HEADER.companyName }}
+            {{ sidebarTitle }}
           </p>
-          <p class="truncate text-xs text-muted-foreground">
+          <p v-if="!isProjectScope" class="truncate text-xs text-muted-foreground">
             {{ SIDEBAR_HEADER.tagline }}
           </p>
         </div>
@@ -254,43 +297,41 @@ function isProjectChildActive(pathSuffix: string): boolean {
             class="flex min-h-9 items-center rounded-md"
             :class="collapsed ? 'justify-center' : 'pl-3'"
           >
-            <RouterLink v-slot="{ navigate }" :to="item.path" custom>
-              <Tooltip v-if="collapsed">
-                <TooltipTrigger as-child>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    :class="
-                      cn(
-                        'h-9 w-9 shrink-0 justify-center rounded-md',
-                        isItemActive(item.path) && 'bg-accent text-accent-foreground'
-                      )
-                    "
-                    @click="navigate"
-                  >
-                    <component
-                      :is="ICON_MAP[item.icon] ?? LayoutDashboard"
-                      class="size-4 shrink-0"
-                    />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">{{ item.label }}</TooltipContent>
-              </Tooltip>
-              <Button
-                v-else
-                variant="ghost"
-                :class="
-                  cn(
-                    'h-9 w-full justify-start gap-3 rounded-md px-3',
-                    isItemActive(item.path) && 'bg-accent text-accent-foreground'
-                  )
-                "
-                @click="navigate"
-              >
-                <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
-                <span class="truncate">{{ item.label }}</span>
-              </Button>
-            </RouterLink>
+            <Tooltip v-if="collapsed">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  :class="
+                    cn(
+                      'h-9 w-9 shrink-0 justify-center rounded-md',
+                      isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                    )
+                  "
+                  @click="router.push(item.path)"
+                >
+                  <component
+                    :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                    class="size-4 shrink-0"
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{{ item.label }}</TooltipContent>
+            </Tooltip>
+            <Button
+              v-else
+              variant="ghost"
+              :class="
+                cn(
+                  'h-9 w-full justify-start gap-3 rounded-md px-3',
+                  isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                )
+              "
+              @click="router.push(item.path)"
+            >
+              <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+              <span class="truncate">{{ item.label }}</span>
+            </Button>
           </div>
         </template>
 

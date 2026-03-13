@@ -1,14 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -27,6 +22,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   listDefaultFormTemplates,
   createDefaultFormTemplate,
   updateFormTemplate,
@@ -34,13 +35,31 @@ import {
   getFormTemplateBlob,
 } from '@/api/form-templates'
 import type { FormTemplateItem } from '@/api/form-templates'
-import { Upload, Loader2, Trash2, Download, FileText, Pencil } from 'lucide-vue-next'
+import { Upload, Loader2, Trash2, Download, FileText, Pencil, MoreHorizontal } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
 const tenantId = computed(() => authStore.user?.tenantId ?? null)
 
 const list = ref<FormTemplateItem[]>([])
 const loading = ref(true)
+const selectedIds = ref<Set<string>>(new Set())
+const isAllSelected = computed(() => list.value.length > 0 && selectedIds.value.size === list.value.length)
+const isSomeSelected = computed(() => selectedIds.value.size > 0)
+function toggleAll(checked: boolean) {
+  if (checked) list.value.forEach((r) => selectedIds.value.add(r.id))
+  else selectedIds.value.clear()
+  selectedIds.value = new Set(selectedIds.value)
+}
+function toggleOne(id: string, checked: boolean) {
+  if (checked) selectedIds.value.add(id)
+  else selectedIds.value.delete(id)
+  selectedIds.value = new Set(selectedIds.value)
+}
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 const addDialogOpen = ref(false)
 const addForm = ref({ name: '', description: '', file: null as File | null })
@@ -169,83 +188,144 @@ async function handleDownload(row: FormTemplateItem) {
     // ignore
   }
 }
+
+const batchDeleteOpen = ref(false)
+const batchDeleteLoading = ref(false)
+function openBatchDelete() {
+  batchDeleteOpen.value = true
+}
+function closeBatchDelete() {
+  if (!batchDeleteLoading.value) batchDeleteOpen.value = false
+}
+async function confirmBatchDelete() {
+  if (selectedIds.value.size === 0) return
+  batchDeleteLoading.value = true
+  try {
+    for (const id of selectedIds.value) {
+      await deleteFormTemplate(id)
+    }
+    selectedIds.value = new Set()
+    batchDeleteOpen.value = false
+    await fetchList()
+  } finally {
+    batchDeleteLoading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">表單樣板</h1>
-        <p class="mt-1 text-sm text-muted-foreground">
-          在此新增的樣板會成為「預設樣板」，專案內「相關表單」頁面可看到並下載；專案也可自行新增樣板。
-        </p>
-      </div>
+    <div>
+      <h1 class="text-xl font-semibold text-foreground">表單樣板</h1>
+      <p class="mt-1 text-sm text-muted-foreground">
+        在此新增的樣板會成為「預設樣板」，專案內「相關表單」頁面可看到並下載；專案也可自行新增樣板。
+      </p>
+    </div>
+
+    <!-- 工具列：已選 + ButtonGroup + 新增 全部靠右（表格上方） -->
+    <div class="flex flex-wrap items-center justify-end gap-3">
+      <template v-if="selectedIds.size > 0">
+        <span class="text-sm text-muted-foreground">已選 {{ selectedIds.size }} 項</span>
+        <ButtonGroup>
+          <Button variant="outline" size="sm" @click="selectedIds = new Set()">
+            取消選取
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            @click="openBatchDelete"
+          >
+            <Trash2 class="mr-1.5 size-4" />
+            批次刪除
+          </Button>
+        </ButtonGroup>
+      </template>
       <Button :disabled="!tenantId" @click="openAdd">
         <Upload class="mr-2 size-4" />
         新增預設樣板
       </Button>
     </div>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>預設樣板列表</CardTitle>
-        <CardDescription>名稱、描述與更新時間，讓使用者清楚辨識每個樣板用途</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div v-if="loading" class="flex justify-center py-12">
-          <Loader2 class="size-8 animate-spin text-muted-foreground" />
+    <div class="rounded-lg border border-border bg-card">
+      <div v-if="loading" class="flex justify-center py-12">
+        <Loader2 class="size-8 animate-spin text-muted-foreground" />
+      </div>
+      <template v-else>
+        <Table v-if="list.length">
+          <TableHeader>
+            <TableRow>
+              <TableHead class="w-10">
+                <Checkbox
+                  :checked="isAllSelected || (isSomeSelected && 'indeterminate')"
+                  aria-label="全選"
+                  @update:checked="(v: boolean | 'indeterminate') => toggleAll(v === true)"
+                />
+              </TableHead>
+              <TableHead class="w-[22%]">名稱</TableHead>
+              <TableHead class="w-[24%]">描述</TableHead>
+              <TableHead>檔案大小</TableHead>
+              <TableHead class="text-muted-foreground">檔名</TableHead>
+              <TableHead>更新時間</TableHead>
+              <TableHead class="w-[80px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="row in list" :key="row.id">
+              <TableCell class="w-10">
+                <Checkbox
+                  :checked="selectedIds.has(row.id)"
+                  :aria-label="'選取 ' + row.name"
+                  @update:checked="(v: boolean | 'indeterminate') => toggleOne(row.id, v === true)"
+                />
+              </TableCell>
+              <TableCell class="font-medium">
+                <div class="flex items-center gap-2">
+                  <FileText class="size-4 shrink-0 text-muted-foreground" />
+                  <span class="truncate" :title="row.name">{{ row.name }}</span>
+                </div>
+              </TableCell>
+              <TableCell class="text-muted-foreground max-w-[200px] truncate" :title="row.description ?? ''">
+                {{ row.description || '—' }}
+              </TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ formatSize(row.fileSize ?? 0) }}</TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ row.fileName }}</TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ formatDate(row.updatedAt) }}</TableCell>
+              <TableCell class="w-[80px] text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon" class="size-8" aria-label="更多">
+                      <MoreHorizontal class="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem @click="handleDownload(row)">
+                      <Download class="mr-2 size-4" />
+                      下載
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="openEdit(row)">
+                      <Pencil class="mr-2 size-4" />
+                      編輯
+                    </DropdownMenuItem>
+                    <DropdownMenuItem class="text-destructive focus:text-destructive" @click="openDelete(row)">
+                      <Trash2 class="mr-2 size-4" />
+                      刪除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <div
+          v-else
+          class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground"
+        >
+          <FileText class="mb-2 size-10 opacity-50" />
+          <p class="text-sm">尚無預設樣板，點擊「新增預設樣板」上傳</p>
         </div>
-        <template v-else>
-          <Table v-if="list.length">
-            <TableHeader>
-              <TableRow>
-                <TableHead class="w-[22%]">名稱</TableHead>
-                <TableHead class="w-[28%]">描述</TableHead>
-                <TableHead>檔名</TableHead>
-                <TableHead>更新時間</TableHead>
-                <TableHead class="w-[140px] text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="row in list" :key="row.id">
-                <TableCell class="font-medium">{{ row.name }}</TableCell>
-                <TableCell class="text-muted-foreground max-w-[200px] truncate" :title="row.description ?? ''">
-                  {{ row.description || '—' }}
-                </TableCell>
-                <TableCell class="text-muted-foreground text-sm">{{ row.fileName }}</TableCell>
-                <TableCell class="text-muted-foreground text-sm">{{ formatDate(row.updatedAt) }}</TableCell>
-                <TableCell class="text-right">
-                  <div class="flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="size-8" aria-label="下載" @click="handleDownload(row)">
-                      <Download class="size-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="size-8" aria-label="編輯" @click="openEdit(row)">
-                      <Pencil class="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-8 text-destructive hover:text-destructive"
-                      aria-label="刪除"
-                      @click="openDelete(row)"
-                    >
-                      <Trash2 class="size-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-          <div
-            v-else
-            class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground"
-          >
-            <FileText class="mb-2 size-10 opacity-50" />
-            <p class="text-sm">尚無預設樣板，點擊「新增預設樣板」上傳</p>
-          </div>
-        </template>
-      </CardContent>
-    </Card>
+      </template>
+    </div>
 
     <!-- 新增 Dialog -->
     <input
@@ -336,6 +416,25 @@ async function handleDownload(row: FormTemplateItem) {
           <Button variant="outline" :disabled="deleteLoading" @click="deleteDialogOpen = false">取消</Button>
           <Button variant="destructive" :disabled="deleteLoading" @click="confirmDelete">
             <Loader2 v-if="deleteLoading" class="mr-2 size-4 animate-spin" />
+            刪除
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 批次刪除確認 -->
+    <Dialog :open="batchDeleteOpen" @update:open="(v) => !v && closeBatchDelete()">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>批次刪除樣板</DialogTitle>
+          <DialogDescription>
+            確定要刪除所選的 {{ selectedIds.size }} 個樣板？此操作無法復原。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete">取消</Button>
+          <Button variant="destructive" :disabled="batchDeleteLoading" @click="confirmBatchDelete">
+            <Loader2 v-if="batchDeleteLoading" class="mr-2 size-4 animate-spin" />
             刪除
           </Button>
         </DialogFooter>

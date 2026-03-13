@@ -16,5 +16,10 @@ export interface PlatformUserItem {
   updatedAt: string
 }
 
-/** 租戶後台成員列表單筆（與 PlatformUserItem 結構一致） */
-export type AdminUserItem = PlatformUserItem
+/** 成員狀態（後台成員管理） */
+export type UserStatus = 'active' | 'suspended'
+
+/** 租戶後台成員列表單筆（含 status） */
+export interface AdminUserItem extends PlatformUserItem {
+  status?: UserStatus
+}

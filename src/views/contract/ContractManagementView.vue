@@ -12,12 +12,6 @@ import { ref, computed, h, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { valueUpdater } from '@/lib/utils'
 import type { SortingState } from '@tanstack/vue-table'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -58,6 +52,7 @@ import {
   Download,
   Trash2,
   Plus,
+  FileIcon,
 } from 'lucide-vue-next'
 import { listProjectFiles, deleteFile, getFileBlob } from '@/api/files'
 import { useUploadQueue } from '@/composables/useUploadQueue'
@@ -127,6 +122,7 @@ const listError = ref<string | null>(null)
 function toContractRow(item: {
   id: string
   fileName: string
+  fileSize: number
   createdAt: string
   uploaderName: string | null
   category: string | null
@@ -135,6 +131,7 @@ function toContractRow(item: {
   return {
     id: item.id,
     fileName: item.fileName,
+    fileSize: item.fileSize,
     uploadDate: item.createdAt.slice(0, 10),
     uploader: item.uploaderName ?? '—',
     category: item.category ?? 'other',
@@ -255,7 +252,19 @@ const columns = computed<ColumnDef<ContractFileRow, unknown>[]>(() => [
     accessorKey: 'fileName',
     header: '檔案名稱',
     cell: ({ row }) =>
-      h('div', { class: 'font-medium text-foreground' }, row.getValue('fileName') as string),
+      h('div', { class: 'flex items-center gap-2 font-medium text-foreground' }, [
+        h(FileIcon, { class: 'size-4 shrink-0 text-muted-foreground' }),
+        h('span', { class: 'truncate' }, row.getValue('fileName') as string),
+      ]),
+  },
+  {
+    accessorKey: 'fileSize',
+    header: '檔案大小',
+    cell: ({ row }) => {
+      const bytes = row.getValue('fileSize') as number
+      const str = bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+      return h('div', { class: 'text-muted-foreground text-sm' }, str)
+    },
   },
   {
     accessorKey: 'uploadDate',
@@ -271,7 +280,7 @@ const columns = computed<ColumnDef<ContractFileRow, unknown>[]>(() => [
   },
   {
     id: 'actions',
-    header: () => h('div', { class: 'font-medium' }, '操作'),
+    header: () => h('div', { class: 'w-[80px]' }),
     cell: ({ row }) =>
       h('div', { class: 'flex' }, [
         h(ContractFileRowActions, {
@@ -374,13 +383,9 @@ function onFileSelect(e: Event) {
       </p>
     </div>
 
-    <!-- 上方：選擇分類（與監測項目同風格；可新增分類，固定保留全部與其他） -->
-    <Card class="border-border">
-      <CardHeader class="pb-2">
-        <CardTitle class="text-base">選擇分類</CardTitle>
-        <p class="text-sm text-muted-foreground">可新增自訂分類，列表首尾固定為「全部」與「其他」</p>
-      </CardHeader>
-      <CardContent class="flex flex-wrap items-center gap-2">
+    <!-- 上方：選擇分類 -->
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-sm font-medium text-foreground">選擇分類：</span>
         <Button
           v-for="c in categories"
           :key="c.key"
@@ -426,18 +431,12 @@ function onFileSelect(e: Event) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </CardContent>
-    </Card>
+    </div>
 
     <!-- 下方：列表 + 工具列 -->
-    <Card class="border-border">
-      <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-4 pb-2">
-        <div>
-          <CardTitle class="text-base">契約文件</CardTitle>
-          <p class="text-sm text-muted-foreground">
-            依上方分類篩選，可多選後批次下載或刪除
-          </p>
-        </div>
+    <p class="text-sm text-muted-foreground">依上方分類篩選，可多選後批次下載或刪除</p>
+    <div class="rounded-lg border border-border bg-card">
+      <div class="flex flex-row flex-wrap items-center justify-between gap-4 p-4 pb-0">
         <div class="flex flex-wrap items-center gap-2">
           <!-- 有勾選時顯示：批次下載、批次刪除 -->
           <template v-if="hasSelection">
@@ -535,17 +534,16 @@ function onFileSelect(e: Event) {
             </DialogContent>
           </Dialog>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div class="space-y-4">
-          <p v-if="listError" class="text-sm text-destructive">
-            {{ listError }}
-          </p>
-          <p v-if="listLoading" class="text-sm text-muted-foreground">
-            載入中…
-          </p>
-          <div v-else class="rounded-md border border-border">
-            <Table>
+      </div>
+      <div class="space-y-4 p-4">
+        <p v-if="listError" class="text-sm text-destructive">
+          {{ listError }}
+        </p>
+        <p v-if="listLoading" class="text-sm text-muted-foreground">
+          載入中…
+        </p>
+        <div v-else>
+          <Table>
               <TableHeader>
                 <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
                   <TableHead v-for="header in headerGroup.headers" :key="header.id">
@@ -574,7 +572,7 @@ function onFileSelect(e: Event) {
                 </template>
                 <template v-else>
                   <TableRow>
-                    <TableCell :colspan="5" class="h-24 text-center text-muted-foreground">
+                    <TableCell :colspan="6" class="h-24 text-center text-muted-foreground">
                       尚無資料，請選擇分類或上傳檔案
                     </TableCell>
                   </TableRow>
@@ -584,7 +582,6 @@ function onFileSelect(e: Event) {
           </div>
           <DataTablePagination :table="table" />
         </div>
-      </CardContent>
-    </Card>
+    </div>
   </div>
 </template>

@@ -15,9 +15,9 @@ import { apiClient } from '@/api/client'
 import { API_PATH } from '@/constants'
 import type { ApiResponse } from '@/types'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -50,7 +50,7 @@ import {
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { buildTenantManagePath } from '@/constants/routes'
-import { Plus, UserPlus, MoreHorizontal, Pencil, PauseCircle, PlayCircle, Loader2, KeyRound } from 'lucide-vue-next'
+import { Plus, UserPlus, MoreHorizontal, Pencil, PauseCircle, PlayCircle, Loader2, KeyRound, Trash2 } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 
 const list = ref<TenantItem[]>([])
@@ -347,6 +347,40 @@ async function submitResetPassword() {
     resetPasswordSubmitting.value = false
   }
 }
+
+const batchDeleteOpen = ref(false)
+const batchDeleteLoading = ref(false)
+const batchDeleteError = ref('')
+function openBatchDelete() {
+  batchDeleteError.value = ''
+  batchDeleteOpen.value = true
+}
+function closeBatchDelete() {
+  batchDeleteOpen.value = false
+  batchDeleteError.value = ''
+}
+async function confirmBatchDelete() {
+  const ids = Array.from(selectedTenantIds.value)
+  if (!ids.length) return
+  batchDeleteLoading.value = true
+  batchDeleteError.value = ''
+  try {
+    for (const id of ids) {
+      await apiClient.delete(`${API_PATH.PLATFORM_TENANTS}/${id}`)
+    }
+    selectedTenantIds.value = new Set()
+    closeBatchDelete()
+    await loadTenants()
+  } catch (err: unknown) {
+    const res =
+      err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+        : null
+    batchDeleteError.value = res?.message ?? '批次刪除失敗'
+  } finally {
+    batchDeleteLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -359,7 +393,7 @@ async function submitResetPassword() {
       </p>
     </div>
 
-    <!-- Toolbar: filter + create（獨立 div，不包在 Card 內） -->
+    <!-- Toolbar: filter + 多選工具列（表格外、表格上方）+ 新增 -->
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex flex-wrap items-center gap-3">
         <Select v-model="statusFilter" @update:model-value="loadTenants">
@@ -373,13 +407,35 @@ async function submitResetPassword() {
           </SelectContent>
         </Select>
       </div>
-      <Dialog :open="createDialogOpen" @update:open="(v: boolean) => { createDialogOpen = v; if (!v) resetCreateForm() }">
-        <DialogTrigger as-child>
-          <Button class="gap-2">
-            <Plus class="size-4" />
-            新增租戶
-          </Button>
-        </DialogTrigger>
+      <div class="flex flex-wrap items-center gap-3">
+        <template v-if="selectedTenantIds.size > 0">
+          <span class="text-sm text-muted-foreground">已選 {{ selectedTenantIds.size }} 項</span>
+          <ButtonGroup>
+            <Button
+              variant="outline"
+              size="sm"
+              @click="selectedTenantIds = new Set()"
+            >
+              取消選取
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              @click="openBatchDelete"
+            >
+              <Trash2 class="mr-1.5 size-4" />
+              批次刪除
+            </Button>
+          </ButtonGroup>
+        </template>
+        <Dialog :open="createDialogOpen" @update:open="(v: boolean) => { createDialogOpen = v; if (!v) resetCreateForm() }">
+          <DialogTrigger as-child>
+            <Button class="gap-2">
+              <Plus class="size-4" />
+              新增租戶
+            </Button>
+          </DialogTrigger>
             <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>新增租戶</DialogTitle>
@@ -437,12 +493,12 @@ async function submitResetPassword() {
               </form>
             </DialogContent>
           </Dialog>
+      </div>
     </div>
 
     <!-- Table -->
-    <Card class="border-border bg-card">
-      <CardContent class="p-4">
-        <div v-if="loading" class="flex items-center justify-center py-16">
+    <div class="rounded-lg border border-border bg-card">
+      <div v-if="loading" class="flex items-center justify-center py-16">
           <Loader2 class="size-8 animate-spin text-muted-foreground" />
         </div>
         <div v-else-if="!list.length" class="py-16 text-center text-sm text-muted-foreground">
@@ -547,8 +603,7 @@ async function submitResetPassword() {
             </TableRow>
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+    </div>
 
     <!-- Edit dialog -->
     <Dialog :open="editDialogOpen" @update:open="(v: boolean) => { if (!v) closeEditDialog() }">
@@ -727,6 +782,25 @@ async function submitResetPassword() {
             </template>
           </template>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="batchDeleteOpen" @update:open="(v: boolean) => !v && closeBatchDelete()">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>批次刪除租戶</DialogTitle>
+          <DialogDescription>
+            確定要刪除所選的 {{ selectedTenantIds.size }} 個租戶？刪除後無法復原。
+          </DialogDescription>
+        </DialogHeader>
+        <p v-if="batchDeleteError" class="text-sm text-destructive">{{ batchDeleteError }}</p>
+        <DialogFooter>
+          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete">取消</Button>
+          <Button variant="destructive" :disabled="batchDeleteLoading" @click="confirmBatchDelete">
+            <Loader2 v-if="batchDeleteLoading" class="mr-2 size-4 animate-spin" />
+            刪除
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </div>

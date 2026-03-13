@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -16,6 +11,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,7 @@ import {
 import { listProjectFiles, deleteFile, getFileBlob } from '@/api/files'
 import type { AttachmentItem } from '@/api/files'
 import { useUploadQueue } from '@/composables/useUploadQueue'
-import { Upload, Loader2, Trash2, Download, FileIcon } from 'lucide-vue-next'
+import { Upload, Loader2, Trash2, Download, FileIcon, MoreHorizontal } from 'lucide-vue-next'
 
 /** 檔案管理專用 category，與契約分開 */
 const FILE_MANAGEMENT_CATEGORY = 'general'
@@ -41,6 +42,21 @@ const loading = ref(true)
 const total = ref(0)
 const page = ref(1)
 const limit = 20
+const selectedIds = ref<Set<string>>(new Set())
+const isAllSelected = computed(
+  () => fileList.value.length > 0 && selectedIds.value.size === fileList.value.length
+)
+const isSomeSelected = computed(() => selectedIds.value.size > 0)
+function toggleAll(checked: boolean) {
+  if (checked) fileList.value.forEach((f) => selectedIds.value.add(f.id))
+  else selectedIds.value.clear()
+  selectedIds.value = new Set(selectedIds.value)
+}
+function toggleOne(id: string, checked: boolean) {
+  if (checked) selectedIds.value.add(id)
+  else selectedIds.value.delete(id)
+  selectedIds.value = new Set(selectedIds.value)
+}
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadInProgress = ref(false)
@@ -174,74 +190,80 @@ async function confirmDelete() {
       </div>
     </div>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>專案檔案</CardTitle>
-        <CardDescription>
-          此列表僅顯示「檔案管理」上傳的檔案，與契約附件分開管理。上傳狀態會顯示於右上角「檔案上傳」清單。
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div v-if="loading" class="flex items-center justify-center py-12">
-          <Loader2 class="size-8 animate-spin text-muted-foreground" />
+    <p class="text-sm text-muted-foreground">
+      此列表僅顯示「檔案管理」上傳的檔案，與契約附件分開管理。上傳狀態會顯示於右上角「檔案上傳」清單。
+    </p>
+    <div class="rounded-lg border border-border bg-card">
+      <div v-if="loading" class="flex items-center justify-center py-12">
+        <Loader2 class="size-8 animate-spin text-muted-foreground" />
+      </div>
+      <template v-else>
+        <Table v-if="fileList.length">
+          <TableHeader>
+            <TableRow>
+              <TableHead class="w-10">
+                <Checkbox
+                  :checked="isAllSelected || (isSomeSelected && 'indeterminate')"
+                  aria-label="全選"
+                  @update:checked="(v: boolean | 'indeterminate') => toggleAll(v === true)"
+                />
+              </TableHead>
+              <TableHead class="w-[40%]">檔名</TableHead>
+              <TableHead>檔案大小</TableHead>
+              <TableHead>上傳者</TableHead>
+              <TableHead>上傳時間</TableHead>
+              <TableHead class="w-[80px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="row in fileList" :key="row.id">
+              <TableCell class="w-10">
+                <Checkbox
+                  :checked="selectedIds.has(row.id)"
+                  :aria-label="'選取 ' + row.fileName"
+                  @update:checked="(v: boolean | 'indeterminate') => toggleOne(row.id, v === true)"
+                />
+              </TableCell>
+              <TableCell class="font-medium">
+                <div class="flex items-center gap-2">
+                  <FileIcon class="size-4 shrink-0 text-muted-foreground" />
+                  <span class="truncate" :title="row.fileName">{{ row.fileName }}</span>
+                </div>
+              </TableCell>
+              <TableCell class="text-muted-foreground">{{ formatSize(row.fileSize) }}</TableCell>
+              <TableCell class="text-muted-foreground">{{ row.uploaderName ?? '—' }}</TableCell>
+              <TableCell class="text-muted-foreground">{{ formatDate(row.createdAt) }}</TableCell>
+              <TableCell class="w-[80px] text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon" class="size-8" aria-label="更多">
+                      <MoreHorizontal class="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem @click="handleDownload(row)">
+                      <Download class="mr-2 size-4" />
+                      下載
+                    </DropdownMenuItem>
+                    <DropdownMenuItem class="text-destructive focus:text-destructive" @click="openDeleteDialog(row)">
+                      <Trash2 class="mr-2 size-4" />
+                      刪除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <div
+          v-else
+          class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground"
+        >
+          <FileIcon class="mb-2 size-10 opacity-50" />
+          <p class="text-sm">尚無檔案，點擊「新增檔案」上傳</p>
         </div>
-        <template v-else>
-          <Table v-if="fileList.length">
-            <TableHeader>
-              <TableRow>
-                <TableHead class="w-[40%]">檔名</TableHead>
-                <TableHead>大小</TableHead>
-                <TableHead>上傳者</TableHead>
-                <TableHead>上傳時間</TableHead>
-                <TableHead class="w-[100px] text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="row in fileList" :key="row.id">
-                <TableCell class="font-medium">
-                  <div class="flex items-center gap-2">
-                    <FileIcon class="size-4 shrink-0 text-muted-foreground" />
-                    <span class="truncate" :title="row.fileName">{{ row.fileName }}</span>
-                  </div>
-                </TableCell>
-                <TableCell class="text-muted-foreground">{{ formatSize(row.fileSize) }}</TableCell>
-                <TableCell class="text-muted-foreground">{{ row.uploaderName ?? '—' }}</TableCell>
-                <TableCell class="text-muted-foreground">{{ formatDate(row.createdAt) }}</TableCell>
-                <TableCell class="text-right">
-                  <div class="flex justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-8"
-                      aria-label="下載"
-                      @click="handleDownload(row)"
-                    >
-                      <Download class="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-8 text-destructive hover:text-destructive"
-                      aria-label="刪除"
-                      @click="openDeleteDialog(row)"
-                    >
-                      <Trash2 class="size-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-          <div
-            v-else
-            class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground"
-          >
-            <FileIcon class="mb-2 size-10 opacity-50" />
-            <p class="text-sm">尚無檔案，點擊「新增檔案」上傳</p>
-          </div>
-        </template>
-      </CardContent>
-    </Card>
+      </template>
+    </div>
 
     <Dialog :open="deleteDialogOpen" @update:open="(v) => !v && closeDeleteDialog()">
       <DialogContent>

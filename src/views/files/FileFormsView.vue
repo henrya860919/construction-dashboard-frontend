@@ -1,14 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -28,19 +22,43 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   listProjectFormTemplates,
   createProjectFormTemplate,
   deleteFormTemplate,
   getFormTemplateBlob,
 } from '@/api/form-templates'
 import type { FormTemplateItem } from '@/api/form-templates'
-import { Upload, Loader2, Trash2, Download, FileText } from 'lucide-vue-next'
+import { Upload, Loader2, Trash2, Download, FileText, MoreHorizontal } from 'lucide-vue-next'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
 
 const list = ref<FormTemplateItem[]>([])
 const loading = ref(true)
+const selectedIds = ref<Set<string>>(new Set())
+const isAllSelected = computed(() => list.value.length > 0 && selectedIds.value.size === list.value.length)
+const isSomeSelected = computed(() => selectedIds.value.size > 0)
+function toggleAll(checked: boolean) {
+  if (checked) list.value.forEach((r) => selectedIds.value.add(r.id))
+  else selectedIds.value.clear()
+  selectedIds.value = new Set(selectedIds.value)
+}
+function toggleOne(id: string, checked: boolean) {
+  if (checked) selectedIds.value.add(id)
+  else selectedIds.value.delete(id)
+  selectedIds.value = new Set(selectedIds.value)
+}
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 const addDialogOpen = ref(false)
 const addForm = ref({ name: '', description: '', file: null as File | null })
@@ -161,68 +179,90 @@ async function handleDownload(row: FormTemplateItem) {
       </Button>
     </div>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>表單樣板</CardTitle>
-        <CardDescription>預設樣板與本專案自訂樣板，可下載使用</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div v-if="loading" class="flex justify-center py-12">
-          <Loader2 class="size-8 animate-spin text-muted-foreground" />
-        </div>
-        <template v-else>
-          <Table v-if="list.length">
-            <TableHeader>
-              <TableRow>
-                <TableHead class="w-[18%]">名稱</TableHead>
-                <TableHead class="w-[26%]">描述</TableHead>
-                <TableHead>類型</TableHead>
-                <TableHead>更新時間</TableHead>
-                <TableHead class="w-[100px] text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="row in list" :key="row.id">
-                <TableCell class="font-medium">{{ row.name }}</TableCell>
-                <TableCell class="max-w-[220px] truncate text-muted-foreground" :title="row.description ?? ''">
-                  {{ row.description || '—' }}
-                </TableCell>
-                <TableCell>
-                  <Badge :variant="row.isDefault ? 'secondary' : 'default'" class="text-xs">
-                    {{ row.isDefault ? '預設樣板' : '專案樣板' }}
-                  </Badge>
-                </TableCell>
-                <TableCell class="text-muted-foreground text-sm">{{ formatDate(row.updatedAt) }}</TableCell>
-                <TableCell class="text-right">
-                  <div class="flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="size-8" aria-label="下載" @click="handleDownload(row)">
-                      <Download class="size-4" />
+    <p class="text-sm text-muted-foreground">預設樣板與本專案自訂樣板，可下載使用</p>
+    <div class="rounded-lg border border-border bg-card">
+      <div v-if="loading" class="flex justify-center py-12">
+        <Loader2 class="size-8 animate-spin text-muted-foreground" />
+      </div>
+      <template v-else>
+        <Table v-if="list.length">
+          <TableHeader>
+            <TableRow>
+              <TableHead class="w-10">
+                <Checkbox
+                  :checked="isAllSelected || (isSomeSelected && 'indeterminate')"
+                  aria-label="全選"
+                  @update:checked="(v: boolean | 'indeterminate') => toggleAll(v === true)"
+                />
+              </TableHead>
+              <TableHead class="w-[18%]">名稱</TableHead>
+              <TableHead class="w-[20%]">描述</TableHead>
+              <TableHead>檔案大小</TableHead>
+              <TableHead>類型</TableHead>
+              <TableHead>更新時間</TableHead>
+              <TableHead class="w-[80px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="row in list" :key="row.id">
+              <TableCell class="w-10">
+                <Checkbox
+                  :checked="selectedIds.has(row.id)"
+                  :aria-label="'選取 ' + row.name"
+                  @update:checked="(v: boolean | 'indeterminate') => toggleOne(row.id, v === true)"
+                />
+              </TableCell>
+              <TableCell class="font-medium">
+                <div class="flex items-center gap-2">
+                  <FileText class="size-4 shrink-0 text-muted-foreground" />
+                  <span class="truncate" :title="row.name">{{ row.name }}</span>
+                </div>
+              </TableCell>
+              <TableCell class="max-w-[220px] truncate text-muted-foreground" :title="row.description ?? ''">
+                {{ row.description || '—' }}
+              </TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ formatSize(row.fileSize ?? 0) }}</TableCell>
+              <TableCell>
+                <Badge :variant="row.isDefault ? 'secondary' : 'default'" class="text-xs">
+                  {{ row.isDefault ? '預設樣板' : '專案樣板' }}
+                </Badge>
+              </TableCell>
+              <TableCell class="text-muted-foreground text-sm">{{ formatDate(row.updatedAt) }}</TableCell>
+              <TableCell class="w-[80px] text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="icon" class="size-8" aria-label="更多">
+                      <MoreHorizontal class="size-4" />
                     </Button>
-                    <Button
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem @click="handleDownload(row)">
+                      <Download class="mr-2 size-4" />
+                      下載
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       v-if="canDelete(row)"
-                      variant="ghost"
-                      size="icon"
-                      class="size-8 text-destructive hover:text-destructive"
-                      aria-label="刪除"
+                      class="text-destructive focus:text-destructive"
                       @click="openDelete(row)"
                     >
-                      <Trash2 class="size-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-          <div
-            v-else
-            class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground"
-          >
-            <FileText class="mb-2 size-10 opacity-50" />
-            <p class="text-sm">尚無表單樣板。請由後台「表單樣板」新增預設樣板，或在此新增專案樣板。</p>
-          </div>
-        </template>
-      </CardContent>
-    </Card>
+                      <Trash2 class="mr-2 size-4" />
+                      刪除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+        <div
+          v-else
+          class="flex flex-col items-center justify-center py-12 text-center text-muted-foreground"
+        >
+          <FileText class="mb-2 size-10 opacity-50" />
+          <p class="text-sm">尚無表單樣板。請由後台「表單樣板」新增預設樣板，或在此新增專案樣板。</p>
+        </div>
+      </template>
+    </div>
 
     <!-- 新增專案樣板 Dialog -->
     <input

@@ -1,0 +1,90 @@
+---
+description: UI／使用者邏輯與版面原則，新頁面與元件開發時必須遵守
+alwaysApply: true
+---
+
+# UI／使用者邏輯原則
+
+本規則彙整目前前端的版面、按鈕、表格、多選、導航等約定。**新增或修改頁面時請先閱讀本規則與相關 rules**（project-routes、theme-support、api-contract、shadcn-vue-official）。
+
+---
+
+## 一、版面與導航
+
+### 1.1 Header（AppHeader）
+
+- **標題**：專案內（`/p/:projectId/...`）顯示「專案名稱」；未進專案顯示「公司名稱」（租戶有設定時）或「Construction Dashboard」。
+- **不含 logo**：Logo 與品牌標題在 Sidebar 上方呈現，Header 僅顯示上述標題與操作列（選單、通知、上傳、使用者）。
+
+### 1.2 Sidebar（AppSidebar）
+
+- **上方區塊**（品牌區）：
+  - **Logo**：僅在租戶有設定公司 Logo 時顯示圖片；**沒有 logo 時不顯示任何預設圖或佔位圖**。
+  - Logo 容器需有**淺色底色**（如 `bg-white dark:bg-zinc-200`），避免上傳去背圖時透明處在深色下變黑。
+  - **標題**：專案內 = 專案名稱；未進專案 = 公司名稱（有設定時）或「Construction Dashboard」。
+  - **副標**：僅在「未進專案」時顯示（例如「工程儀表板」）；在專案內不顯示副標。
+- 專案內導航路徑一律用 `buildProjectPath(projectId, pathSuffix)` 或 `router.push({ name: ROUTE_NAME.PROJECT_XXX, params: { projectId } })`，見 project-routes.mdc。
+
+### 1.3 專案內頁面
+
+- 取得當前專案：`route.params.projectId`，專案名稱用 `useProjectStore().currentProjectName`。
+- 新增專案內頁面時：在 `routes.ts` 加路徑與 name、在 `navigation.ts` 加側欄項、在 `breadcrumb.ts` 加路徑對應標籤。
+
+---
+
+## 二、按鈕（Button）
+
+- **預設尺寸**：全站 Button 預設為 `size="sm"`（已在 `src/components/ui/button/index.ts` 的 `defaultVariants` 設定）。不需在每個按鈕重複寫 `size="sm"`，除非要使用 `size="icon"` 或 `size="lg"`。
+- **多選工具列按鈕**：使用 **ButtonGroup** 元件包住多個按鈕（例如「取消選取」「批次刪除」），勿自訂外層 `div` 加 border 或額外 class；按鈕用 `variant="outline"` 即可，ButtonGroup 會處理視覺群組。
+  - 引用：`import { ButtonGroup } from '@/components/ui/button-group'`
+
+---
+
+## 三、表格（Table）
+
+- **第一欄**：一律為**勾選欄**（checkbox），用於多選。
+- **操作欄**：使用「**更多**」下拉（DropdownMenu）收合「檢視／編輯／刪除／停用」等動作，不散落多個按鈕。
+- **檔案類列表**（檔案管理、相關表單、表單樣板等）：
+  - 必須有「**檔案大小**」欄位。
+  - 檔名欄位需在名稱前加上**檔案類型 icon**（依副檔名或類型選擇圖示）。
+- **版面**：若頁面有**篩選列／工具列**在表格上方，則**工具列與表格都不要用 Card 包**；表格區塊使用自己的邊框與底色（如 `rounded-lg border border-border bg-card`），避免雙重 Card 包覆。
+
+---
+
+## 四、多選工具列（批次操作）
+
+- **位置**：在表格區塊**外**、表格**上方**。
+- **左右配置**：
+  - **篩選**（Select 等）：一律在**左側**。
+  - **「已選 N 項」+ ButtonGroup（取消選取、批次刪除）+ 新增／上傳按鈕**：**全部在右側**，同一區塊、相鄰排列（`flex items-center gap-3`）。
+- **實作**：工具列外層用 `flex flex-wrap items-center justify-between gap-4`；左邊放篩選區塊（若有），右邊放單一區塊「已選 + ButtonGroup + 新增／上傳」。無篩選的頁面則整列用 `justify-end`，右側區塊同樣「已選 + ButtonGroup + 新增」相鄰。
+- **內容**：顯示「已選 N 項」、以 **ButtonGroup** 包住「取消選取」「批次刪除」等按鈕；新增／上傳按鈕緊接在 ButtonGroup 右側。
+- **顯示時機**：當有選取項目時顯示「已選 N 項」與 ButtonGroup；可與「選取模式」開關搭配（依功能需求）。
+
+---
+
+## 五、表單與對話框
+
+- 表單欄位使用 Label + Input/Select 等 shadcn-vue 元件，錯誤訊息以 `text-destructive` 顯示。
+- 對話框（Dialog）的取消／確認按鈕：取消用 `variant="outline"`，主要送出用預設或 `variant="destructive"`（刪除類）。
+
+---
+
+## 六、主題與色彩
+
+- **必須遵守 theme-support.mdc**：所有背景、文字、邊框使用語意化 token（`bg-background`、`text-foreground`、`border-border`、`bg-card`、`text-muted-foreground` 等），禁止硬編碼固定色；新功能需在淺色與深色模式下皆可讀。
+
+---
+
+## 七、新頁面開發檢查清單
+
+開發新頁面或大幅修改既有頁面時，請確認：
+
+- [ ] **路由**：路徑與 name 已加入 `constants/routes.ts`，並在 `router/index.ts` 註冊。
+- [ ] **導航**：若需出現在側欄，已在 `constants/navigation.ts` 對應群組加入項目；麵包屑已在 `constants/breadcrumb.ts` 對應。
+- [ ] **專案內路徑**：連結使用 `buildProjectPath(projectId, pathSuffix)` 或具名路由，不手動拼字串。
+- [ ] **表格**：第一欄為勾選、操作收合在「更多」、檔案類有檔案大小與檔名 icon；有篩選時不雙重 Card。
+- [ ] **多選**：多選工具列在表格外上方、用 ButtonGroup；篩選在左、已選+ButtonGroup+新增/上傳**全部在右**相鄰。
+- [ ] **按鈕**：未特別需求時不覆寫 size（預設 sm）；多選列使用 ButtonGroup。
+- [ ] **主題**：未使用硬編碼色、淺色／深色皆已檢查可讀性。
+- [ ] **API**：使用專案內 API client、錯誤依 api-contract 處理（如 401 導向登入）。

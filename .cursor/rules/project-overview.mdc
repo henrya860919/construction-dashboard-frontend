@@ -47,3 +47,8 @@ alwaysApply: true
 - 元件名: PascalCase
 - 變數/函式: camelCase
 - 常數: UPPER_SNAKE_CASE（constants/ 內）
+
+## 新頁面開發
+
+- **做新頁面或列表／表格頁時，請先讀 `.cursor/rules/ui-ux-principles.mdc`**，依其中版面、按鈕、表格、多選、導航等原則與檢查清單實作。
+- 同時依情境參考：project-routes.mdc（專案內路徑與側欄）、theme-support.mdc（深淺色）、api-contract.mdc（API 與錯誤）、shadcn-vue-official.mdc（UI 元件）。

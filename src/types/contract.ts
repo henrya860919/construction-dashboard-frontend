@@ -6,6 +6,7 @@
 export interface ContractFileRow {
   id: string
   fileName: string
+  fileSize: number
   uploadDate: string
   uploader: string
   category: string

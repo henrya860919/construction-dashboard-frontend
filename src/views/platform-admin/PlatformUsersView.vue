@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { apiClient } from '@/api/client'
+import { API_PATH } from '@/constants'
 import {
   fetchPlatformUsers,
   fetchTenants,
@@ -8,9 +10,9 @@ import {
   type TenantItem,
 } from '@/api/platform'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -41,7 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2, MoreHorizontal, KeyRound, Users } from 'lucide-vue-next'
+import { Loader2, MoreHorizontal, KeyRound, Users, Trash2 } from 'lucide-vue-next'
 
 const list = ref<PlatformUserItem[]>([])
 const tenants = ref<TenantItem[]>([])
@@ -179,6 +181,40 @@ async function submitResetPassword() {
     resetPasswordSubmitting.value = false
   }
 }
+
+const batchDeleteOpen = ref(false)
+const batchDeleteLoading = ref(false)
+const batchDeleteError = ref('')
+function openBatchDelete() {
+  batchDeleteError.value = ''
+  batchDeleteOpen.value = true
+}
+function closeBatchDelete() {
+  batchDeleteOpen.value = false
+  batchDeleteError.value = ''
+}
+async function confirmBatchDelete() {
+  const ids = Array.from(selectedUserIds.value)
+  if (!ids.length) return
+  batchDeleteLoading.value = true
+  batchDeleteError.value = ''
+  try {
+    for (const id of ids) {
+      await apiClient.delete(`${API_PATH.PLATFORM_USERS}/${id}`)
+    }
+    selectedUserIds.value = new Set()
+    closeBatchDelete()
+    await loadUsers()
+  } catch (err: unknown) {
+    const res =
+      err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+        : null
+    batchDeleteError.value = res?.message ?? '批次刪除失敗'
+  } finally {
+    batchDeleteLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -190,7 +226,7 @@ async function submitResetPassword() {
       </p>
     </div>
 
-    <!-- 篩選列：獨立 div，不包在 Card 內 -->
+    <!-- 篩選列與多選工具列：表格外、表格上方 -->
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex flex-wrap items-center gap-3">
         <Select v-model="tenantFilter" @update:model-value="onFilterChange">
@@ -230,11 +266,31 @@ async function submitResetPassword() {
           </SelectContent>
         </Select>
       </div>
+      <div v-if="selectedUserIds.size > 0" class="flex flex-wrap items-center gap-3">
+        <span class="text-sm text-muted-foreground">已選 {{ selectedUserIds.size }} 項</span>
+        <ButtonGroup>
+          <Button
+            variant="outline"
+            size="sm"
+            @click="selectedUserIds = new Set()"
+          >
+            取消選取
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            @click="openBatchDelete"
+          >
+            <Trash2 class="mr-1.5 size-4" />
+            批次刪除
+          </Button>
+        </ButtonGroup>
+      </div>
     </div>
 
-    <Card class="border-border bg-card">
-      <CardContent class="p-4">
-        <div v-if="loading" class="flex items-center justify-center py-16">
+    <div class="rounded-lg border border-border bg-card">
+      <div v-if="loading" class="flex items-center justify-center py-16">
           <Loader2 class="size-8 animate-spin text-muted-foreground" />
         </div>
         <div v-else-if="!list.length" class="py-16 text-center text-sm text-muted-foreground">
@@ -256,7 +312,7 @@ async function submitResetPassword() {
               <TableHead class="text-muted-foreground">成員類型</TableHead>
               <TableHead class="text-muted-foreground">所屬租戶</TableHead>
               <TableHead class="text-muted-foreground">建立日期</TableHead>
-              <TableHead class="w-[80px] text-muted-foreground">操作</TableHead>
+              <TableHead class="w-[80px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -312,8 +368,7 @@ async function submitResetPassword() {
             </TableRow>
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+    </div>
 
     <!-- 重設密碼 Dialog -->
     <Dialog :open="resetPasswordDialogOpen" @update:open="(v: boolean) => { if (!v) closeResetPasswordDialog() }">
@@ -349,6 +404,25 @@ async function submitResetPassword() {
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="batchDeleteOpen" @update:open="(v: boolean) => !v && closeBatchDelete()">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>批次刪除使用者</DialogTitle>
+          <DialogDescription>
+            確定要刪除所選的 {{ selectedUserIds.size }} 位使用者？刪除後無法復原。
+          </DialogDescription>
+        </DialogHeader>
+        <p v-if="batchDeleteError" class="text-sm text-destructive">{{ batchDeleteError }}</p>
+        <DialogFooter>
+          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete">取消</Button>
+          <Button variant="destructive" :disabled="batchDeleteLoading" @click="confirmBatchDelete">
+            <Loader2 v-if="batchDeleteLoading" class="mr-2 size-4 animate-spin" />
+            刪除
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </div>

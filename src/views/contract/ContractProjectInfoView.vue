@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Card,
@@ -35,7 +35,7 @@ const errorMessage = ref('')
 /** 是否為編輯模式 */
 const isEditMode = ref(false)
 
-/** 表單資料 */
+/** 表單資料（預定完工 = 開工+工期，預定竣工 = 開工+工期+調整天數，由 API 回傳） */
 const form = ref({
   projectName: '',
   designUnit: '',
@@ -44,6 +44,7 @@ const form = ref({
   summary: '',
   benefits: '',
   startDate: '',
+  plannedDurationDays: '' as number | string,
   plannedEndDate: '',
   revisedEndDate: '',
   siteManager: '',
@@ -57,6 +58,40 @@ const emptyPlaceholder = '—'
 function displayValue(value: string | undefined): string {
   return value?.trim() || emptyPlaceholder
 }
+
+/** 預定完工日期 = 開工 + 工期（僅顯示用） */
+const computedPlannedEndDisplay = computed(() => {
+  const start = form.value.startDate?.trim()
+  const days = form.value.plannedDurationDays
+  if (!start || days === '' || (typeof days === 'number' && days < 0)) return ''
+  const d = new Date(start)
+  if (Number.isNaN(d.getTime())) return ''
+  const numDays = typeof days === 'number' ? days : parseInt(String(days), 10)
+  if (Number.isNaN(numDays) || numDays < 0) return ''
+  d.setDate(d.getDate() + numDays)
+  return d.toISOString().slice(0, 10)
+})
+
+/** 預定竣工（依工期調整）：API 回傳的 revisedEndDate，無則顯示預定完工 */
+const effectivePlannedEndDisplay = computed(() => {
+  const revised = form.value.revisedEndDate?.trim()
+  const planned = form.value.plannedEndDate?.trim()
+  const computed = computedPlannedEndDisplay.value
+  const effective = revised || planned || computed
+  return displayValue(effective)
+})
+
+/** 工期區塊副說明：預定完工 = 開工+工期；預定竣工 = 開工+工期+調整天數 */
+const plannedEndSubtext = computed(() => {
+  const planned = form.value.plannedEndDate?.trim()
+  const revised = form.value.revisedEndDate?.trim()
+  const computed = computedPlannedEndDisplay.value
+  const parts: string[] = []
+  if (computed) parts.push(`預定完工 ${computed}（開工+工期）`)
+  if (revised && revised !== computed) parts.push(`預定竣工 ${revised}`)
+  if (!revised && planned && planned !== computed) parts.push(`原訂 ${planned}`)
+  return parts.join(' · ')
+})
 
 function dateToInputValue(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -72,6 +107,7 @@ function fillForm(project: ProjectDetail) {
     summary: project.summary ?? '',
     benefits: project.benefits ?? '',
     startDate: dateToInputValue(project.startDate),
+    plannedDurationDays: project.plannedDurationDays ?? '',
     plannedEndDate: dateToInputValue(project.plannedEndDate),
     revisedEndDate: dateToInputValue(project.revisedEndDate),
     siteManager: project.siteManager ?? '',
@@ -116,8 +152,7 @@ async function save() {
       summary: form.value.summary.trim() || null,
       benefits: form.value.benefits.trim() || null,
       startDate: form.value.startDate || null,
-      plannedEndDate: form.value.plannedEndDate || null,
-      revisedEndDate: form.value.revisedEndDate || null,
+      plannedDurationDays: form.value.plannedDurationDays === '' ? null : Number(form.value.plannedDurationDays),
       siteManager: form.value.siteManager.trim() || null,
       contactPhone: form.value.contactPhone.trim() || null,
       projectStaff: form.value.projectStaff.trim() || null,
@@ -298,12 +333,18 @@ async function save() {
             <p class="text-sm font-medium text-foreground">{{ displayValue(form.startDate) }}</p>
           </div>
           <div class="space-y-1">
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">預定完工日期</p>
-            <p class="text-sm font-medium text-foreground">{{ displayValue(form.plannedEndDate) }}</p>
+            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工期（天）</p>
+            <p class="text-sm font-medium text-foreground">{{ form.plannedDurationDays !== '' ? form.plannedDurationDays : emptyPlaceholder }}</p>
           </div>
           <div class="space-y-1">
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">變更竣工日期</p>
-            <p class="text-sm font-medium text-foreground">{{ form.revisedEndDate ? form.revisedEndDate : '未變更' }}</p>
+            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">預定完工日期</p>
+            <p class="text-sm font-medium text-foreground">{{ displayValue(computedPlannedEndDisplay) || emptyPlaceholder }}</p>
+            <p class="mt-0.5 text-xs text-muted-foreground">開工 + 工期</p>
+          </div>
+          <div class="space-y-1">
+            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">預定竣工（依工期調整）</p>
+            <p class="text-sm font-medium text-foreground">{{ effectivePlannedEndDisplay }}</p>
+            <p v-if="plannedEndSubtext" class="mt-0.5 text-xs text-muted-foreground">{{ plannedEndSubtext }}</p>
           </div>
         </template>
         <template v-else>
@@ -312,12 +353,16 @@ async function save() {
             <Input v-model="form.startDate" type="date" class="mt-0.5" />
           </div>
           <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground">預定完工日期</label>
-            <Input v-model="form.plannedEndDate" type="date" class="mt-0.5" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground">變更竣工日期</label>
-            <Input v-model="form.revisedEndDate" type="date" class="mt-0.5" placeholder="未變更可留空" />
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工期（天）</label>
+            <Input
+              v-model="form.plannedDurationDays"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="開工後天數"
+              class="mt-0.5"
+            />
+            <p class="mt-0.5 text-xs text-muted-foreground">預定完工 = 開工 + 工期；預定竣工 = 開工 + 工期 + 工期調整</p>
           </div>
         </template>
       </CardContent>

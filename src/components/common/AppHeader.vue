@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Menu, User, Bell, Sun, Moon, Upload } from 'lucide-vue-next'
+import { Menu, User, Bell, Sun, Moon, Upload, Megaphone } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -19,6 +19,8 @@ import { useProjectStore } from '@/stores/project'
 import { useUploadQueueStore } from '@/stores/uploadQueue'
 import { useAuth } from '@/composables/useAuth'
 import UploadQueuePanel from '@/components/common/UploadQueuePanel.vue'
+import AnnouncementPanel from '@/components/common/AnnouncementPanel.vue'
+import { useAnnouncementStore } from '@/stores/announcements'
 
 const route = useRoute()
 const sidebarStore = useSidebarStore()
@@ -26,6 +28,7 @@ const projectStore = useProjectStore()
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const uploadQueueStore = useUploadQueueStore()
+const announcementStore = useAnnouncementStore()
 const { logout } = useAuth()
 
 const props = withDefaults(
@@ -88,6 +91,27 @@ function handleMenuClick() {
           {{ notificationCount }}
         </Badge>
       </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="relative"
+            aria-label="平台公告"
+          >
+            <Megaphone class="size-5" />
+            <Badge
+              v-if="announcementStore.unreadCount > 0"
+              class="absolute -right-1 -top-1 size-4 min-w-4 rounded-full px-1 p-0 text-[10px]"
+            >
+              {{ announcementStore.unreadCount }}
+            </Badge>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-auto p-0" :side-offset="6">
+          <AnnouncementPanel />
+        </DropdownMenuContent>
+      </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <Button

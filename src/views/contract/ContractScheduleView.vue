@@ -59,27 +59,27 @@ const loading = ref(true)
 const saving = ref(false)
 const errorMessage = ref('')
 
-/** 專案資訊（用於摘要開工／預計竣工） */
-const projectInfo = ref<{ startDate: string | null; plannedEndDate: string | null; revisedEndDate: string | null } | null>(null)
+/** 專案資訊（開工、工期、預定完工=開工+工期、預定竣工=開工+工期+調整天數） */
+const projectInfo = ref<{
+  startDate: string | null
+  plannedDurationDays: number | null
+  plannedEndDate: string | null
+  revisedEndDate: string | null
+} | null>(null)
 
 /** 工期調整列表 */
 const list = ref<ScheduleAdjustmentRow[]>([])
 
-/** 上方摘要：從 list 與 project 計算 */
+/** 上方摘要：預定完工=開工+工期，預定竣工=開工+工期+核定調整天數（API 已計算 revisedEndDate） */
 const summary = computed(() => {
   const totalApplyDays = list.value.reduce((s, r) => s + r.applyDays, 0)
   const totalApprovedDays = list.value.reduce((s, r) => s + r.approvedDays, 0)
   const startDate = projectInfo.value?.startDate ? projectInfo.value.startDate.slice(0, 10) : '—'
-  let plannedEndDate = '—'
-  if (projectInfo.value?.revisedEndDate) {
-    plannedEndDate = projectInfo.value.revisedEndDate.slice(0, 10)
-  } else if (projectInfo.value?.startDate && totalApprovedDays > 0) {
-    const d = new Date(projectInfo.value.startDate)
-    d.setDate(d.getDate() + totalApprovedDays)
-    plannedEndDate = d.toISOString().slice(0, 10)
-  } else if (projectInfo.value?.plannedEndDate) {
-    plannedEndDate = projectInfo.value.plannedEndDate.slice(0, 10)
-  }
+  const plannedEndDate = projectInfo.value?.revisedEndDate
+    ? projectInfo.value.revisedEndDate.slice(0, 10)
+    : projectInfo.value?.plannedEndDate
+      ? projectInfo.value.plannedEndDate.slice(0, 10)
+      : '—'
   return { totalApplyDays, totalApprovedDays, startDate, plannedEndDate }
 })
 
@@ -135,6 +135,7 @@ async function loadData() {
     if (project) {
       projectInfo.value = {
         startDate: project.startDate,
+        plannedDurationDays: project.plannedDurationDays ?? null,
         plannedEndDate: project.plannedEndDate,
         revisedEndDate: project.revisedEndDate,
       }
@@ -368,9 +369,9 @@ const columns = computed<ColumnDef<ScheduleAdjustmentRow, unknown>[]>(() => [
             <CalendarRange class="size-6" />
           </div>
           <div>
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">預計竣工日期</p>
+            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">預定竣工日期</p>
             <p class="text-lg font-semibold tabular-nums text-foreground">{{ summary.plannedEndDate }}</p>
-            <p class="text-xs text-muted-foreground">依核定展延天數計算</p>
+            <p class="text-xs text-muted-foreground">開工 + 工期 + 核定調整天數</p>
           </div>
         </CardContent>
       </Card>

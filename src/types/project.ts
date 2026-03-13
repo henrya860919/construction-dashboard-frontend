@@ -36,8 +36,9 @@ export interface ProjectDetail extends ProjectItem {
   summary: string | null
   benefits: string | null
   startDate: string | null
-  plannedEndDate: string | null
-  revisedEndDate: string | null  // 變更竣工日期（依工期調整後；未變更則 null）
+  plannedDurationDays: number | null  // 工期（天）；預定完工 = 開工 + 工期
+  plannedEndDate: string | null       // 由開工+工期算出（API 回傳）
+  revisedEndDate: string | null       // 預定竣工 = 開工+工期+調整工期（API 回傳）
   siteManager: string | null
   contactPhone: string | null
   projectStaff: string | null
@@ -55,6 +56,7 @@ export interface UpdateProjectInfoPayload {
   summary?: string | null
   benefits?: string | null
   startDate?: string | null
+  plannedDurationDays?: number | null
   plannedEndDate?: string | null
   revisedEndDate?: string | null
   siteManager?: string | null

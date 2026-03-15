@@ -178,7 +178,11 @@ async function openEditDialog(tenant: TenantItem) {
   editDialogOpen.value = true
   editTenantUsersLoading.value = true
   try {
-    const { list: users } = await fetchPlatformUsers({ tenantId: tenant.id, limit: 50 })
+    const { list: users } = await fetchPlatformUsers({
+      tenantId: tenant.id,
+      systemRole: 'tenant_admin',
+      limit: 50,
+    })
     editTenantUsers.value = users ?? []
   } catch {
     editTenantUsers.value = []
@@ -714,16 +718,16 @@ async function confirmBatchDelete() {
             <label for="edit-storage" class="text-sm font-medium text-foreground">總儲存容量 (MB)</label>
             <Input id="edit-storage" v-model="editForm.storageQuotaMb" type="number" min="0" placeholder="不限制" class="bg-background" />
           </div>
-          <!-- 租戶帳號 -->
+          <!-- 租戶管理員 -->
           <div class="space-y-2 border-t border-border pt-4">
-            <p class="text-sm font-medium text-foreground">租戶帳號</p>
-            <p class="text-xs text-muted-foreground">此租戶下已建立的登入帳號</p>
+            <p class="text-sm font-medium text-foreground">租戶管理員</p>
+            <p class="text-xs text-muted-foreground">此租戶下的租戶管理員帳號</p>
             <div v-if="editTenantUsersLoading" class="flex items-center gap-2 py-2 text-sm text-muted-foreground">
               <Loader2 class="size-4 animate-spin" />
               載入中…
             </div>
             <ul v-else-if="editTenantUsers.length === 0" class="rounded-md border border-border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
-              尚無帳號
+              尚無租戶管理員
             </ul>
             <ul v-else class="space-y-1.5 rounded-md border border-border bg-muted/20 px-3 py-2">
               <li
@@ -733,7 +737,7 @@ async function confirmBatchDelete() {
               >
                 <span class="font-medium text-foreground">{{ u.name || u.email }}</span>
                 <span class="text-muted-foreground">{{ u.email }}</span>
-                <Badge variant="secondary" class="shrink-0 text-xs">{{ u.systemRole === 'tenant_admin' ? '租戶管理員' : u.systemRole === 'platform_admin' ? '平台管理員' : '專案使用者' }}</Badge>
+                <Badge variant="secondary" class="shrink-0 text-xs">租戶管理員</Badge>
               </li>
             </ul>
           </div>

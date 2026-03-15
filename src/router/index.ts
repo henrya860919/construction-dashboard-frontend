@@ -52,6 +52,11 @@ const router = createRouter({
           component: () => import('@/views/monitoring/MonitoringMetricsView.vue'),
         },
         {
+          path: 'p/:projectId/monitoring/alerts',
+          name: ROUTE_NAME.PROJECT_MONITORING_ALERTS,
+          component: () => import('@/views/monitoring/MonitoringAlertsView.vue'),
+        },
+        {
           path: 'p/:projectId/monitoring/devices',
           name: ROUTE_NAME.PROJECT_MONITORING_DEVICES,
           component: () => import('@/views/monitoring/MonitoringDevicesView.vue'),

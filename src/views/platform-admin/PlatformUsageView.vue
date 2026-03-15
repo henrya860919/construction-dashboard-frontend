@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Card, CardContent } from '@/components/ui/card'
+import type { ColumnDef } from '@tanstack/vue-table'
+import { getCoreRowModel, getPaginationRowModel, useVueTable } from '@tanstack/vue-table'
+import { FlexRender } from '@tanstack/vue-table'
+import { ref, computed, onMounted, h } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -11,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import { Loader2, BarChart3 } from 'lucide-vue-next'
 import { fetchUsage, type TenantUsageItem } from '@/api/platform'
 
@@ -69,6 +72,95 @@ async function load() {
   }
 }
 
+const columns = computed<ColumnDef<TenantUsageItem, unknown>[]>(() => [
+  {
+    accessorKey: 'name',
+    header: () => '租戶',
+    cell: ({ row }) => {
+      const r = row.original
+      return h('div', [
+        h('div', { class: 'font-medium text-foreground' }, r.name),
+        r.slug ? h('div', { class: 'text-xs text-muted-foreground' }, r.slug) : null,
+      ])
+    },
+  },
+  {
+    accessorKey: 'status',
+    header: () => '狀態',
+    cell: ({ row }) => {
+      const r = row.original
+      const badges = [
+        h(Badge, { variant: r.status === 'active' ? 'default' : 'secondary' }, () => r.status === 'active' ? '啟用' : '停用'),
+      ]
+      if (isExpired(r)) {
+        badges.push(h(Badge, { variant: 'destructive', class: 'ml-1' }, () => '已到期'))
+      } else if (isExpiringSoon(r)) {
+        badges.push(
+          h(Badge, { variant: 'outline', class: 'ml-1 border-amber-500 text-amber-600 dark:text-amber-400' }, () => '即將到期')
+        )
+      }
+      return h('div', badges)
+    },
+  },
+  {
+    accessorKey: 'userCount',
+    header: () => '使用者',
+    cell: ({ row }) => {
+      const r = row.original
+      return h('span', { class: 'tabular-nums text-foreground' }, [
+        r.userCount,
+        r.userLimit != null ? h('span', { class: 'text-muted-foreground' }, ` / ${r.userLimit}`) : null,
+      ])
+    },
+  },
+  {
+    accessorKey: 'projectCount',
+    header: () => '專案',
+    cell: ({ row }) =>
+      h('span', { class: 'tabular-nums text-foreground' }, String(row.original.projectCount)),
+  },
+  {
+    id: 'storage',
+    header: () => h('span', { class: 'min-w-[200px]' }, '儲存用量'),
+    cell: ({ row }) => {
+      const r = row.original
+      const pct = storagePercent(r)
+      return h('div', { class: 'flex min-w-[200px] flex-col gap-1' }, [
+        h('span', { class: 'text-foreground' }, storageDisplay(r.storageUsageBytes)),
+        h('span', { class: 'text-xs text-muted-foreground' }, quotaDisplay(r.storageQuotaMb)),
+        pct != null
+          ? h(Progress, {
+              modelValue: pct,
+              class: ['h-2 w-32', isOverQuota(r) ? '[&>div]:bg-destructive' : ''],
+            })
+          : null,
+        isOverQuota(r) ? h('span', { class: 'text-xs text-destructive' }, '已超用') : null,
+      ])
+    },
+  },
+  {
+    accessorKey: 'expiresAt',
+    header: () => '到期日',
+    cell: ({ row }) =>
+      h('span', { class: 'tabular-nums text-muted-foreground' }, formatDate(row.original.expiresAt)),
+  },
+])
+
+const table = useVueTable({
+  get data() {
+    return list.value
+  },
+  get columns() {
+    return columns.value
+  },
+  getCoreRowModel: getCoreRowModel(),
+  getPaginationRowModel: getPaginationRowModel(),
+  getRowId: (row) => row.id,
+  initialState: {
+    pagination: { pageSize: 10 },
+  },
+})
+
 onMounted(load)
 </script>
 
@@ -81,68 +173,54 @@ onMounted(load)
       </p>
     </div>
 
-    <Card class="border-border bg-card">
-      <CardContent class="p-4">
-        <div v-if="loading" class="flex items-center justify-center py-16">
-          <Loader2 class="size-8 animate-spin text-muted-foreground" />
+    <!-- 表格區塊（規範：rounded-lg border bg-card） -->
+    <div class="rounded-lg border border-border bg-card p-4">
+      <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
+        <Loader2 class="size-8 animate-spin" />
+      </div>
+      <template v-else>
+        <div v-if="!list.length" class="py-16 text-center text-sm text-muted-foreground">
+          <BarChart3 class="mx-auto mb-2 size-10 opacity-50" />
+          <p>尚無租戶或用量資料。</p>
         </div>
         <template v-else>
-          <div v-if="!list.length" class="py-16 text-center text-sm text-muted-foreground">
-            <BarChart3 class="mx-auto mb-2 size-10 opacity-50" />
-            <p>尚無租戶或用量資料。</p>
-          </div>
-          <div v-else class="overflow-x-auto rounded-md border border-border">
+          <div class="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow class="border-border hover:bg-transparent">
-                  <TableHead class="text-muted-foreground">租戶</TableHead>
-                  <TableHead class="text-muted-foreground">狀態</TableHead>
-                  <TableHead class="text-muted-foreground">使用者</TableHead>
-                  <TableHead class="text-muted-foreground">專案</TableHead>
-                  <TableHead class="min-w-[200px] text-muted-foreground">儲存用量</TableHead>
-                  <TableHead class="text-muted-foreground">到期日</TableHead>
+                <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
+                  <TableHead v-for="header in headerGroup.headers" :key="header.id">
+                    <FlexRender
+                      v-if="!header.isPlaceholder"
+                      :render="header.column.columnDef.header"
+                      :props="header.getContext()"
+                    />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow v-for="row in list" :key="row.id" class="border-border">
-                  <TableCell>
-                    <div class="font-medium text-foreground">{{ row.name }}</div>
-                    <div v-if="row.slug" class="text-xs text-muted-foreground">{{ row.slug }}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge :variant="row.status === 'active' ? 'default' : 'secondary'">
-                      {{ row.status === 'active' ? '啟用' : '停用' }}
-                    </Badge>
-                    <Badge v-if="isExpired(row)" variant="destructive" class="ml-1">已到期</Badge>
-                    <Badge v-else-if="isExpiringSoon(row)" variant="outline" class="ml-1 border-amber-500 text-amber-600 dark:text-amber-400">
-                      即將到期
-                    </Badge>
-                  </TableCell>
-                  <TableCell class="tabular-nums text-foreground">
-                    {{ row.userCount }}
-                    <span v-if="row.userLimit != null" class="text-muted-foreground">/ {{ row.userLimit }}</span>
-                  </TableCell>
-                  <TableCell class="tabular-nums text-foreground">{{ row.projectCount }}</TableCell>
-                  <TableCell class="min-w-[200px]">
-                    <div class="flex flex-col gap-1">
-                      <span class="text-foreground">{{ storageDisplay(row.storageUsageBytes) }}</span>
-                      <span class="text-xs text-muted-foreground">{{ quotaDisplay(row.storageQuotaMb) }}</span>
-                      <Progress
-                        v-if="storagePercent(row) != null"
-                        :model-value="storagePercent(row)!"
-                        class="h-2 w-32"
-                        :class="isOverQuota(row) ? '[&>div]:bg-destructive' : ''"
-                      />
-                      <span v-if="isOverQuota(row)" class="text-xs text-destructive">已超用</span>
-                    </div>
-                  </TableCell>
-                  <TableCell class="tabular-nums text-muted-foreground">{{ formatDate(row.expiresAt) }}</TableCell>
-                </TableRow>
+                <template v-if="table.getRowModel().rows?.length">
+                  <TableRow
+                    v-for="row in table.getRowModel().rows"
+                    :key="row.id"
+                  >
+                    <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
+                      <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+                    </TableCell>
+                  </TableRow>
+                </template>
+                <template v-else>
+                  <TableRow>
+                    <TableCell :colspan="6" class="h-24 text-center text-muted-foreground">
+                      尚無租戶或用量資料。
+                    </TableCell>
+                  </TableRow>
+                </template>
               </TableBody>
             </Table>
           </div>
+          <DataTablePagination :table="table" hide-selection-info />
         </template>
-      </CardContent>
-    </Card>
+      </template>
+    </div>
   </div>
 </template>

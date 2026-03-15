@@ -12,6 +12,8 @@ const props = withDefaults(
     title: string
     /** 主要數值顯示，如「高溫 32.5°C」「PM2.5: 45」 */
     value: string
+    /** 顯示「已過 X 分鐘」，30 分鐘後卡片會從列表移除 */
+    timeAgo?: string
     class?: string
   }>(),
   {}
@@ -79,6 +81,9 @@ const config = computed(() => levelConfig[props.level])
     </p>
     <p class="mt-0.5 text-xs text-muted-foreground">
       {{ config.description }}
+    </p>
+    <p v-if="props.timeAgo" class="mt-1 text-xs text-muted-foreground">
+      {{ props.timeAgo }}
     </p>
   </div>
 </template>

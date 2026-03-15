@@ -34,6 +34,8 @@ export interface AlertItem {
   value: string
   description?: string
   suggestion?: string
+  /** 最後一次發生時間（ISO），用於顯示「已過 X 分鐘」 */
+  lastSeenAt?: string
 }
 
 /** 環境監測單項 */

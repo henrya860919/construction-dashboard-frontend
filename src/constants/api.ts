@@ -78,4 +78,8 @@ export const API_PATH = {
     `${API_V1}/projects/${projectId}/cameras/${cameraId}/install-package?os=${os}`,
   PROJECT_CAMERA_INSTALL: (projectId: string, cameraId: string) =>
     `${API_V1}/projects/${projectId}/cameras/${cameraId}/install`,
+  /** 即時警報（目前假資料；之後接 CWA） */
+  ALERTS_CURRENT: `${API_V1}/alerts/current`,
+  /** 歷史警報（query: projectId?, startDate, endDate, limit?） */
+  ALERTS_HISTORY: `${API_V1}/alerts/history`,
 } as const

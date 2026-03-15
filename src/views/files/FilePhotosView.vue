@@ -139,22 +139,24 @@ interface PhotoGridItem {
   mimeType?: string
 }
 
+/** 圖庫排序：過去到現在（最舊在上、最新在下） */
 const photoGridItems = computed(() => {
   const list = currentPhotos.value
   if (!list.length) return []
-  return list.filter((item: { mimeType?: string }) =>
+  const filtered = list.filter((item: { mimeType?: string }) =>
     (item.mimeType ?? '').startsWith('image/')
   ) as PhotoGridItem[]
+  return [...filtered].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
 })
 
 /** 每個年／月顯示的精選張數（該年／該月的前幾張），點擊進入全部並開 lightbox */
 const FEATURED_PER_GROUP = 6
 
-/** 依年分組（年 tab） */
+/** 依年分組（年 tab），過去到現在 */
 const photosGroupedByYear = computed(() => {
-  const items = [...photoGridItems.value].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  const items = photoGridItems.value
   if (!items.length) return []
   const yearMap = new Map<number, PhotoGridItem[]>()
   for (const item of items) {
@@ -163,15 +165,13 @@ const photosGroupedByYear = computed(() => {
     yearMap.get(y)!.push(item)
   }
   return Array.from(yearMap.entries())
-    .sort(([a], [b]) => b - a)
+    .sort(([a], [b]) => a - b)
     .map(([year, items]) => ({ year, items }))
 })
 
-/** 依年+月分組（月 tab） */
+/** 依年+月分組（月 tab），過去到現在 */
 const photosGroupedByYearMonth = computed(() => {
-  const items = [...photoGridItems.value].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  const items = photoGridItems.value
   if (!items.length) return []
   const map = new Map<string, PhotoGridItem[]>()
   for (const item of items) {
@@ -181,18 +181,16 @@ const photosGroupedByYearMonth = computed(() => {
     map.get(key)!.push(item)
   }
   return Array.from(map.entries())
-    .sort(([a], [b]) => b.localeCompare(a))
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, items]) => {
       const [y, m] = key.split('-').map(Number)
       return { year: y, month: m, items }
     })
 })
 
-/** 依年 → 月 → 日分組，同一日內按時間新到舊 */
+/** 依年 → 月 → 日分組，過去到現在（同一日內亦為舊到新） */
 const photosGroupedByDate = computed(() => {
-  const items = [...photoGridItems.value].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+  const items = photoGridItems.value
   if (!items.length) return []
   const yearMap = new Map<
     number,
@@ -211,15 +209,15 @@ const photosGroupedByDate = computed(() => {
     dayMap.get(day)!.push(item)
   }
   const result: { year: number; months: { month: number; days: { day: number; items: PhotoGridItem[] }[] }[] }[] = []
-  const years = Array.from(yearMap.keys()).sort((a, b) => b - a)
+  const years = Array.from(yearMap.keys()).sort((a, b) => a - b)
   for (const year of years) {
     const monthMap = yearMap.get(year)!
     const months: { month: number; days: { day: number; items: PhotoGridItem[] }[] }[] = []
-    const monthKeys = Array.from(monthMap.keys()).sort((a, b) => b - a)
+    const monthKeys = Array.from(monthMap.keys()).sort((a, b) => a - b)
     for (const month of monthKeys) {
       const dayMap = monthMap.get(month)!
       const days: { day: number; items: PhotoGridItem[] }[] = []
-      const dayKeys = Array.from(dayMap.keys()).sort((a, b) => b - a)
+      const dayKeys = Array.from(dayMap.keys()).sort((a, b) => a - b)
       for (const day of dayKeys) {
         days.push({ day, items: dayMap.get(day)! })
       }
@@ -370,11 +368,31 @@ function isSelected(id: string) {
   return selectedIds.value.has(id)
 }
 
-/** 選取模式：點擊即切換勾選。非選取模式：Shift／Command 多選，否則開 lightbox */
+/** 選取模式：點擊即切換勾選；Shift 範圍選取、Cmd/Ctrl 切換單一項。非選取模式：Shift／Command 多選，否則開 lightbox */
 function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
   const list = photoGridItems.value
   const idx = list.findIndex((p) => p.id === item.id)
   if (selectionMode.value) {
+    if (e.shiftKey) {
+      const lastIdx = lastClickedId.value != null
+        ? list.findIndex((p) => p.id === lastClickedId.value)
+        : -1
+      const from = lastIdx >= 0 ? Math.min(lastIdx, idx) : idx
+      const to = lastIdx >= 0 ? Math.max(lastIdx, idx) : idx
+      const next = new Set(selectedIds.value)
+      for (let i = from; i <= to; i++) next.add(list[i].id)
+      selectedIds.value = next
+      lastClickedId.value = item.id
+      return
+    }
+    if (e.metaKey || e.ctrlKey) {
+      const next = new Set(selectedIds.value)
+      if (next.has(item.id)) next.delete(item.id)
+      else next.add(item.id)
+      selectedIds.value = next
+      lastClickedId.value = item.id
+      return
+    }
     const next = new Set(selectedIds.value)
     if (next.has(item.id)) next.delete(item.id)
     else next.add(item.id)
@@ -818,7 +836,8 @@ async function confirmAddSelectedToAlbum() {
             </Button>
           </div>
         </div>
-        <ScrollArea class="min-h-0 flex-1">
+        <!-- 避免按 Shift／Cmd 多選時觸發 focus-visible 出現橫線 -->
+        <ScrollArea class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:focus-visible:outline-none [&_[data-slot=scroll-area-viewport]]:focus-visible:ring-0">
           <div v-if="loadingPhotos" class="flex flex-col items-center justify-center py-24">
             <Loader2 class="size-10 animate-spin text-muted-foreground" />
             <p class="mt-3 text-sm text-muted-foreground">載入中…</p>

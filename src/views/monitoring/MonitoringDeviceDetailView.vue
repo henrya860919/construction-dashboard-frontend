@@ -42,10 +42,12 @@ const cameraError = ref<string | null>(null)
 const playUrl = ref<string | null>(null)
 const playUrlError = ref<string | null>(null)
 
-/** 僅在攝影機啟用且已取得 URL 時傳入 WHEP，避免停用時連線 */
-const whepUrl = computed(() =>
-  camera.value?.status === 'active' && playUrl.value ? playUrl.value : null
-)
+/** 僅在攝影機啟用、已取得 URL 且未手動標示為離線時傳入 WHEP；手動離線時不連線、不顯示畫面 */
+const whepUrl = computed(() => {
+  if (camera.value?.status !== 'active' || !playUrl.value) return null
+  if (camera.value?.connectionStatusOverride === 'offline') return null
+  return playUrl.value
+})
 const { videoRef, loading: webrtcLoading, error: webrtcError, hasStream: webrtcHasStream, disconnect } = useWhepPlayer(whepUrl)
 
 const settingsOpen = ref(false)
@@ -112,9 +114,12 @@ function connectionStatusLabel(connectionStatus: CameraItem['connectionStatus'])
   }
 }
 
-/** 操作員狀態說明：依 connectionStatus 與 WebRTC 狀態 */
+/** 操作員狀態說明：依 connectionStatus、手動離線標示與 WebRTC 狀態 */
 const streamStatusText = computed(() => {
   const cam = camera.value
+  if (cam?.connectionStatusOverride === 'offline') {
+    return '目前屬於離線狀態（已手動標示，不顯示即時畫面）'
+  }
   const status = cam?.connectionStatus
   if (status === 'not_configured') {
     return '尚未設定：請依安裝精靈在現場安裝 go2rtc 並推流後，此處才會顯示即時畫面'
@@ -508,6 +513,16 @@ async function handleDeleteCamera() {
             class="flex h-full w-full items-center justify-center rounded-lg border border-border bg-muted/50"
           >
             <p class="text-sm text-muted-foreground">此攝影機已停用，無法播放</p>
+          </div>
+          <div
+            v-else-if="camera?.connectionStatusOverride === 'offline'"
+            class="flex h-full w-full flex-col items-center justify-center gap-3 rounded-lg border border-border bg-muted/50"
+          >
+            <WifiOff class="size-12 text-muted-foreground" />
+            <p class="text-sm font-medium text-foreground">目前屬於離線狀態</p>
+            <p class="max-w-sm text-center text-xs text-muted-foreground">
+              此設備已手動標示為離線，不顯示即時畫面。若需恢復顯示，請點擊上方「清除標示」。
+            </p>
           </div>
           <div
             v-else-if="playUrlError"

@@ -29,6 +29,7 @@ export const PROJECT_SIDEBAR_GROUPS: NavGroupProject[] = [
     label: '監測',
     children: [
       { id: 'monitoring-metrics', label: '歷史數據', pathSuffix: '/monitoring/metrics', icon: 'Activity' },
+      { id: 'monitoring-alerts', label: '歷史警報', pathSuffix: '/monitoring/alerts', icon: 'AlertTriangle' },
       { id: 'monitoring-upload', label: '數據上傳', pathSuffix: '/monitoring/upload', icon: 'Upload' },
       { id: 'monitoring-devices', label: '設備', pathSuffix: '/monitoring/devices', icon: 'Cpu' },
       { id: 'monitoring-media', label: '影像', pathSuffix: '/monitoring/media', icon: 'Image' },

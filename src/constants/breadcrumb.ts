@@ -30,6 +30,7 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/overview/events': '大事記',
   '/overview/milestones': '里程碑',
   '/monitoring/metrics': '歷史數據',
+  '/monitoring/alerts': '歷史警報',
   '/monitoring/devices': '設備',
   '/monitoring/media': '影像',
   '/monitoring/reports': '報表',

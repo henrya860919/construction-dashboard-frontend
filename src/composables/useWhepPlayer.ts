@@ -21,18 +21,36 @@ function generateIceCredentials(): { ufrag: string; pwd: string } {
   return { ufrag, pwd }
 }
 
+/** RFC 4566：SDP 應使用 CRLF。Pion 等解析器可能對僅 LF 的 SDP 解析異常。 */
+const SDP_LINE_ENDING = '\r\n'
+
+/**
+ * 檢查 SDP 是否已包含至少一組有效的 session-level 或 media-level ice（RFC 5766：ufrag≥4, pwd≥22）
+ */
+function sdpHasValidIce(sdp: string): boolean {
+  const lines = sdp.split(/\r\n|\n/)
+  let hasUfrag = false
+  let hasPwd = false
+  for (const line of lines) {
+    if (line.startsWith('a=ice-ufrag:')) {
+      if (line.slice(12).trim().length >= 4) hasUfrag = true
+    } else if (line.startsWith('a=ice-pwd:')) {
+      if (line.slice(10).trim().length >= 22) hasPwd = true
+    }
+  }
+  return hasUfrag && hasPwd
+}
+
 /**
  * 為 SDP 補上 ice-ufrag/ice-pwd，避免 SetRemoteDescription 報錯。
  * @param sdp - 原始 SDP 字串
- * @param singleIce - 若為 true（用於送給 mediamtx 的 offer），先移除所有既有 ice 行，再整份 SDP 只插入一組（Pion 要求）；若為 false（answer），每個 m= 區塊可各自補一組
+ * @param singleIce - 若為 true（送給 mediamtx 的 offer）：若已有有效 ice 則只正規化換行為 CRLF 並原樣回傳；否則移除無效 ice、插入一組，並用 CRLF 輸出
  */
 function ensureIceInSdp(sdp: string, singleIce = false): string {
-  const sep = sdp.includes('\r\n') ? '\r\n' : '\n'
-  let lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
+  const lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
 
-  // 送給 mediamtx 的 offer：先移除所有既有的 ice 行（可能為空或與 Pion 不相容），再強制插入唯一一組
-  if (singleIce) {
-    lines = lines.filter((l) => !l.startsWith('a=ice-ufrag:') && !l.startsWith('a=ice-pwd:'))
+  if (singleIce && sdpHasValidIce(sdp)) {
+    return lines.join(SDP_LINE_ENDING)
   }
 
   const out: string[] = []
@@ -43,15 +61,51 @@ function ensureIceInSdp(sdp: string, singleIce = false): string {
     out.push(`a=ice-ufrag:${cred.ufrag}`, `a=ice-pwd:${cred.pwd}`)
   }
 
+  if (singleIce) {
+    const filtered = lines.filter((l) => {
+      if (!l.startsWith('a=ice-ufrag:') && !l.startsWith('a=ice-pwd:')) return true
+      const value = l.slice(l.indexOf(':') + 1).trim()
+      if (l.startsWith('a=ice-ufrag:')) return value.length >= 4
+      return value.length >= 22
+    })
+    for (let i = 0; i < filtered.length; i++) {
+      const line = filtered[i]
+      if (line.startsWith('m=')) {
+        if (needIce) {
+          pushIce(sessionIce!)
+          needIce = false
+        }
+        if (sessionIce && !out.some((l) => l.startsWith('a=ice-ufrag:'))) pushIce(sessionIce)
+        out.push(line)
+        needIce = true
+      } else if (needIce && line.startsWith('a=')) {
+        const isIce = line.startsWith('a=ice-ufrag:') || line.startsWith('a=ice-pwd:')
+        if (isIce) {
+          needIce = false
+        } else {
+          pushIce(sessionIce!)
+          needIce = false
+          out.push(line)
+        }
+      } else {
+        if (line.startsWith('a=ice-ufrag:') || line.startsWith('a=ice-pwd:')) needIce = false
+        out.push(line)
+      }
+    }
+    if (needIce) pushIce(sessionIce!)
+    if (sessionIce && !out.some((l) => l.startsWith('a=ice-ufrag:'))) {
+      out.push(`a=ice-ufrag:${sessionIce.ufrag}`, `a=ice-pwd:${sessionIce.pwd}`)
+    }
+    return out.join(SDP_LINE_ENDING)
+  }
+
+  const sep = sdp.includes('\r\n') ? '\r\n' : '\n'
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (line.startsWith('m=')) {
       if (needIce) {
-        pushIce(sessionIce ?? generateIceCredentials())
+        pushIce(generateIceCredentials())
         needIce = false
-      }
-      if (sessionIce && !out.some((l) => l.startsWith('a=ice-ufrag:'))) {
-        pushIce(sessionIce)
       }
       out.push(line)
       needIce = true
@@ -64,11 +118,11 @@ function ensureIceInSdp(sdp: string, singleIce = false): string {
       const invalidPwd = isPwd && value.length < 22
       const invalidIce = isIce && (invalidUfrag || invalidPwd)
       if (!isIce) {
-        pushIce(sessionIce ?? generateIceCredentials())
+        pushIce(generateIceCredentials())
         needIce = false
         out.push(line)
       } else if (invalidIce) {
-        pushIce(sessionIce ?? generateIceCredentials())
+        pushIce(generateIceCredentials())
         needIce = false
       } else {
         needIce = false
@@ -79,12 +133,7 @@ function ensureIceInSdp(sdp: string, singleIce = false): string {
       out.push(line)
     }
   }
-  if (needIce) {
-    pushIce(sessionIce ?? generateIceCredentials())
-  }
-  if (singleIce && sessionIce && !out.some((l) => l.startsWith('a=ice-ufrag:'))) {
-    out.push(`a=ice-ufrag:${sessionIce.ufrag}`, `a=ice-pwd:${sessionIce.pwd}`)
-  }
+  if (needIce) pushIce(generateIceCredentials())
   return out.join(sep)
 }
 

@@ -24,11 +24,17 @@ function generateIceCredentials(): { ufrag: string; pwd: string } {
 /**
  * 為 SDP 補上 ice-ufrag/ice-pwd，避免 SetRemoteDescription 報錯。
  * @param sdp - 原始 SDP 字串
- * @param singleIce - 若為 true（用於送給 mediamtx 的 offer），整份 SDP 只用同一組 ice 憑證（Pion 不支援每 media 不同值）；若為 false（用於收到的 answer），每個 m= 區塊可各自補一組
+ * @param singleIce - 若為 true（用於送給 mediamtx 的 offer），先移除所有既有 ice 行，再整份 SDP 只插入一組（Pion 要求）；若為 false（answer），每個 m= 區塊可各自補一組
  */
 function ensureIceInSdp(sdp: string, singleIce = false): string {
-  const lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
   const sep = sdp.includes('\r\n') ? '\r\n' : '\n'
+  let lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
+
+  // 送給 mediamtx 的 offer：先移除所有既有的 ice 行（可能為空或與 Pion 不相容），再強制插入唯一一組
+  if (singleIce) {
+    lines = lines.filter((l) => !l.startsWith('a=ice-ufrag:') && !l.startsWith('a=ice-pwd:'))
+  }
+
   const out: string[] = []
   let needIce = false
   const sessionIce = singleIce ? generateIceCredentials() : null
@@ -40,13 +46,11 @@ function ensureIceInSdp(sdp: string, singleIce = false): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (line.startsWith('m=')) {
-      // 新 media 區塊：若上一區塊還沒補 ice，先補在上一區塊結尾
       if (needIce) {
         pushIce(sessionIce ?? generateIceCredentials())
         needIce = false
       }
-      // 送給 mediamtx 的 offer：在第一個 m= 前補 session-level ice（Pion 需要）
-      if (sessionIce && out.every((l) => !l.startsWith('a=ice-ufrag:'))) {
+      if (sessionIce && !out.some((l) => l.startsWith('a=ice-ufrag:'))) {
         pushIce(sessionIce)
       }
       out.push(line)
@@ -77,6 +81,9 @@ function ensureIceInSdp(sdp: string, singleIce = false): string {
   }
   if (needIce) {
     pushIce(sessionIce ?? generateIceCredentials())
+  }
+  if (singleIce && sessionIce && !out.some((l) => l.startsWith('a=ice-ufrag:'))) {
+    out.push(`a=ice-ufrag:${sessionIce.ufrag}`, `a=ice-pwd:${sessionIce.pwd}`)
   }
   return out.join(sep)
 }
@@ -155,6 +162,7 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
       }
       // 手動 WHEP：POST offer 取 answer（mediamtx 跨網域時用此路徑，避免 reader PATCH 送錯）
       pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
+      pc.addTransceiver('video', { direction: 'recvonly' })
       const stream = new MediaStream()
       pc.ontrack = (e) => {
         if (e.streams?.[0]) assignStreamToVideo(e.streams[0])

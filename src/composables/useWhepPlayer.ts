@@ -14,6 +14,31 @@ declare global {
 
 const READER_SCRIPT_ID = 'mediamtx-reader-js'
 
+/** 若 mediamtx 回傳的 SDP 缺少 ice-ufrag/ice-pwd，補上以免 SetRemoteDescription 報錯 */
+function ensureIceInSdp(sdp: string): string {
+  const lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
+  const sep = sdp.includes('\r\n') ? '\r\n' : '\n'
+  const out: string[] = []
+  let inMedia = false
+  let needIce = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.startsWith('m=')) {
+      if (inMedia && needIce) {
+        out.push(`a=ice-ufrag:${Math.random().toString(36).slice(2, 10)}`, `a=ice-pwd:${Math.random().toString(36).slice(2, 26)}`)
+      }
+      out.push(line)
+      inMedia = true
+      needIce = true
+    } else {
+      if (line.startsWith('a=ice-ufrag:') || line.startsWith('a=ice-pwd:')) needIce = false
+      out.push(line)
+    }
+  }
+  if (inMedia && needIce) out.push(`a=ice-ufrag:${Math.random().toString(36).slice(2, 10)}`, `a=ice-pwd:${Math.random().toString(36).slice(2, 26)}`)
+  return out.join(sep)
+}
+
 function loadMediamtxReaderScript(baseUrl: string): Promise<void> {
   const scriptUrl = `${baseUrl.replace(/\/$/, '')}/reader.js`
   const existing = document.getElementById(READER_SCRIPT_ID) as HTMLScriptElement | null
@@ -113,7 +138,8 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
         }
         throw new Error(res.statusText || `HTTP ${res.status}`)
       }
-      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: body }))
+      const sdp = ensureIceInSdp(body)
+      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }))
     } catch (e) {
       error.value = e instanceof Error ? e.message : '連線失敗'
     } finally {

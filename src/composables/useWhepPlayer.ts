@@ -125,25 +125,32 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
       }
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
-      // 等 ICE 收集完成再送 offer，否則 SDP 可能缺 ice-ufrag 導致 mediamtx 端 SetRemoteDescription 失敗
+      // 等 ICE 收集完成再送 offer；若 5 秒內未完成也送出，避免部分環境永遠不 complete 導致一直 loading
       const conn = pc
       if (conn.iceGatheringState !== 'complete') {
-        await new Promise<void>((resolve) => {
-          const onState = () => {
-            if (conn.iceGatheringState === 'complete') {
-              conn.onicegatheringstatechange = null
-              resolve()
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            const onState = () => {
+              if (conn.iceGatheringState === 'complete') {
+                conn.onicegatheringstatechange = null
+                resolve()
+              }
             }
-          }
-          conn.onicegatheringstatechange = onState
-          if (conn.iceGatheringState === 'complete') resolve()
-        })
+            conn.onicegatheringstatechange = onState
+            if (conn.iceGatheringState === 'complete') resolve()
+          }),
+          new Promise<void>((r) => setTimeout(r, 5000)),
+        ])
       }
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp' },
         body: pc.localDescription?.sdp ?? undefined,
+        signal: controller.signal,
       })
+      clearTimeout(timeoutId)
       const body = await res.text()
       if (!res.ok) {
         try {
@@ -156,6 +163,13 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
       }
       const sdp = ensureIceInSdp(body)
       await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }))
+      // 若 WebRTC 連線失敗（ICE 等），顯示錯誤而非一直空白
+      const peerConn = pc
+      peerConn.onconnectionstatechange = () => {
+        if (peerConn.connectionState === 'failed') {
+          error.value = '串流連線失敗（無法與伺服器建立連線，請檢查網路或防火牆）'
+        }
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : '連線失敗'
     } finally {

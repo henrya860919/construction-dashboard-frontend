@@ -14,30 +14,65 @@ declare global {
 
 const READER_SCRIPT_ID = 'mediamtx-reader-js'
 
-/** 若 mediamtx 回傳的 SDP 缺少 ice-ufrag/ice-pwd，補上以免 SetRemoteDescription 報錯。必須在每個 m= 區塊內、盡早出現。 */
+/** 產生一組符合 RFC 5766 的 ice-ufrag（4–256 字元）與 ice-pwd（22–256 字元） */
+function generateIceCredentials(): { ufrag: string; pwd: string } {
+  const ufrag = Math.random().toString(36).slice(2, 10)
+  const pwd = Math.random().toString(36).slice(2, 14) + Math.random().toString(36).slice(2, 14)
+  return { ufrag, pwd }
+}
+
+/**
+ * mediamtx 回傳的 SDP answer 常缺少 ice-ufrag/ice-pwd，導致 SetRemoteDescription 報錯。
+ * 為「每一個」m= 區塊補上 ice 憑證（若該區塊沒有則插入），確保瀏覽器可解析。
+ */
 function ensureIceInSdp(sdp: string): string {
   const lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
   const sep = sdp.includes('\r\n') ? '\r\n' : '\n'
   const out: string[] = []
-  let inMedia = false
   let needIce = false
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (line.startsWith('m=')) {
+      // 新 media 區塊：若上一區塊還沒補 ice，先補在上一區塊結尾
+      if (needIce) {
+        const { ufrag, pwd } = generateIceCredentials()
+        out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+        needIce = false
+      }
       out.push(line)
-      inMedia = true
       needIce = true
-    } else if (inMedia && needIce && line.startsWith('a=')) {
-      // 在 media 區塊內第一個 a= 之前插入 ice（保留 m= / c= 順序）
-      out.push(`a=ice-ufrag:${Math.random().toString(36).slice(2, 10)}`, `a=ice-pwd:${Math.random().toString(36).slice(2, 26)}`)
-      out.push(line)
-      needIce = false
+    } else if (needIce && line.startsWith('a=')) {
+      const isUfrag = line.startsWith('a=ice-ufrag:')
+      const isPwd = line.startsWith('a=ice-pwd:')
+      const isIce = isUfrag || isPwd
+      const value = line.slice(line.indexOf(':') + 1).trim()
+      const invalidUfrag = isUfrag && value.length < 4
+      const invalidPwd = isPwd && value.length < 22
+      const invalidIce = isIce && (invalidUfrag || invalidPwd)
+      if (!isIce) {
+        const { ufrag, pwd } = generateIceCredentials()
+        out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+        needIce = false
+        out.push(line)
+      } else if (invalidIce) {
+        const { ufrag, pwd } = generateIceCredentials()
+        out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+        needIce = false
+        // 不輸出無效的 ice 行，避免 setRemoteDescription 仍報錯
+      } else {
+        needIce = false
+        out.push(line)
+      }
     } else {
       if (line.startsWith('a=ice-ufrag:') || line.startsWith('a=ice-pwd:')) needIce = false
       out.push(line)
     }
   }
-  if (inMedia && needIce) out.push(`a=ice-ufrag:${Math.random().toString(36).slice(2, 10)}`, `a=ice-pwd:${Math.random().toString(36).slice(2, 26)}`)
+  if (needIce) {
+    const { ufrag, pwd } = generateIceCredentials()
+    out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+  }
   return out.join(sep)
 }
 

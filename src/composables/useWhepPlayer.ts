@@ -60,8 +60,10 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
     error.value = null
     try {
       const baseUrl = url.replace(/\/[^/]+\/whep$/, '')
-      const useMediamtxReader = url.includes('/whep') && baseUrl.length > 0
-      if (useMediamtxReader && typeof window !== 'undefined') {
+      const isMediamtxWhep = url.includes('/whep') && baseUrl.length > 0
+      // 跨網域（前端 Vercel、mediamtx Railway）時 reader 會把 Location 解析成前端 origin，PATCH 送錯 → session not found。
+      // mediamtx 一律改用手動 WHEP（僅 POST 取 answer），不依賴 reader。
+      if (!isMediamtxWhep && typeof window !== 'undefined') {
         await loadMediamtxReaderScript(baseUrl)
         const Reader = window.MediaMTXWebRTCReader
         if (Reader) {
@@ -84,7 +86,7 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
           return
         }
       }
-      // Fallback: 手動 WHEP (可能遇到 mediamtx 回傳 SDP 缺 ice-ufrag)
+      // 手動 WHEP：POST offer 取 answer（mediamtx 跨網域時用此路徑，避免 reader PATCH 送錯）
       pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
       const stream = new MediaStream()
       pc.ontrack = (e) => {
@@ -101,9 +103,17 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
         headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp' },
         body: pc.localDescription?.sdp ?? undefined,
       })
-      if (!res.ok) throw new Error(res.statusText || `HTTP ${res.status}`)
-      const answerSdp = await res.text()
-      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
+      const body = await res.text()
+      if (!res.ok) {
+        try {
+          const j = JSON.parse(body) as { error?: string }
+          if (j?.error) throw new Error(j.error)
+        } catch (e) {
+          if (e instanceof Error && e.message !== body) throw e
+        }
+        throw new Error(res.statusText || `HTTP ${res.status}`)
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: body }))
     } catch (e) {
       error.value = e instanceof Error ? e.message : '連線失敗'
     } finally {

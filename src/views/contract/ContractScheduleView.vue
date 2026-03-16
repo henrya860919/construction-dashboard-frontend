@@ -12,7 +12,7 @@ import type { SortingState } from '@tanstack/vue-table'
 import { ref, computed, h, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { valueUpdater } from '@/lib/utils'
-import { Card, CardContent } from '@/components/ui/card'
+import StateCard from '@/components/common/StateCard.vue'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
@@ -458,77 +458,44 @@ async function confirmBatchDelete() {
       </p>
     </div>
 
-    <!-- 上方摘要：申請天數、核定天數、開工時間、預計竣工日期 -->
+    <!-- 上方摘要：申請天數、核定天數、開工時間、預計竣工日期（與儀表板 StateCard 同規範） -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Card class="border-border">
-        <CardContent class="flex items-center gap-4 pt-6">
-          <div
-            class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-          >
-            <Hash class="size-6" />
-          </div>
-          <div>
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              申請天數
-            </p>
-            <p class="text-2xl font-semibold tabular-nums text-foreground">
-              {{ summary.totalApplyDays }} 天
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-      <Card class="border-border">
-        <CardContent class="flex items-center gap-4 pt-6">
-          <div
-            class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-          >
-            <CheckCircle class="size-6" />
-          </div>
-          <div>
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              核定天數
-            </p>
-            <p class="text-2xl font-semibold tabular-nums text-foreground">
-              {{ summary.totalApprovedDays }} 天
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-      <Card class="border-border">
-        <CardContent class="flex items-center gap-4 pt-6">
-          <div
-            class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-          >
-            <Calendar class="size-6" />
-          </div>
-          <div>
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              開工時間
-            </p>
-            <p class="text-lg font-semibold tabular-nums text-foreground">
-              {{ summary.startDate }}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-      <Card class="border-border">
-        <CardContent class="flex items-center gap-4 pt-6">
-          <div
-            class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-          >
-            <CalendarRange class="size-6" />
-          </div>
-          <div>
-            <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              預定竣工日期
-            </p>
-            <p class="text-lg font-semibold tabular-nums text-foreground">
-              {{ summary.plannedEndDate }}
-            </p>
-            <p class="text-xs text-muted-foreground">開工 + 工期 + 核定調整天數</p>
-          </div>
-        </CardContent>
-      </Card>
+      <StateCard title="申請天數">
+        <template #icon>
+          <Hash class="size-6 text-muted-foreground" />
+        </template>
+        <p class="text-3xl font-bold tabular-nums text-foreground">
+          {{ summary.totalApplyDays }} 天
+        </p>
+        <p class="mt-1 text-xs text-muted-foreground">展延／停工申請合計</p>
+      </StateCard>
+      <StateCard title="核定天數">
+        <template #icon>
+          <CheckCircle class="size-6 text-muted-foreground" />
+        </template>
+        <p class="text-3xl font-bold tabular-nums text-foreground">
+          {{ summary.totalApprovedDays }} 天
+        </p>
+        <p class="mt-1 text-xs text-muted-foreground">已核定調整天數</p>
+      </StateCard>
+      <StateCard title="開工時間">
+        <template #icon>
+          <Calendar class="size-6 text-muted-foreground" />
+        </template>
+        <p class="text-3xl font-bold tabular-nums text-foreground">
+          {{ summary.startDate }}
+        </p>
+        <p class="mt-1 text-xs text-muted-foreground">專案開工日</p>
+      </StateCard>
+      <StateCard title="預定竣工日期">
+        <template #icon>
+          <CalendarRange class="size-6 text-muted-foreground" />
+        </template>
+        <p class="text-3xl font-bold tabular-nums text-foreground">
+          {{ summary.plannedEndDate }}
+        </p>
+        <p class="mt-1 text-xs text-muted-foreground">開工 + 工期 + 核定調整天數</p>
+      </StateCard>
     </div>
 
     <!-- 工具列：已選 + ButtonGroup + 新增在右 -->

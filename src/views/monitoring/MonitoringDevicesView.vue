@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import StateCard from '@/components/dashboard/StateCard.vue'
+import StateCard from '@/components/common/StateCard.vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

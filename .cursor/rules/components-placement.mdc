@@ -1,0 +1,44 @@
+---
+description: 元件擺放邏輯，決定新元件應放在 common 或領域資料夾
+alwaysApply: false
+---
+
+# 元件擺放邏輯
+
+新增或移動元件時，依**使用範圍**決定放在 `common/` 或領域子目錄（如 `dashboard/`）。
+
+---
+
+## 規則
+
+### 放 `src/components/common/`
+
+- **條件**：元件被 **2 個以上** 不同 view 或不同模組使用。
+- **範例**：StateCard（儀表板、設備、租戶資訊、平台租戶管理、工期調整、ChartSummaryCards）、DataTablePagination、AppHeader、AppSidebar、AnimatedNumber。
+- **引用**：`import StateCard from '@/components/common/StateCard.vue'` 或依路徑。
+
+### 放領域子目錄（如 `src/components/dashboard/`）
+
+- **條件**：元件**僅**在單一 view 或單一領域內使用。
+- **範例**：AlertCard、MonitorCard、ChartSummaryCards、MonitoringChart、TimeDisplay、AutoRotateSwitch（皆僅儀表板或儀表板區塊使用）。
+- 若之後該元件被其他 view 引用，應**遷移至 common/**。
+
+### 放 `src/components/ui/`
+
+- shadcn-vue 元件，一律用 CLI 新增，勿手動改 CVA。
+
+---
+
+## 判斷流程
+
+1. 此元件會被哪些 view／頁面／模組使用？
+2. 若 ≥ 2 個不同領域或不同 view → **common/**。
+3. 若僅 1 個 view 或同一領域內 → **該領域資料夾**（如 dashboard/）。
+4. **勿**把已跨多處使用的元件留在 dashboard 等領域夾內（例如 StateCard 已用於儀表板、設備、租戶、工期等 → 應在 common）。
+
+---
+
+## 與 project-overview 的對應
+
+- 目錄結構中的 `common/`、`dashboard/` 說明見 `project-overview.mdc`。
+- 狀態統計卡一律使用 common 內的 StateCard，見 `ui-ux-principles.mdc` 三之一。

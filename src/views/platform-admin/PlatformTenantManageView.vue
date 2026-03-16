@@ -10,7 +10,7 @@ import {
 } from '@/api/platform'
 import { useTenantStore } from '@/stores/tenant'
 import type { TenantItem, UpdateTenantPayload, PlatformUserItem, PlatformProjectItem } from '@/types'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import StateCard from '@/components/common/StateCard.vue'
 import { Users, FolderKanban, HardDrive, Loader2, KeyRound, ArrowLeft, Pencil, UserPlus } from 'lucide-vue-next'
 import { apiClient } from '@/api/client'
 import { API_PATH } from '@/constants'
@@ -308,42 +309,29 @@ function formatDate(iso: string | null | undefined): string {
     </div>
 
     <template v-else-if="tenant">
-      <!-- 上：統計卡片 -->
+      <!-- 上：統計卡片（與儀表板 StateCard 同規範） -->
       <div class="grid shrink-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card class="border-border">
-          <CardHeader class="flex flex-row items-center gap-3 pb-2">
-            <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Users class="size-6" />
-            </div>
-            <div>
-              <CardTitle class="text-base font-medium text-muted-foreground">成員總數</CardTitle>
-              <p class="text-2xl font-semibold tabular-nums text-foreground">{{ memberCount }}</p>
-            </div>
-          </CardHeader>
-        </Card>
-        <Card class="border-border">
-          <CardHeader class="flex flex-row items-center gap-3 pb-2">
-            <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <FolderKanban class="size-6" />
-            </div>
-            <div>
-              <CardTitle class="text-base font-medium text-muted-foreground">專案總數</CardTitle>
-              <p class="text-2xl font-semibold tabular-nums text-foreground">{{ projectCount }}</p>
-            </div>
-          </CardHeader>
-        </Card>
-        <Card class="border-border">
-          <CardHeader class="flex flex-row items-center gap-3 pb-2">
-            <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <HardDrive class="size-6" />
-            </div>
-            <div>
-              <CardTitle class="text-base font-medium text-muted-foreground">總使用儲存空間</CardTitle>
-              <p class="text-2xl font-semibold tabular-nums text-foreground">{{ storageDisplay }}</p>
-              <p class="text-xs text-muted-foreground">尚未統計</p>
-            </div>
-          </CardHeader>
-        </Card>
+        <StateCard title="成員總數">
+          <template #icon>
+            <Users class="size-6 text-muted-foreground" />
+          </template>
+          <p class="text-3xl font-bold tabular-nums text-foreground">{{ memberCount }}</p>
+          <p class="mt-1 text-xs text-muted-foreground">此租戶成員數</p>
+        </StateCard>
+        <StateCard title="專案總數">
+          <template #icon>
+            <FolderKanban class="size-6 text-muted-foreground" />
+          </template>
+          <p class="text-3xl font-bold tabular-nums text-foreground">{{ projectCount }}</p>
+          <p class="mt-1 text-xs text-muted-foreground">此租戶專案數</p>
+        </StateCard>
+        <StateCard title="總使用儲存空間">
+          <template #icon>
+            <HardDrive class="size-6 text-muted-foreground" />
+          </template>
+          <p class="text-3xl font-bold tabular-nums text-foreground">{{ storageDisplay }}</p>
+          <p class="mt-1 text-xs text-muted-foreground">尚未統計</p>
+        </StateCard>
       </div>
 
       <!-- 下：Tabs Card 滿版 -->

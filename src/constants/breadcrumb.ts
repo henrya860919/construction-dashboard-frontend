@@ -38,6 +38,7 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/contract/project-info': '專案資訊',
   '/contract/schedule': '工期調整',
   '/contract/management': '契約管理',
+  '/contract/members': '專案成員',
   '/files': '檔案管理',
   '/files/forms': '相關表單',
   '/files/photos': '照片管理',

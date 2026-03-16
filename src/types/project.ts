@@ -44,6 +44,32 @@ export interface ProjectDetail extends ProjectItem {
   projectStaff: string | null
 }
 
+/** 專案成員單筆（從租戶成員引入） */
+export interface ProjectMemberItem {
+  id: string
+  projectId: string
+  userId: string
+  role: string
+  status: string // active | suspended
+  createdAt: string
+  updatedAt: string
+  user: {
+    id: string
+    email: string
+    name: string | null
+    systemRole: string
+    memberType: string
+    status: string
+  }
+}
+
+/** 可加入專案之租戶成員（尚未在專案中） */
+export interface ProjectMemberAvailableItem {
+  id: string
+  email: string
+  name: string | null
+}
+
 /** 專案資訊更新 payload（PATCH /projects/:id） */
 export interface UpdateProjectInfoPayload {
   name?: string

@@ -43,6 +43,7 @@ export const PROJECT_SIDEBAR_GROUPS: NavGroupProject[] = [
       { id: 'contract-project-info', label: '專案資訊', pathSuffix: '/contract/project-info', icon: 'ClipboardList' },
       { id: 'contract-schedule', label: '工期調整', pathSuffix: '/contract/schedule', icon: 'CalendarRange' },
       { id: 'contract-management', label: '契約管理', pathSuffix: '/contract/management', icon: 'FileSignature' },
+      { id: 'project-members', label: '專案成員', pathSuffix: '/contract/members', icon: 'Users' },
     ],
   },
   {

@@ -19,7 +19,9 @@ alwaysApply: true
 - `src/assets/` - 靜態資源、全域 CSS
 - `src/components/` - 可重用元件
   - `ui/` - shadcn-vue（用 CLI 加，勿手動改 CVA）
-  - `common/` - 自訂共用元件（Logo、Loading、Empty 等）
+  - `common/` - **跨多個 view／多個領域共用**的自訂元件（StateCard、DataTablePagination、AppHeader、AnimatedNumber 等）
+  - `dashboard/`、依領域子目錄 - **僅單一 view 或單一領域使用**的元件（如僅儀表板用的 AlertCard、MonitorCard、ChartSummaryCards）
+  - **元件擺放邏輯**：被 2 個以上不同 view 或不同模組使用 → 放 `common/`；僅單一 view／單一領域使用 → 放該領域資料夾（如 `dashboard/`）。勿把跨域共用元件放在 dashboard 等領域夾內。
 - `src/composables/` - 共用邏輯（useAuth、usePagination 等）
 - `src/constants/` - 路由、API 路徑、選項等常數，避免 magic string
 - `src/layouts/` - 版面（DefaultLayout、AuthLayout），router 套用

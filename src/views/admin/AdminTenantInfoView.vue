@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import StateCard from '@/components/common/StateCard.vue'
 import { Users, FolderKanban, HardDrive, Loader2 } from 'lucide-vue-next'
 import { getAdminTenantInfo } from '@/api/admin'
 import type { AdminTenantInfo } from '@/api/admin'
@@ -59,41 +60,41 @@ onMounted(() => fetch())
       </div>
     </template>
     <template v-else-if="tenant">
-      <!-- 上半部：成員數量、專案數量、總使用儲存容量 -->
+      <!-- 上半部：成員數量、專案數量、總使用儲存容量（與儀表板 StateCard 同規範） -->
       <div class="grid gap-4 md:grid-cols-3">
-        <Card class="border-border">
-          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">成員數量</CardTitle>
-            <Users class="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p class="text-2xl font-semibold tabular-nums text-foreground">
-              {{ tenant.memberCount }}
-            </p>
-          </CardContent>
-        </Card>
-        <Card class="border-border">
-          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">專案數量</CardTitle>
-            <FolderKanban class="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p class="text-2xl font-semibold tabular-nums text-foreground">
-              {{ tenant.projectCount }}
-            </p>
-          </CardContent>
-        </Card>
-        <Card class="border-border">
-          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">總使用儲存容量</CardTitle>
-            <HardDrive class="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <p class="text-2xl font-semibold tabular-nums text-foreground">
-              {{ storageDisplay }}
-            </p>
-          </CardContent>
-        </Card>
+        <StateCard title="成員數量">
+          <template #icon>
+            <Users class="size-6 text-muted-foreground" />
+          </template>
+          <p class="text-3xl font-bold tabular-nums text-foreground">
+            {{ tenant.memberCount }}
+          </p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            所屬租戶成員總數
+          </p>
+        </StateCard>
+        <StateCard title="專案數量">
+          <template #icon>
+            <FolderKanban class="size-6 text-muted-foreground" />
+          </template>
+          <p class="text-3xl font-bold tabular-nums text-foreground">
+            {{ tenant.projectCount }}
+          </p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            所屬租戶專案總數
+          </p>
+        </StateCard>
+        <StateCard title="總使用儲存容量">
+          <template #icon>
+            <HardDrive class="size-6 text-muted-foreground" />
+          </template>
+          <p class="text-3xl font-bold tabular-nums text-foreground">
+            {{ storageDisplay }}
+          </p>
+          <p class="mt-1 text-xs text-muted-foreground">
+            已使用 / 容量上限
+          </p>
+        </StateCard>
       </div>
 
       <!-- 下半部：租戶資訊（唯讀） -->

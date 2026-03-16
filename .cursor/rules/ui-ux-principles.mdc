@@ -59,6 +59,17 @@ alwaysApply: true
 
 ---
 
+## 三之一、狀態統計卡（StateCard）
+
+- **一律使用**儀表板同款 **StateCard** 元件（`src/components/common/StateCard.vue`），勿在頁面內手寫 Card＋標題＋數值。
+- **結構**：CardHeader（左：CardTitle text-lg；右：`#icon` slot）＋ CardContent（主數值＋副說明；可選 Progress）。
+- **主數值**：`text-3xl font-bold tabular-nums text-foreground`；**副說明**：`text-xs text-muted-foreground`。
+- **icon**：使用 `#icon` slot，圖示建議 `size-6 text-muted-foreground`（或依語意改色，如設備狀態的綠/黃）。
+- **網格**：依數量使用 `grid gap-4`，欄數用 `md:grid-cols-3`、`sm:grid-cols-2 lg:grid-cols-4` 等，與儀表板 KPI 卡一致。
+- **適用**：儀表板 KPI、設備狀態、租戶／專案統計、工期摘要、圖表摘要等所有「單一標題＋數值」的統計卡。
+
+---
+
 ## 四、多選工具列（批次操作）
 
 - **位置**：在表格區塊**外**、表格**上方**。
@@ -96,4 +107,5 @@ alwaysApply: true
 - [ ] **按鈕**：未特別需求時不覆寫 size（預設 sm）；多選列使用 ButtonGroup。
 - [ ] **主題**：未使用硬編碼色、淺色／深色皆已檢查可讀性。
 - [ ] **API**：使用專案內 API client、錯誤依 api-contract 處理（如 401 導向登入）。
-- [ ] **元件**：有對應共用元件時一律使用（如分頁用 DataTablePagination），未在頁面內重做相同 UI。
+- [ ] **元件**：有對應共用元件時一律使用（如分頁用 DataTablePagination、統計卡用 StateCard），未在頁面內重做相同 UI。
+- [ ] **狀態統計卡**：需顯示「標題＋數值」的統計卡一律使用 **StateCard**，勿手寫 Card。

@@ -1,8 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import type { ColumnDef } from '@tanstack/vue-table'
+import {
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useVueTable,
+} from '@tanstack/vue-table'
+import { FlexRender } from '@tanstack/vue-table'
+import type { SortingState } from '@tanstack/vue-table'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRoute } from 'vue-router'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { valueUpdater } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -18,19 +31,25 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Eye } from 'lucide-vue-next'
+import { Loader2 } from 'lucide-vue-next'
 import { fetchAlertHistory, type AlertHistoryItem } from '@/api/alerts'
+import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
+import MonitoringAlertsRowActions from '@/views/monitoring/MonitoringAlertsRowActions.vue'
 
 const route = useRoute()
 const projectId = route.params.projectId as string
 
 const list = ref<AlertHistoryItem[]>([])
 const loading = ref(true)
+const errorMessage = ref('')
 const detailOpen = ref(false)
 const selectedAlert = ref<AlertHistoryItem | null>(null)
 
 const startDate = ref('')
 const endDate = ref('')
+
+const sorting = ref<SortingState>([])
+const rowSelection = ref<Record<string, boolean>>({})
 
 function setDefaultDateRange() {
   const end = new Date()
@@ -43,6 +62,7 @@ function setDefaultDateRange() {
 async function load() {
   if (!startDate.value || !endDate.value) return
   loading.value = true
+  errorMessage.value = ''
   try {
     list.value = await fetchAlertHistory({
       projectId,
@@ -52,6 +72,7 @@ async function load() {
     })
   } catch {
     list.value = []
+    errorMessage.value = '無法載入警報紀錄'
   } finally {
     loading.value = false
   }
@@ -85,6 +106,101 @@ const levelVariant = (level: string): 'destructive' | 'secondary' | 'outline' =>
   return 'outline'
 }
 
+const columns = computed<ColumnDef<AlertHistoryItem, unknown>[]>(() => [
+  {
+    id: 'select',
+    header: ({ table }) =>
+      h(Checkbox, {
+        checked: table.getIsAllPageRowsSelected()
+          ? true
+          : table.getIsSomePageRowsSelected()
+            ? 'indeterminate'
+            : false,
+        'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
+        'aria-label': '全選',
+      }),
+    cell: ({ row }) =>
+      h(Checkbox, {
+        checked: row.getIsSelected(),
+        'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
+        'aria-label': '選取此列',
+      }),
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'title',
+    id: 'title',
+    header: () => '類型',
+    cell: ({ row }) =>
+      h('div', { class: 'font-medium text-foreground' }, row.original.title),
+  },
+  {
+    accessorKey: 'level',
+    id: 'level',
+    header: () => '等級',
+    cell: ({ row }) =>
+      h(Badge, { variant: levelVariant(row.original.level) }, () => levelLabel(row.original.level)),
+  },
+  {
+    accessorKey: 'value',
+    id: 'value',
+    header: () => '摘要',
+    cell: ({ row }) =>
+      h('div', { class: 'max-w-[240px] truncate text-muted-foreground' }, row.original.value),
+  },
+  {
+    accessorKey: 'createdAt',
+    id: 'createdAt',
+    header: () => '時間',
+    cell: ({ row }) =>
+      h('div', { class: 'tabular-nums text-muted-foreground' }, formatDateTime(row.original.createdAt)),
+  },
+  {
+    id: 'actions',
+    header: () => h('div', { class: 'w-[80px]' }),
+    cell: ({ row }) =>
+      h(MonitoringAlertsRowActions, {
+        row: row.original,
+        onView: (r) => openDetail(r),
+      }),
+    enableSorting: false,
+  },
+])
+
+const table = useVueTable({
+  get data() {
+    return list.value
+  },
+  get columns() {
+    return columns.value
+  },
+  getCoreRowModel: getCoreRowModel(),
+  getPaginationRowModel: getPaginationRowModel(),
+  getFilteredRowModel: getFilteredRowModel(),
+  getSortedRowModel: getSortedRowModel(),
+  onSortingChange: (updater) => valueUpdater(updater, sorting),
+  onRowSelectionChange: (updater) => valueUpdater(updater, rowSelection),
+  state: {
+    get sorting() {
+      return sorting.value
+    },
+    get rowSelection() {
+      return rowSelection.value
+    },
+  },
+  getRowId: (row) => row.id,
+  initialState: {
+    pagination: { pageSize: 10 },
+  },
+})
+
+const selectedRows = computed(() => table.getSelectedRowModel().rows)
+const hasSelection = computed(() => selectedRows.value.length > 0)
+
+function clearSelection() {
+  rowSelection.value = {}
+}
+
 onMounted(() => {
   setDefaultDateRange()
   load()
@@ -92,77 +208,83 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-4">
     <h1 class="text-xl font-semibold text-foreground">歷史警報</h1>
     <p class="text-sm text-muted-foreground">
       目前顯示政府（氣象署等）警特報紀錄；之後可支援手動新增。
     </p>
 
-    <Card>
-      <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-3">
-        <CardTitle>警報紀錄</CardTitle>
-        <div class="flex flex-wrap items-center gap-2">
-          <input
-            v-model="startDate"
-            type="date"
-            class="rounded-md border border-input bg-background px-3 py-2 text-sm"
-          />
-          <span class="text-muted-foreground">～</span>
-          <input
-            v-model="endDate"
-            type="date"
-            class="rounded-md border border-input bg-background px-3 py-2 text-sm"
-          />
-          <Button variant="outline" size="sm" :disabled="loading" @click="load">
-            <Loader2 v-if="loading" class="mr-2 size-4 animate-spin" />
-            查詢
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div v-if="loading" class="flex justify-center py-12 text-sm text-muted-foreground">
-          載入中…
-        </div>
+    <!-- 工具列：篩選在左、已選+ButtonGroup 在右 -->
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <Input
+          v-model="startDate"
+          type="date"
+          class="w-[10rem]"
+        />
+        <span class="text-muted-foreground">～</span>
+        <Input
+          v-model="endDate"
+          type="date"
+          class="w-[10rem]"
+        />
+        <Button variant="outline" :disabled="loading" @click="load">
+          <Loader2 v-if="loading" class="mr-2 size-4 animate-spin" />
+          查詢
+        </Button>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        <template v-if="hasSelection">
+          <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
+          <ButtonGroup>
+            <Button variant="outline" @click="clearSelection">取消選取</Button>
+          </ButtonGroup>
+        </template>
+      </div>
+    </div>
+
+    <!-- 表格區塊（依規範 rounded-lg border border-border bg-card p-4） -->
+    <div class="rounded-lg border border-border bg-card p-4">
+      <p v-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
+      <div v-else-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
+        <Loader2 class="size-8 animate-spin" />
+      </div>
+      <template v-else>
         <div
-          v-else-if="list.length === 0"
+          v-if="list.length === 0"
           class="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center"
         >
           <p class="text-sm text-muted-foreground">此區間無警報紀錄</p>
         </div>
-        <div v-else class="rounded-lg border border-border">
+        <template v-else>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>類型</TableHead>
-                <TableHead>等級</TableHead>
-                <TableHead>摘要</TableHead>
-                <TableHead>時間</TableHead>
-                <TableHead class="w-[80px]">操作</TableHead>
+              <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
+                <TableHead v-for="header in headerGroup.headers" :key="header.id">
+                  <FlexRender
+                    v-if="!header.isPlaceholder"
+                    :render="header.column.columnDef.header"
+                    :props="header.getContext()"
+                  />
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-for="row in list" :key="row.id">
-                <TableCell class="font-medium">{{ row.title }}</TableCell>
-                <TableCell>
-                  <Badge :variant="levelVariant(row.level)">{{ levelLabel(row.level) }}</Badge>
-                </TableCell>
-                <TableCell class="max-w-[240px] truncate text-muted-foreground">
-                  {{ row.value }}
-                </TableCell>
-                <TableCell class="tabular-nums text-muted-foreground">
-                  {{ formatDateTime(row.createdAt) }}
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="sm" @click="openDetail(row)">
-                    <Eye class="size-4" />
-                  </Button>
+              <TableRow
+                v-for="row in table.getRowModel().rows"
+                :key="row.id"
+                :data-state="row.getIsSelected() ? 'selected' : undefined"
+              >
+                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
+                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
-        </div>
-      </CardContent>
-    </Card>
+          <DataTablePagination :table="table" />
+        </template>
+      </template>
+    </div>
 
     <Dialog v-model:open="detailOpen">
       <DialogContent class="max-w-md">
@@ -172,7 +294,7 @@ onMounted(() => {
         <div v-if="selectedAlert" class="space-y-3 text-sm">
           <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">類型</span>
-            <span class="font-medium">{{ selectedAlert.title }}</span>
+            <span class="font-medium text-foreground">{{ selectedAlert.title }}</span>
           </div>
           <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">等級</span>
@@ -182,7 +304,7 @@ onMounted(() => {
           </div>
           <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">摘要</span>
-            <span class="text-right">{{ selectedAlert.value }}</span>
+            <span class="text-right text-foreground">{{ selectedAlert.value }}</span>
           </div>
           <div v-if="selectedAlert.description" class="flex flex-col gap-1">
             <span class="text-muted-foreground">說明</span>
@@ -192,7 +314,7 @@ onMounted(() => {
           </div>
           <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">時間</span>
-            <span class="tabular-nums">{{ formatDateTime(selectedAlert.createdAt) }}</span>
+            <span class="tabular-nums text-foreground">{{ formatDateTime(selectedAlert.createdAt) }}</span>
           </div>
         </div>
       </DialogContent>

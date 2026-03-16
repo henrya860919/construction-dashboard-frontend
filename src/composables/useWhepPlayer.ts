@@ -25,7 +25,7 @@ function generateIceCredentials(): { ufrag: string; pwd: string } {
 const SDP_LINE_ENDING = '\r\n'
 
 /**
- * 檢查 SDP 是否已包含至少一組有效的 session-level 或 media-level ice（RFC 5766：ufrag≥4, pwd≥22）
+ * 檢查 SDP 是否已包含至少一組有效的 ice（RFC 5766：ufrag≥4, pwd≥22）
  */
 function sdpHasValidIce(sdp: string): boolean {
   const lines = sdp.split(/\r\n|\n/)
@@ -41,6 +41,34 @@ function sdpHasValidIce(sdp: string): boolean {
   return hasUfrag && hasPwd
 }
 
+/** 檢查是否有 session-level ice（在第一個 m= 之前出現的 a=ice-ufrag / a=ice-pwd） */
+function sdpHasSessionLevelIce(sdp: string): boolean {
+  const lines = sdp.split(/\r\n|\n/)
+  for (const line of lines) {
+    if (line.startsWith('m=')) break
+    if (line.startsWith('a=ice-ufrag:') || line.startsWith('a=ice-pwd:')) return true
+  }
+  return false
+}
+
+/** 從 SDP 中取第一組有效的 ice 憑證（任一 media 區塊內），若無則回傳 null */
+function getFirstValidIceFromSdp(sdp: string): { ufrag: string; pwd: string } | null {
+  const lines = sdp.split(/\r\n|\n/)
+  let ufrag = ''
+  let pwd = ''
+  for (const line of lines) {
+    if (line.startsWith('a=ice-ufrag:')) {
+      const v = line.slice(12).trim()
+      if (v.length >= 4) ufrag = v
+    } else if (line.startsWith('a=ice-pwd:')) {
+      const v = line.slice(10).trim()
+      if (v.length >= 22) pwd = v
+    }
+    if (ufrag && pwd) return { ufrag, pwd }
+  }
+  return null
+}
+
 /**
  * 為 SDP 補上 ice-ufrag/ice-pwd，避免 SetRemoteDescription 報錯。
  * @param sdp - 原始 SDP 字串
@@ -50,6 +78,21 @@ function ensureIceInSdp(sdp: string, singleIce = false): string {
   const lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
 
   if (singleIce && sdpHasValidIce(sdp)) {
+    if (!sdpHasSessionLevelIce(sdp)) {
+      const cred = getFirstValidIceFromSdp(sdp)
+      if (cred) {
+        const out: string[] = []
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith('m=')) {
+            out.push(`a=ice-ufrag:${cred.ufrag}`, `a=ice-pwd:${cred.pwd}`, lines[i])
+            out.push(...lines.slice(i + 1))
+            break
+          }
+          out.push(lines[i])
+        }
+        return out.length ? out.join(SDP_LINE_ENDING) : lines.join(SDP_LINE_ENDING)
+      }
+    }
     return lines.join(SDP_LINE_ENDING)
   }
 

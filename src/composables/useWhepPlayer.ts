@@ -14,7 +14,7 @@ declare global {
 
 const READER_SCRIPT_ID = 'mediamtx-reader-js'
 
-/** 若 mediamtx 回傳的 SDP 缺少 ice-ufrag/ice-pwd，補上以免 SetRemoteDescription 報錯 */
+/** 若 mediamtx 回傳的 SDP 缺少 ice-ufrag/ice-pwd，補上以免 SetRemoteDescription 報錯。必須在每個 m= 區塊內、盡早出現。 */
 function ensureIceInSdp(sdp: string): string {
   const lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
   const sep = sdp.includes('\r\n') ? '\r\n' : '\n'
@@ -24,12 +24,14 @@ function ensureIceInSdp(sdp: string): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (line.startsWith('m=')) {
-      if (inMedia && needIce) {
-        out.push(`a=ice-ufrag:${Math.random().toString(36).slice(2, 10)}`, `a=ice-pwd:${Math.random().toString(36).slice(2, 26)}`)
-      }
       out.push(line)
       inMedia = true
       needIce = true
+    } else if (inMedia && needIce && line.startsWith('a=')) {
+      // 在 media 區塊內第一個 a= 之前插入 ice（保留 m= / c= 順序）
+      out.push(`a=ice-ufrag:${Math.random().toString(36).slice(2, 10)}`, `a=ice-pwd:${Math.random().toString(36).slice(2, 26)}`)
+      out.push(line)
+      needIce = false
     } else {
       if (line.startsWith('a=ice-ufrag:') || line.startsWith('a=ice-pwd:')) needIce = false
       out.push(line)
@@ -123,6 +125,20 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
       }
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
+      // 等 ICE 收集完成再送 offer，否則 SDP 可能缺 ice-ufrag 導致 mediamtx 端 SetRemoteDescription 失敗
+      const conn = pc
+      if (conn.iceGatheringState !== 'complete') {
+        await new Promise<void>((resolve) => {
+          const onState = () => {
+            if (conn.iceGatheringState === 'complete') {
+              conn.onicegatheringstatechange = null
+              resolve()
+            }
+          }
+          conn.onicegatheringstatechange = onState
+          if (conn.iceGatheringState === 'complete') resolve()
+        })
+      }
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp' },

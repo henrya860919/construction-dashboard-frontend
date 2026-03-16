@@ -177,12 +177,15 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
           new Promise<void>((r) => setTimeout(r, 5000)),
         ])
       }
+      // mediamtx 會對我們送出的 offer 做 setRemoteDescription；若 offer 缺少 ice-ufrag 會報錯並回傳 error。
+      // 送出的 offer 也先補齊每個 m= 區塊的 ice，避免伺服器端 SetRemoteDescription 失敗。
+      const offerSdp = pc.localDescription?.sdp ?? ''
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 15000)
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp' },
-        body: pc.localDescription?.sdp ?? undefined,
+        body: ensureIceInSdp(offerSdp),
         signal: controller.signal,
       })
       clearTimeout(timeoutId)

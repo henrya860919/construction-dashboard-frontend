@@ -68,7 +68,13 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
           readerInstance = new Reader({
             url,
             onError: (err) => {
-              error.value = err instanceof Error ? err.message : '連線失敗'
+              if (err instanceof Error) {
+                error.value = err.message
+              } else if (err && typeof err === 'object' && 'error' in err && typeof (err as { error: unknown }).error === 'string') {
+                error.value = (err as { error: string }).error
+              } else {
+                error.value = '連線失敗'
+              }
             },
             onTrack: (evt) => {
               if (evt.streams?.[0]) assignStreamToVideo(evt.streams[0])

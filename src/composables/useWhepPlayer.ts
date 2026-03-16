@@ -22,23 +22,32 @@ function generateIceCredentials(): { ufrag: string; pwd: string } {
 }
 
 /**
- * mediamtx 回傳的 SDP answer 常缺少 ice-ufrag/ice-pwd，導致 SetRemoteDescription 報錯。
- * 為「每一個」m= 區塊補上 ice 憑證（若該區塊沒有則插入），確保瀏覽器可解析。
+ * 為 SDP 補上 ice-ufrag/ice-pwd，避免 SetRemoteDescription 報錯。
+ * @param sdp - 原始 SDP 字串
+ * @param singleIce - 若為 true（用於送給 mediamtx 的 offer），整份 SDP 只用同一組 ice 憑證（Pion 不支援每 media 不同值）；若為 false（用於收到的 answer），每個 m= 區塊可各自補一組
  */
-function ensureIceInSdp(sdp: string): string {
+function ensureIceInSdp(sdp: string, singleIce = false): string {
   const lines = sdp.includes('\r\n') ? sdp.split('\r\n') : sdp.split('\n')
   const sep = sdp.includes('\r\n') ? '\r\n' : '\n'
   const out: string[] = []
   let needIce = false
+  const sessionIce = singleIce ? generateIceCredentials() : null
+
+  const pushIce = (cred: { ufrag: string; pwd: string }) => {
+    out.push(`a=ice-ufrag:${cred.ufrag}`, `a=ice-pwd:${cred.pwd}`)
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (line.startsWith('m=')) {
       // 新 media 區塊：若上一區塊還沒補 ice，先補在上一區塊結尾
       if (needIce) {
-        const { ufrag, pwd } = generateIceCredentials()
-        out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+        pushIce(sessionIce ?? generateIceCredentials())
         needIce = false
+      }
+      // 送給 mediamtx 的 offer：在第一個 m= 前補 session-level ice（Pion 需要）
+      if (sessionIce && out.every((l) => !l.startsWith('a=ice-ufrag:'))) {
+        pushIce(sessionIce)
       }
       out.push(line)
       needIce = true
@@ -51,15 +60,12 @@ function ensureIceInSdp(sdp: string): string {
       const invalidPwd = isPwd && value.length < 22
       const invalidIce = isIce && (invalidUfrag || invalidPwd)
       if (!isIce) {
-        const { ufrag, pwd } = generateIceCredentials()
-        out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+        pushIce(sessionIce ?? generateIceCredentials())
         needIce = false
         out.push(line)
       } else if (invalidIce) {
-        const { ufrag, pwd } = generateIceCredentials()
-        out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+        pushIce(sessionIce ?? generateIceCredentials())
         needIce = false
-        // 不輸出無效的 ice 行，避免 setRemoteDescription 仍報錯
       } else {
         needIce = false
         out.push(line)
@@ -70,8 +76,7 @@ function ensureIceInSdp(sdp: string): string {
     }
   }
   if (needIce) {
-    const { ufrag, pwd } = generateIceCredentials()
-    out.push(`a=ice-ufrag:${ufrag}`, `a=ice-pwd:${pwd}`)
+    pushIce(sessionIce ?? generateIceCredentials())
   }
   return out.join(sep)
 }
@@ -177,15 +182,15 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
           new Promise<void>((r) => setTimeout(r, 5000)),
         ])
       }
-      // mediamtx 會對我們送出的 offer 做 setRemoteDescription；若 offer 缺少 ice-ufrag 會報錯並回傳 error。
-      // 送出的 offer 也先補齊每個 m= 區塊的 ice，避免伺服器端 SetRemoteDescription 失敗。
+      // mediamtx（Pion WebRTC）會對我們送出的 offer 做 setRemoteDescription；若 offer 缺少 ice-ufrag 會報錯。
+      // Pion 要求整份 SDP 只用同一組 ice（bundled），故用 ensureIceInSdp(offer, true)。
       const offerSdp = pc.localDescription?.sdp ?? ''
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 15000)
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/sdp', Accept: 'application/sdp' },
-        body: ensureIceInSdp(offerSdp),
+        body: ensureIceInSdp(offerSdp, true),
         signal: controller.signal,
       })
       clearTimeout(timeoutId)

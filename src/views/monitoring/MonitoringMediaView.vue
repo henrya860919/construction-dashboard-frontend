@@ -5,11 +5,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+
+defineProps<{ embedded?: boolean }>()
 </script>
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-xl font-semibold text-foreground">影像</h1>
+    <h1 v-if="!embedded" class="text-xl font-semibold text-foreground">影像</h1>
     <Card>
       <CardHeader>
         <CardTitle>監測影像與媒體</CardTitle>

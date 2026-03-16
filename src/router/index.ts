@@ -47,14 +47,21 @@ const router = createRouter({
           component: () => import('@/views/overview/OverviewMilestonesView.vue'),
         },
         {
+          path: 'p/:projectId/monitoring/history',
+          name: ROUTE_NAME.PROJECT_MONITORING_HISTORY,
+          component: () => import('@/views/monitoring/MonitoringHistoryView.vue'),
+        },
+        {
           path: 'p/:projectId/monitoring/metrics',
-          name: ROUTE_NAME.PROJECT_MONITORING_METRICS,
-          component: () => import('@/views/monitoring/MonitoringMetricsView.vue'),
+          redirect: (to) => ({ path: `/p/${to.params.projectId}/monitoring/history`, query: { tab: 'metrics' } }),
         },
         {
           path: 'p/:projectId/monitoring/alerts',
-          name: ROUTE_NAME.PROJECT_MONITORING_ALERTS,
-          component: () => import('@/views/monitoring/MonitoringAlertsView.vue'),
+          redirect: (to) => ({ path: `/p/${to.params.projectId}/monitoring/history`, query: { tab: 'alerts' } }),
+        },
+        {
+          path: 'p/:projectId/monitoring/media',
+          redirect: (to) => ({ path: `/p/${to.params.projectId}/monitoring/history`, query: { tab: 'media' } }),
         },
         {
           path: 'p/:projectId/monitoring/devices',
@@ -65,11 +72,6 @@ const router = createRouter({
           path: 'p/:projectId/monitoring/devices/:deviceId',
           name: ROUTE_NAME.PROJECT_MONITORING_DEVICE_DETAIL,
           component: () => import('@/views/monitoring/MonitoringDeviceDetailView.vue'),
-        },
-        {
-          path: 'p/:projectId/monitoring/media',
-          name: ROUTE_NAME.PROJECT_MONITORING_MEDIA,
-          component: () => import('@/views/monitoring/MonitoringMediaView.vue'),
         },
         {
           path: 'p/:projectId/monitoring/reports',

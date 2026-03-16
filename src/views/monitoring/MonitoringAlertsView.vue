@@ -36,6 +36,8 @@ import { fetchAlertHistory, type AlertHistoryItem } from '@/api/alerts'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import MonitoringAlertsRowActions from '@/views/monitoring/MonitoringAlertsRowActions.vue'
 
+defineProps<{ embedded?: boolean }>()
+
 const route = useRoute()
 const projectId = route.params.projectId as string
 
@@ -209,10 +211,12 @@ onMounted(() => {
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-xl font-semibold text-foreground">歷史警報</h1>
-    <p class="text-sm text-muted-foreground">
-      目前顯示政府（氣象署等）警特報紀錄；之後可支援手動新增。
-    </p>
+    <template v-if="!embedded">
+      <h1 class="text-xl font-semibold text-foreground">歷史警報</h1>
+      <p class="text-sm text-muted-foreground">
+        目前顯示政府（氣象署等）警特報紀錄；之後可支援手動新增。
+      </p>
+    </template>
 
     <!-- 工具列：篩選在左、已選+ButtonGroup 在右 -->
     <div class="flex flex-wrap items-center justify-between gap-4">

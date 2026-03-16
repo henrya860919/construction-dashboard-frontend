@@ -49,6 +49,8 @@ const METRICS = [
   { key: 'waterLevel', label: '水位', unit: 'm', icon: Waves },
 ] as const
 
+defineProps<{ embedded?: boolean }>()
+
 const route = useRoute()
 const selectedKey = ref<string>(METRICS[0].key)
 const selectedYear = ref<string>('2025')
@@ -177,12 +179,71 @@ function downloadCurrentData() {
 
 <template>
   <div class="space-y-6">
+    <!-- 工具列：篩選條件（監測項目、年份、月份）+ 上傳數據 -->
     <div class="flex flex-wrap items-center justify-between gap-4">
-      <h1 class="text-xl font-semibold text-foreground">歷史數據</h1>
+      <div class="flex flex-wrap items-center gap-3">
+        <template v-if="!embedded">
+          <h1 class="text-xl font-semibold text-foreground shrink-0">歷史數據</h1>
+        </template>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-muted-foreground shrink-0">監測項目</span>
+          <Select v-model="selectedKey">
+            <SelectTrigger class="w-[120px]">
+              <SelectValue placeholder="選擇項目" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="m in METRICS"
+                :key="m.key"
+                :value="m.key"
+              >
+                <span class="flex items-center gap-2">
+                  <component :is="m.icon" class="size-4 shrink-0" />
+                  {{ m.label }}
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-muted-foreground shrink-0">年份</span>
+          <Select v-model="selectedYear">
+            <SelectTrigger class="w-[100px]">
+              <SelectValue placeholder="年份" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="y in yearOptions"
+                :key="y"
+                :value="String(y)"
+              >
+                {{ y }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-muted-foreground shrink-0">月份</span>
+          <Select v-model="selectedMonth">
+            <SelectTrigger class="w-[100px]">
+              <SelectValue placeholder="月份" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="mo in monthOptions"
+                :key="mo"
+                :value="String(mo)"
+              >
+                {{ mo }} 月
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <Button
         variant="outline"
         size="sm"
-        class="gap-2"
+        class="gap-2 shrink-0"
         as-child
       >
         <RouterLink :to="buildProjectPath((route.params.projectId as string) ?? '', '/monitoring/upload')">
@@ -192,66 +253,10 @@ function downloadCurrentData() {
       </Button>
     </div>
 
-    <!-- 第一層：切換層 - 監測項目 -->
+    <!-- 趨勢圖表 -->
     <Card>
       <CardHeader class="pb-2">
-        <CardTitle class="text-base">選擇監測項目</CardTitle>
-      </CardHeader>
-      <CardContent class="flex flex-wrap gap-2">
-        <Button
-          v-for="m in METRICS"
-          :key="m.key"
-          :variant="selectedKey === m.key ? 'secondary' : 'outline'"
-          size="sm"
-          class="gap-2"
-          @click="selectedKey = m.key"
-        >
-          <component :is="m.icon" class="size-4 shrink-0" />
-          {{ m.label }}
-        </Button>
-      </CardContent>
-    </Card>
-
-    <!-- 第二層：圖表層 - 年/月 + 趨勢圖 -->
-    <Card>
-      <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-4 pb-2">
         <CardTitle class="text-base">趨勢圖表</CardTitle>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center gap-2">
-            <span class="text-sm text-muted-foreground">年份</span>
-            <Select v-model="selectedYear">
-              <SelectTrigger class="w-[100px]">
-                <SelectValue placeholder="年份" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="y in yearOptions"
-                  :key="y"
-                  :value="String(y)"
-                >
-                  {{ y }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm text-muted-foreground">月份</span>
-            <Select v-model="selectedMonth">
-              <SelectTrigger class="w-[100px]">
-                <SelectValue placeholder="月份" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="mo in monthOptions"
-                  :key="mo"
-                  :value="String(mo)"
-                >
-                  {{ mo }} 月
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
       </CardHeader>
       <CardContent>
         <div class="h-[300px] w-full">

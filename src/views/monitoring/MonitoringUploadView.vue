@@ -132,7 +132,7 @@ function clearFiles() {
 
 /** 前往歷史數據頁查看 */
 function goToMetrics() {
-  if (projectId.value) router.push(buildProjectPath(projectId.value, '/monitoring/metrics'))
+  if (projectId.value) router.push(buildProjectPath(projectId.value, '/monitoring/history'))
 }
 </script>
 

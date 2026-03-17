@@ -53,6 +53,18 @@ export const PROJECT_SIDEBAR_GROUPS: NavGroupProject[] = [
       { id: 'files-photos', label: '照片管理', pathSuffix: '/files/photos', icon: 'Image' },
     ],
   },
+  {
+    id: 'management',
+    label: '管理',
+    children: [
+      { id: 'management-wbs', label: 'WBS清單', pathSuffix: '/management/wbs', icon: 'ListTree' },
+      { id: 'management-resources', label: '資源庫', pathSuffix: '/management/resources', icon: 'Library' },
+      { id: 'management-risks', label: '風險與議題', pathSuffix: '/management/risks', icon: 'AlertTriangle' },
+      { id: 'management-schedule', label: '排班表', pathSuffix: '/management/schedule', icon: 'CalendarDays' },
+      { id: 'management-gantt', label: '甘特圖', pathSuffix: '/management/gantt', icon: 'ChartGantt' },
+      { id: 'management-overview', label: '總覽', pathSuffix: '/management/overview', icon: 'LayoutDashboard' },
+    ],
+  },
 ]
 
 /** 非專案內（專案列表頁等）顯示的側欄項目；非平台方登入時顯示專案列表 */

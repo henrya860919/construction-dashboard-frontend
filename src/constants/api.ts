@@ -83,6 +83,19 @@ export const API_PATH = {
   /** 專案成員（列表、可加入名單、新增、移除） */
   PROJECT_MEMBERS: (projectId: string) => `${API_V1}/projects/${projectId}/members`,
   PROJECT_MEMBERS_AVAILABLE: (projectId: string) => `${API_V1}/projects/${projectId}/members/available`,
+  /** WBS 工作分解結構（樹狀） */
+  PROJECT_WBS: (projectId: string) => `${API_V1}/projects/${projectId}/wbs`,
+  PROJECT_WBS_NODE: (projectId: string, nodeId: string) => `${API_V1}/projects/${projectId}/wbs/${nodeId}`,
+  PROJECT_WBS_NODE_MOVE: (projectId: string, nodeId: string) =>
+    `${API_V1}/projects/${projectId}/wbs/${nodeId}/move`,
+  /** 議題風險表（列表、新增、編輯、刪除） */
+  PROJECT_ISSUE_RISKS: (projectId: string) => `${API_V1}/projects/${projectId}/issue-risks`,
+  PROJECT_ISSUE_RISK: (projectId: string, id: string) =>
+    `${API_V1}/projects/${projectId}/issue-risks/${id}`,
+  /** 資源庫（人力、機具、材料），query type=labor|equipment|material */
+  PROJECT_RESOURCES: (projectId: string) => `${API_V1}/projects/${projectId}/resources`,
+  PROJECT_RESOURCE: (projectId: string, id: string) =>
+    `${API_V1}/projects/${projectId}/resources/${id}`,
   /** 即時警報（目前假資料；之後接 CWA） */
   ALERTS_CURRENT: `${API_V1}/alerts/current`,
   /** 歷史警報（query: projectId?, startDate, endDate, limit?） */

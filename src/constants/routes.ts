@@ -36,6 +36,13 @@ export const ROUTE_PATH = {
   PROJECT_FILES: '/files',
   PROJECT_FILES_FORMS: '/files/forms',
   PROJECT_FILES_PHOTOS: '/files/photos',
+  /** 管理：WBS、資源、風險、排班、甘特、總覽 */
+  PROJECT_MANAGEMENT_WBS: '/management/wbs',
+  PROJECT_MANAGEMENT_RESOURCES: '/management/resources',
+  PROJECT_MANAGEMENT_RISKS: '/management/risks',
+  PROJECT_MANAGEMENT_SCHEDULE: '/management/schedule',
+  PROJECT_MANAGEMENT_GANTT: '/management/gantt',
+  PROJECT_MANAGEMENT_OVERVIEW: '/management/overview',
 
   /** 單租後台（租戶自管） */
   ADMIN: '/admin',
@@ -79,6 +86,12 @@ export const ROUTE_NAME = {
   PROJECT_FILES: 'project-files',
   PROJECT_FILES_FORMS: 'project-files-forms',
   PROJECT_FILES_PHOTOS: 'project-files-photos',
+  PROJECT_MANAGEMENT_WBS: 'project-management-wbs',
+  PROJECT_MANAGEMENT_RESOURCES: 'project-management-resources',
+  PROJECT_MANAGEMENT_RISKS: 'project-management-risks',
+  PROJECT_MANAGEMENT_SCHEDULE: 'project-management-schedule',
+  PROJECT_MANAGEMENT_GANTT: 'project-management-gantt',
+  PROJECT_MANAGEMENT_OVERVIEW: 'project-management-overview',
   ADMIN: 'admin',
   ADMIN_TENANT_INFO: 'admin-tenant-info',
   ADMIN_PROJECTS: 'admin-projects',

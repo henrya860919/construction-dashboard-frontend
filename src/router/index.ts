@@ -118,6 +118,36 @@ const router = createRouter({
           name: ROUTE_NAME.PROJECT_FILES_PHOTOS,
           component: () => import('@/views/files/FilePhotosView.vue'),
         },
+        {
+          path: 'p/:projectId/management/wbs',
+          name: ROUTE_NAME.PROJECT_MANAGEMENT_WBS,
+          component: () => import('@/views/management/ManagementWbsView.vue'),
+        },
+        {
+          path: 'p/:projectId/management/resources',
+          name: ROUTE_NAME.PROJECT_MANAGEMENT_RESOURCES,
+          component: () => import('@/views/management/ManagementResourcesView.vue'),
+        },
+        {
+          path: 'p/:projectId/management/risks',
+          name: ROUTE_NAME.PROJECT_MANAGEMENT_RISKS,
+          component: () => import('@/views/management/ManagementRisksView.vue'),
+        },
+        {
+          path: 'p/:projectId/management/schedule',
+          name: ROUTE_NAME.PROJECT_MANAGEMENT_SCHEDULE,
+          component: () => import('@/views/management/ManagementScheduleView.vue'),
+        },
+        {
+          path: 'p/:projectId/management/gantt',
+          name: ROUTE_NAME.PROJECT_MANAGEMENT_GANTT,
+          component: () => import('@/views/management/ManagementGanttView.vue'),
+        },
+        {
+          path: 'p/:projectId/management/overview',
+          name: ROUTE_NAME.PROJECT_MANAGEMENT_OVERVIEW,
+          component: () => import('@/views/management/ManagementOverviewView.vue'),
+        },
         // 單租後台（共用 DefaultLayout，sidebar 依路由切換為後台選單）
         { path: 'admin', redirect: ROUTE_PATH.ADMIN_PROJECTS },
         {

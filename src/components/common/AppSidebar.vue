@@ -29,6 +29,10 @@ import {
   BarChart3,
   Megaphone,
   Server,
+  ListTree,
+  Library,
+  CalendarDays,
+  ChartGantt,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -77,6 +81,10 @@ const ICON_MAP: Record<string, LucideIcon> = {
   BarChart3,
   Megaphone,
   Server,
+  ListTree,
+  Library,
+  CalendarDays,
+  ChartGantt,
 }
 
 withDefaults(

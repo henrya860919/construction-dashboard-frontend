@@ -40,4 +40,10 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/files': '檔案管理',
   '/files/forms': '相關表單',
   '/files/photos': '照片管理',
+  '/management/wbs': 'WBS清單',
+  '/management/resources': '資源庫',
+  '/management/risks': '風險與議題',
+  '/management/schedule': '排班表',
+  '/management/gantt': '甘特圖',
+  '/management/overview': '總覽',
 }

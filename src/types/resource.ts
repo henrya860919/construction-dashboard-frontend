@@ -10,6 +10,7 @@ export interface ProjectResourceItem {
   unitCost: number
   capacityType: string | null
   dailyCapacity: number | null
+  vendor: string | null
   description: string | null
   createdAt: string
   updatedAt: string
@@ -22,6 +23,7 @@ export interface CreateProjectResourcePayload {
   unitCost: number
   capacityType?: string | null
   dailyCapacity?: number | null
+  vendor?: string | null
   description?: string | null
 }
 
@@ -31,5 +33,6 @@ export interface UpdateProjectResourcePayload {
   unitCost?: number
   capacityType?: string | null
   dailyCapacity?: number | null
+  vendor?: string | null
   description?: string | null
 }

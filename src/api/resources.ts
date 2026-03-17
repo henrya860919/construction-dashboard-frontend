@@ -8,6 +8,13 @@ import type {
   UpdateProjectResourcePayload,
 } from '@/types/resource'
 
+/** 取得專案所有類型資源（供 WBS 資源多選等使用） */
+export async function getAllProjectResources(projectId: string): Promise<ProjectResourceItem[]> {
+  const types: ProjectResourceType[] = ['labor', 'equipment', 'material']
+  const results = await Promise.all(types.map((type) => getProjectResources(projectId, type)))
+  return results.flat()
+}
+
 export async function getProjectResources(
   projectId: string,
   type: ProjectResourceType

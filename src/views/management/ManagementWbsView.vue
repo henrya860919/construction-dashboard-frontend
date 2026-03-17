@@ -36,6 +36,8 @@ import {
   deleteWbsNode,
   moveWbsNode,
 } from '@/api/wbs'
+import { getAllProjectResources } from '@/api/resources'
+import type { ProjectResourceItem } from '@/types/resource'
 import {
   ChevronRight,
   ChevronDown,
@@ -333,22 +335,52 @@ function onDragHandlePointerDown(e: PointerEvent, item: WbsFlatItem) {
 const createDialogOpen = ref(false)
 const createParentId = ref<string | null>(null)
 const createName = ref('')
+const createStartDate = ref('')
+const createDurationDays = ref<number | ''>('')
+const createResourceIds = ref<string[]>([])
 const createSubmitting = ref(false)
 const createError = ref<string | null>(null)
+
+const projectResources = ref<ProjectResourceItem[]>([])
 
 function openCreateRoot() {
   createParentId.value = null
   createName.value = ''
+  createStartDate.value = ''
+  createDurationDays.value = ''
+  createResourceIds.value = []
   createError.value = null
   createDialogOpen.value = true
+  if (projectId.value) loadProjectResources()
 }
 
 function openCreateChild(parentNode: WbsNode) {
   createParentId.value = parentNode.id
   createName.value = ''
+  createStartDate.value = ''
+  createDurationDays.value = ''
+  createResourceIds.value = []
   createError.value = null
   createDialogOpen.value = true
+  if (projectId.value) loadProjectResources()
 }
+
+async function loadProjectResources() {
+  if (!projectId.value) return
+  try {
+    projectResources.value = await getAllProjectResources(projectId.value)
+  } catch {
+    projectResources.value = []
+  }
+}
+
+const createEndDate = computed(() => {
+  if (!createStartDate.value || createDurationDays.value === '' || Number(createDurationDays.value) < 1)
+    return ''
+  const d = new Date(createStartDate.value)
+  d.setDate(d.getDate() + Number(createDurationDays.value))
+  return d.toISOString().slice(0, 10)
+})
 
 async function submitCreate() {
   if (!projectId.value || !createName.value.trim()) return
@@ -358,6 +390,9 @@ async function submitCreate() {
     await createWbsNode(projectId.value, {
       parentId: createParentId.value,
       name: createName.value.trim(),
+      startDate: createStartDate.value || undefined,
+      durationDays: createDurationDays.value === '' ? undefined : Number(createDurationDays.value),
+      resourceIds: createResourceIds.value.length ? createResourceIds.value : undefined,
     })
     createDialogOpen.value = false
     await fetchWbs()
@@ -372,14 +407,43 @@ async function submitCreate() {
 const editDialogOpen = ref(false)
 const editNode = ref<WbsNode | null>(null)
 const editName = ref('')
+const editStartDate = ref('')
+const editDurationDays = ref<number | ''>('')
+const editResourceIds = ref<string[]>([])
 const editSubmitting = ref(false)
 const editError = ref<string | null>(null)
 
 function openEdit(node: WbsNode) {
   editNode.value = node
   editName.value = node.name
+  editStartDate.value = node.startDate ?? ''
+  editDurationDays.value = node.durationDays ?? ''
+  editResourceIds.value = node.resources?.map((r) => r.id) ?? []
   editError.value = null
   editDialogOpen.value = true
+  if (projectId.value) loadProjectResources()
+}
+
+const editEndDate = computed(() => {
+  if (!editStartDate.value || editDurationDays.value === '' || Number(editDurationDays.value) < 1)
+    return ''
+  const d = new Date(editStartDate.value)
+  d.setDate(d.getDate() + Number(editDurationDays.value))
+  return d.toISOString().slice(0, 10)
+})
+
+function toggleEditResource(id: string) {
+  const next = editResourceIds.value.includes(id)
+    ? editResourceIds.value.filter((r) => r !== id)
+    : [...editResourceIds.value, id]
+  editResourceIds.value = next
+}
+
+function toggleCreateResource(id: string) {
+  const next = createResourceIds.value.includes(id)
+    ? createResourceIds.value.filter((r) => r !== id)
+    : [...createResourceIds.value, id]
+  createResourceIds.value = next
 }
 
 async function submitEdit() {
@@ -387,7 +451,12 @@ async function submitEdit() {
   editSubmitting.value = true
   editError.value = null
   try {
-    await updateWbsNode(projectId.value, editNode.value.id, { name: editName.value.trim() })
+    await updateWbsNode(projectId.value, editNode.value.id, {
+      name: editName.value.trim(),
+      startDate: editStartDate.value || null,
+      durationDays: editDurationDays.value === '' ? null : Number(editDurationDays.value),
+      resourceIds: editResourceIds.value,
+    })
     editDialogOpen.value = false
     await fetchWbs()
   } catch (e: unknown) {
@@ -523,13 +592,17 @@ watch(projectId, (id) => {
               />
             </TableHead>
             <TableHead>項目名稱</TableHead>
+            <TableHead class="whitespace-nowrap text-muted-foreground">開始</TableHead>
+            <TableHead class="whitespace-nowrap text-muted-foreground">工期(天)</TableHead>
+            <TableHead class="whitespace-nowrap text-muted-foreground">結束</TableHead>
+            <TableHead class="text-muted-foreground min-w-[120px]">資源</TableHead>
             <TableHead class="w-12 px-1" aria-label="操作" />
           </TableRow>
         </TableHeader>
         <TableBody ref="tableBodyRef">
           <template v-if="flattenedList.length === 0">
             <TableRow>
-              <TableCell colspan="4" class="text-center text-muted-foreground py-8">
+              <TableCell colspan="8" class="text-center text-muted-foreground py-8">
                 尚無 WBS 項目
               </TableCell>
             </TableRow>
@@ -541,7 +614,7 @@ watch(projectId, (id) => {
               class="pointer-events-none"
               aria-hidden="true"
             >
-              <td colspan="4" class="h-0 p-0 align-top">
+              <td colspan="8" class="h-0 p-0 align-top">
                 <div
                   class="mx-2 rounded-full bg-primary/90 h-0.5 min-h-[2px] shadow-sm"
                   style="margin-top: -1px"
@@ -613,6 +686,18 @@ watch(projectId, (id) => {
                 </span>
               </div>
             </TableCell>
+            <TableCell class="whitespace-nowrap text-muted-foreground text-sm">
+              {{ item.node.startDate ?? '—' }}
+            </TableCell>
+            <TableCell class="whitespace-nowrap text-muted-foreground text-sm tabular-nums">
+              {{ item.node.durationDays != null ? item.node.durationDays : '—' }}
+            </TableCell>
+            <TableCell class="whitespace-nowrap text-muted-foreground text-sm">
+              {{ item.node.endDate ?? '—' }}
+            </TableCell>
+            <TableCell class="text-muted-foreground text-sm max-w-[180px] truncate">
+              {{ item.node.resources?.length ? item.node.resources.map(r => r.name).join('、') : '—' }}
+            </TableCell>
             <TableCell class="w-12 p-1">
               <DropdownMenu>
                 <DropdownMenuTrigger as-child>
@@ -647,10 +732,10 @@ watch(projectId, (id) => {
 
     <!-- 新增節點對話框 -->
     <Dialog v-model:open="createDialogOpen">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{{ createParentId ? '新增子節點' : '新增根節點' }}</DialogTitle>
-          <DialogDescription>輸入項目名稱，編號將由系統自動產生。</DialogDescription>
+          <DialogDescription>輸入項目名稱與排程，編號由系統自動產生。</DialogDescription>
         </DialogHeader>
         <div class="grid gap-4 py-2">
           <div class="grid gap-2">
@@ -661,6 +746,44 @@ watch(projectId, (id) => {
               placeholder="請輸入項目名稱"
               @keydown.enter.prevent="submitCreate"
             />
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="grid gap-2">
+              <Label for="create-start">開始日期</Label>
+              <Input id="create-start" v-model="createStartDate" type="date" />
+            </div>
+            <div class="grid gap-2">
+              <Label for="create-duration">工期（天）</Label>
+              <Input
+                id="create-duration"
+                v-model.number="createDurationDays"
+                type="number"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div v-if="createEndDate" class="grid gap-2">
+            <Label>結束日期</Label>
+            <span class="text-sm text-muted-foreground">{{ createEndDate }}（依開始+工期推算）</span>
+          </div>
+          <div class="grid gap-2">
+            <Label>資源（多選）</Label>
+            <div class="max-h-32 overflow-y-auto rounded-md border border-border p-2 space-y-1">
+              <label
+                v-for="res in projectResources"
+                :key="res.id"
+                class="flex items-center gap-2 cursor-pointer text-sm"
+              >
+                <Checkbox
+                  :checked="createResourceIds.includes(res.id)"
+                  @update:checked="() => toggleCreateResource(res.id)"
+                />
+                <span>{{ res.name }}</span>
+                <span class="text-muted-foreground text-xs">({{ res.type }})</span>
+              </label>
+              <p v-if="!projectResources.length" class="text-muted-foreground text-xs">尚無資源，請至資源庫新增。</p>
+            </div>
           </div>
           <p v-if="createError" class="text-sm text-destructive">{{ createError }}</p>
         </div>
@@ -676,10 +799,10 @@ watch(projectId, (id) => {
 
     <!-- 編輯節點對話框 -->
     <Dialog v-model:open="editDialogOpen">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>編輯項目</DialogTitle>
-          <DialogDescription>修改項目名稱，編號由系統維護。</DialogDescription>
+          <DialogDescription>修改名稱、排程與資源，結束日期依開始+工期推算。</DialogDescription>
         </DialogHeader>
         <div class="grid gap-4 py-2">
           <div class="grid gap-2">
@@ -690,6 +813,44 @@ watch(projectId, (id) => {
               placeholder="請輸入項目名稱"
               @keydown.enter.prevent="submitEdit"
             />
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="grid gap-2">
+              <Label for="edit-start">開始日期</Label>
+              <Input id="edit-start" v-model="editStartDate" type="date" />
+            </div>
+            <div class="grid gap-2">
+              <Label for="edit-duration">工期（天）</Label>
+              <Input
+                id="edit-duration"
+                v-model.number="editDurationDays"
+                type="number"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div v-if="editEndDate" class="grid gap-2">
+            <Label>結束日期</Label>
+            <span class="text-sm text-muted-foreground">{{ editEndDate }}（依開始+工期推算）</span>
+          </div>
+          <div class="grid gap-2">
+            <Label>資源（多選）</Label>
+            <div class="max-h-32 overflow-y-auto rounded-md border border-border p-2 space-y-1">
+              <label
+                v-for="res in projectResources"
+                :key="res.id"
+                class="flex items-center gap-2 cursor-pointer text-sm"
+              >
+                <Checkbox
+                  :checked="editResourceIds.includes(res.id)"
+                  @update:checked="() => toggleEditResource(res.id)"
+                />
+                <span>{{ res.name }}</span>
+                <span class="text-muted-foreground text-xs">({{ res.type }})</span>
+              </label>
+              <p v-if="!projectResources.length" class="text-muted-foreground text-xs">尚無資源，請至資源庫新增。</p>
+            </div>
           </div>
           <p v-if="editError" class="text-sm text-destructive">{{ editError }}</p>
         </div>

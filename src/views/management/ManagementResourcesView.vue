@@ -68,6 +68,7 @@ const formUnit = ref('')
 const formUnitCost = ref<number>(0)
 const formCapacityType = ref('')
 const formDailyCapacity = ref<string>('')
+const formVendor = ref('')
 const formDescription = ref('')
 const formSubmitting = ref(false)
 const formError = ref('')
@@ -104,6 +105,7 @@ function openCreateDialog() {
   formUnitCost.value = 0
   formCapacityType.value = ''
   formDailyCapacity.value = ''
+  formVendor.value = ''
   formDescription.value = ''
   formError.value = ''
   formOpen.value = true
@@ -117,6 +119,7 @@ function openEditDialog(row: ProjectResourceItem) {
   formUnitCost.value = row.unitCost
   formCapacityType.value = row.capacityType ?? ''
   formDailyCapacity.value = row.dailyCapacity != null ? String(row.dailyCapacity) : ''
+  formVendor.value = row.vendor ?? ''
   formDescription.value = row.description ?? ''
   formError.value = ''
   formOpen.value = true
@@ -162,6 +165,7 @@ async function submitForm() {
         unitCost,
         capacityType: formCapacityType.value.trim() || null,
         dailyCapacity,
+        vendor: formVendor.value.trim() || null,
         description: formDescription.value.trim() || null,
       })
     } else if (editingItem.value) {
@@ -171,6 +175,7 @@ async function submitForm() {
         unitCost,
         capacityType: formCapacityType.value.trim() || null,
         dailyCapacity,
+        vendor: formVendor.value.trim() || null,
         description: formDescription.value.trim() || null,
       })
     }
@@ -272,6 +277,13 @@ const columns = computed<ColumnDef<ProjectResourceItem, unknown>[]>(() => [
         { class: 'text-foreground tabular-nums' },
         row.original.dailyCapacity != null ? String(row.original.dailyCapacity) : '—'
       ),
+  },
+  {
+    accessorKey: 'vendor',
+    id: 'vendor',
+    header: () => '廠商',
+    cell: ({ row }) =>
+      h('div', { class: 'max-w-[160px] truncate text-foreground', title: row.original.vendor ?? '' }, row.original.vendor ?? '—'),
   },
   {
     accessorKey: 'description',
@@ -445,7 +457,7 @@ watch(
                 </template>
                 <template v-else>
                   <TableRow>
-                    <TableCell :colspan="8" class="h-24 text-center text-muted-foreground">
+                    <TableCell :colspan="9" class="h-24 text-center text-muted-foreground">
                       尚無資源
                     </TableCell>
                   </TableRow>
@@ -475,7 +487,7 @@ watch(
             {{ formMode === 'create' ? `新增${TAB_LABELS[activeTab]}` : '編輯資源' }}
           </DialogTitle>
           <DialogDescription>
-            填寫名稱、單位、單位成本、容量類型、每日容量與說明。
+            填寫名稱、單位、單位成本、容量類型、每日容量、廠商與說明。
           </DialogDescription>
         </DialogHeader>
         <div class="grid gap-4 py-4">
@@ -513,6 +525,10 @@ watch(
               step="0.01"
               placeholder="留空則不填"
             />
+          </div>
+          <div class="space-y-2">
+            <Label for="form-vendor">廠商（選填）</Label>
+            <Input id="form-vendor" v-model="formVendor" placeholder="例：供應商或廠商名稱" />
           </div>
           <div class="space-y-2">
             <Label for="form-desc">說明（選填）</Label>

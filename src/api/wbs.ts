@@ -9,10 +9,16 @@ export type WbsNodeTree = WbsNode
 export interface CreateWbsPayload {
   parentId?: string | null
   name: string
+  startDate?: string | null
+  durationDays?: number | null
+  resourceIds?: string[]
 }
 
 export interface UpdateWbsPayload {
   name?: string
+  startDate?: string | null
+  durationDays?: number | null
+  resourceIds?: string[]
 }
 
 export interface MoveWbsPayload {

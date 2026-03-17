@@ -1,0 +1,99 @@
+<script setup lang="ts">
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Flag } from 'lucide-vue-next'
+
+defineProps<{
+  showActualPlan: boolean
+  showCriticalPath: boolean
+  showTodayLine: boolean
+  showMilestoneLines: boolean
+  showAssignee: boolean
+  showProgress: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:showActualPlan': [value: boolean]
+  'update:showCriticalPath': [value: boolean]
+  'update:showTodayLine': [value: boolean]
+  'update:showMilestoneLines': [value: boolean]
+  'update:showAssignee': [value: boolean]
+  'update:showProgress': [value: boolean]
+  addMilestoneLine: []
+}>()
+</script>
+
+<template>
+  <div
+    class="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-3"
+  >
+    <div class="flex flex-wrap items-center gap-4">
+      <div class="flex items-center gap-2">
+        <Switch
+          :checked="showActualPlan"
+          @update:checked="(v: boolean) => emit('update:showActualPlan', v)"
+        />
+        <Label class="text-muted-foreground cursor-pointer text-xs">
+          實際／計劃
+        </Label>
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch
+          :checked="showCriticalPath"
+          @update:checked="(v: boolean) => emit('update:showCriticalPath', v)"
+        />
+        <Label class="text-muted-foreground cursor-pointer text-xs">
+          要徑
+        </Label>
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch
+          :checked="showTodayLine"
+          @update:checked="(v: boolean) => emit('update:showTodayLine', v)"
+        />
+        <Label class="text-muted-foreground cursor-pointer text-xs">
+          今日線
+        </Label>
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch
+          :checked="showMilestoneLines"
+          @update:checked="(v: boolean) => emit('update:showMilestoneLines', v)"
+        />
+        <Label class="text-muted-foreground cursor-pointer text-xs">
+          里程碑線
+        </Label>
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch
+          :checked="showAssignee"
+          @update:checked="(v: boolean) => emit('update:showAssignee', v)"
+        />
+        <Label class="text-muted-foreground cursor-pointer text-xs">
+          負責人
+        </Label>
+      </div>
+      <div class="flex items-center gap-2">
+        <Switch
+          :checked="showProgress"
+          @update:checked="(v: boolean) => emit('update:showProgress', v)"
+        />
+        <Label class="text-muted-foreground cursor-pointer text-xs">
+          進度％
+        </Label>
+      </div>
+    </div>
+    <div class="ml-auto flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        class="h-8"
+        @click="emit('addMilestoneLine')"
+      >
+        <Flag class="mr-1 size-4" />
+        新增里程碑線
+      </Button>
+    </div>
+  </div>
+</template>

@@ -34,7 +34,7 @@ export interface CameraInstallConfig {
   streamToken: string
   mediamtxHost: string
   mediamtxWebRtcUrl: string
-  rtmpPublishUrl: string
+  rtspPublishUrl: string
   go2rtcYamlSnippet: string
 }
 

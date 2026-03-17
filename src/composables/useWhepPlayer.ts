@@ -295,6 +295,11 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
       })
       clearTimeout(timeoutId)
       const body = await res.text()
+
+      // 除錯用：確認 mediamtx 回傳的 answer 是否有 ice-ufrag（修好後可移除）
+      console.log('[WHEP] answer SDP:', body)
+      console.log('[WHEP] has ice-ufrag:', body.includes('a=ice-ufrag'))
+
       if (!res.ok) {
         try {
           const j = JSON.parse(body) as { error?: string }
@@ -304,8 +309,8 @@ export function useWhepPlayer(whepUrl: Ref<string | null>) {
         }
         throw new Error(res.statusText || `HTTP ${res.status}`)
       }
-      const sdp = ensureIceInSdp(body)
-      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }))
+      // 直接用 mediamtx 回傳的原始 answer；若仍報 no ice-ufrag 代表是 mediamtx 設定問題（需 webrtc.iceServers 等）
+      await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: body }))
       // 若 WebRTC 連線失敗（ICE 等），顯示錯誤而非一直空白
       const peerConn = pc
       peerConn.onconnectionstatechange = () => {

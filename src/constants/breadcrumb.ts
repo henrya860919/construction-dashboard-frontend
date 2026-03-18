@@ -46,4 +46,9 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/management/schedule': '排班表',
   '/management/gantt': '甘特圖',
   '/management/overview': '總覽',
+  '/construction/self-check': '自主檢查',
+  '/construction/diary': '施工日誌',
+  '/construction/defects': '缺失改善',
+  '/repair/overview': '報修總覽',
+  '/repair/records': '報修紀錄表',
 }

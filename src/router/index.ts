@@ -148,6 +148,31 @@ const router = createRouter({
           name: ROUTE_NAME.PROJECT_MANAGEMENT_OVERVIEW,
           component: () => import('@/views/management/ManagementOverviewView.vue'),
         },
+        {
+          path: 'p/:projectId/construction/self-check',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK,
+          component: () => import('@/views/construction/ConstructionSelfCheckView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY,
+          component: () => import('@/views/construction/ConstructionDiaryView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/defects',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DEFECTS,
+          component: () => import('@/views/construction/ConstructionDefectsView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/overview',
+          name: ROUTE_NAME.PROJECT_REPAIR_OVERVIEW,
+          component: () => import('@/views/repair/RepairOverviewView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/records',
+          name: ROUTE_NAME.PROJECT_REPAIR_RECORDS,
+          component: () => import('@/views/repair/RepairRecordsView.vue'),
+        },
         // 單租後台（共用 DefaultLayout，sidebar 依路由切換為後台選單）
         { path: 'admin', redirect: ROUTE_PATH.ADMIN_PROJECTS },
         {

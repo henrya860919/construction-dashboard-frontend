@@ -31,8 +31,8 @@ const emit = defineEmits<{
     <div class="flex flex-wrap items-center gap-4">
       <div class="flex items-center gap-2">
         <Switch
-          :checked="showActualPlan"
-          @update:checked="(v: boolean) => emit('update:showActualPlan', v)"
+          :model-value="showActualPlan"
+          @update:model-value="(v: boolean) => emit('update:showActualPlan', v)"
         />
         <Label class="text-muted-foreground cursor-pointer text-xs">
           實際／計劃
@@ -40,8 +40,8 @@ const emit = defineEmits<{
       </div>
       <div class="flex items-center gap-2">
         <Switch
-          :checked="showCriticalPath"
-          @update:checked="(v: boolean) => emit('update:showCriticalPath', v)"
+          :model-value="showCriticalPath"
+          @update:model-value="(v: boolean) => emit('update:showCriticalPath', v)"
         />
         <Label class="text-muted-foreground cursor-pointer text-xs">
           要徑
@@ -49,8 +49,8 @@ const emit = defineEmits<{
       </div>
       <div class="flex items-center gap-2">
         <Switch
-          :checked="showTodayLine"
-          @update:checked="(v: boolean) => emit('update:showTodayLine', v)"
+          :model-value="showTodayLine"
+          @update:model-value="(v: boolean) => emit('update:showTodayLine', v)"
         />
         <Label class="text-muted-foreground cursor-pointer text-xs">
           今日線
@@ -58,8 +58,8 @@ const emit = defineEmits<{
       </div>
       <div class="flex items-center gap-2">
         <Switch
-          :checked="showMilestoneLines"
-          @update:checked="(v: boolean) => emit('update:showMilestoneLines', v)"
+          :model-value="showMilestoneLines"
+          @update:model-value="(v: boolean) => emit('update:showMilestoneLines', v)"
         />
         <Label class="text-muted-foreground cursor-pointer text-xs">
           里程碑線
@@ -67,8 +67,8 @@ const emit = defineEmits<{
       </div>
       <div class="flex items-center gap-2">
         <Switch
-          :checked="showAssignee"
-          @update:checked="(v: boolean) => emit('update:showAssignee', v)"
+          :model-value="showAssignee"
+          @update:model-value="(v: boolean) => emit('update:showAssignee', v)"
         />
         <Label class="text-muted-foreground cursor-pointer text-xs">
           負責人
@@ -76,8 +76,8 @@ const emit = defineEmits<{
       </div>
       <div class="flex items-center gap-2">
         <Switch
-          :checked="showProgress"
-          @update:checked="(v: boolean) => emit('update:showProgress', v)"
+          :model-value="showProgress"
+          @update:model-value="(v: boolean) => emit('update:showProgress', v)"
         />
         <Label class="text-muted-foreground cursor-pointer text-xs">
           進度％

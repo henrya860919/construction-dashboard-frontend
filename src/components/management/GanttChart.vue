@@ -27,12 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   ChevronRight,
   ChevronDown,
@@ -203,6 +198,9 @@ const emit = defineEmits<{
   'update:dependencies': [taskId: string, predecessorIds: string[]]
   /** 從 A 的尾巴拖到 B 的開始，建立 A→B 前置關係（B 的前置含 A） */
   addDependency: [fromTaskId: string, toTaskId: string]
+  'update:showCriticalPath': [value: boolean]
+  'update:showMilestoneLines': [value: boolean]
+  'update:showAssignee': [value: boolean]
 }>()
 
 /** 可見區域中心對應的年月，供工具列顯示；捲動時自動更新 */
@@ -216,11 +214,17 @@ const visibleYearMonth = computed((): { year: number; month: number } | null => 
 })
 watch(visibleYearMonth, (v) => emit('update:visibleYearMonth', v), { immediate: true })
 
+/** 拖曳／縮放時只改此草稿，mouseup 才 emit，避免父層每格都打 API */
+const scheduleDraftTask = ref<GanttTask | null>(null)
+const scheduleDragBaseline = ref<{ id: string; start: string; end: string } | null>(null)
+
 /** 實際用於圖表與左欄的任務順序（有 leftColumnItems 時用其 task 列表） */
 const displayedTasks = computed(() => {
   const items = props.leftColumnItems
-  if (items?.length) return items.map((x) => x.task)
-  return props.tasks
+  const base = items?.length ? items.map((x) => x.task) : props.tasks
+  const draft = scheduleDraftTask.value
+  if (!draft) return base
+  return base.map((t) => (t.id === draft.id ? { ...t, ...draft } : t))
 })
 
 /** 左欄列數與圖表列高一致，與外層 sharedScrollRef 一起垂直捲（左表不可再包一层 overflow-auto） */
@@ -352,7 +356,11 @@ const editPlannedStart = ref('')
 const editDurationDays = ref<number | ''>('')
 
 const editEndDate = computed(() => {
-  if (!editPlannedStart.value || editDurationDays.value === '' || Number(editDurationDays.value) < 1)
+  if (
+    !editPlannedStart.value ||
+    editDurationDays.value === '' ||
+    Number(editDurationDays.value) < 1
+  )
     return ''
   return wbsEndDateInclusive(editPlannedStart.value, Number(editDurationDays.value))
 })
@@ -366,7 +374,12 @@ function openEditSchedule(task: GanttTask) {
 
 function submitEditSchedule() {
   const task = displayedTasks.value.find((t) => t.id === editingTaskId.value)
-  if (!task || !editPlannedStart.value || editDurationDays.value === '' || Number(editDurationDays.value) < 1)
+  if (
+    !task ||
+    !editPlannedStart.value ||
+    editDurationDays.value === '' ||
+    Number(editDurationDays.value) < 1
+  )
     return
   const end = editEndDate.value
   if (!end) return
@@ -553,9 +566,7 @@ function pathFinishIntoTaskHead(
   const yAbove = rowY - DETOUR_ABOVE_PX
 
   if (fromXAtRow > xTailOut - 0.5) {
-    return (
-      `L ${xTailOut} ${rowY} L ${xTailOut} ${yAbove} L ${stubLeft} ${yAbove} L ${stubLeft} ${rowY} L ${headX} ${rowY}`
-    )
+    return `L ${xTailOut} ${rowY} L ${xTailOut} ${yAbove} L ${stubLeft} ${yAbove} L ${stubLeft} ${rowY} L ${headX} ${rowY}`
   }
   if (fromXAtRow <= stubLeft) {
     return `L ${stubLeft} ${rowY} L ${headX} ${rowY}`
@@ -606,7 +617,8 @@ function buildDependencyPathD(
 
   if (straightVerticalNextDay) {
     return (
-      `M ${fromX} ${fromY} L ${fromX} ${toY}` + pathFinishIntoTaskHead(fromX, toY, toX, succBarRightX)
+      `M ${fromX} ${fromY} L ${fromX} ${toY}` +
+      pathFinishIntoTaskHead(fromX, toY, toX, succBarRightX)
     )
   }
 
@@ -625,13 +637,18 @@ function buildDependencyPathD(
   )
 }
 
-/** 單條依賴 path；arrow=false 為共用主幹（無箭頭） */
-type DependencyPathSeg = { pathD: string; arrow: boolean; key: string }
+/** 單條依賴 path；arrow=false 為共用主幹（無箭頭）；isCritical 表示此邊在要徑上 */
+type DependencyPathSeg = { pathD: string; arrow: boolean; key: string; isCritical: boolean }
 
 const dependencyPaths = computed((): DependencyPathSeg[] => {
   const list = displayedTasks.value
   const cw = chartWidthVal.value
+  const cpMap = criticalPathMapVal.value
   const taskIndex = new Map(list.map((t, i) => [t.id, i]))
+
+  function isEdgeCritical(predId: string, succId: string): boolean {
+    return !!(cpMap.get(predId)?.isCritical && cpMap.get(succId)?.isCritical)
+  }
 
   type SuccEdge = {
     toTask: GanttTask
@@ -688,6 +705,7 @@ const dependencyPaths = computed((): DependencyPathSeg[] => {
           g.nextDay
         ),
         arrow: true,
+        isCritical: isEdgeCritical(predId, g.toTask.id),
       })
       continue
     }
@@ -715,6 +733,7 @@ const dependencyPaths = computed((): DependencyPathSeg[] => {
             g.nextDay
           ),
           arrow: true,
+          isCritical: isEdgeCritical(predId, g.toTask.id),
         })
       }
       continue
@@ -735,6 +754,7 @@ const dependencyPaths = computed((): DependencyPathSeg[] => {
             g.nextDay
           ),
           arrow: true,
+          isCritical: isEdgeCritical(predId, g.toTask.id),
         })
       }
       continue
@@ -754,7 +774,8 @@ const dependencyPaths = computed((): DependencyPathSeg[] => {
       allNextDay && legX === fromEnd
         ? `M ${fromEnd} ${fromY} L ${fromEnd} ${yBusEnd}`
         : `M ${fromEnd} ${fromY} L ${legX} ${fromY} L ${legX} ${yBusEnd}`
-    out.push({ key: `t-${predId}`, pathD: trunk, arrow: false })
+    const trunkCritical = group.some((g) => isEdgeCritical(predId, g.toTask.id))
+    out.push({ key: `t-${predId}`, pathD: trunk, arrow: false, isCritical: trunkCritical })
 
     const sorted = [...group].sort((a, b) => a.toIdx - b.toIdx)
     for (const g of sorted) {
@@ -764,6 +785,7 @@ const dependencyPaths = computed((): DependencyPathSeg[] => {
         key: `s-${predId}-${g.toTask.id}`,
         pathD: spurD,
         arrow: true,
+        isCritical: isEdgeCritical(predId, g.toTask.id),
       })
     }
   }
@@ -781,21 +803,14 @@ const dependencyPreviewPathD = computed(() => {
   if (idx < 0) return ''
   const fromEnd = inclusiveBarRightPx(from.plannedEnd)
   const fromY = idx * ROW_HEIGHT + ROW_HEIGHT / 2
-  const toIdx = Math.min(
-    list.length - 1,
-    Math.max(0, Math.floor(to.y / ROW_HEIGHT))
-  )
+  const toIdx = Math.min(list.length - 1, Math.max(0, Math.floor(to.y / ROW_HEIGHT)))
   const laneX = computeDependencyLaneX(list, idx, toIdx, fromEnd, chartWidthVal.value)
   const targetTask = list[toIdx]
   const nextDay =
     targetTask &&
     isSuccessorStartNextCalendarDayAfterPredecessorEnd(from.plannedEnd, targetTask.plannedStart)
-  const succLeft = targetTask
-    ? toPx(parseDate(targetTask.plannedStart))
-    : Math.max(4, to.x - 6)
-  const succRight = targetTask
-    ? inclusiveBarRightPx(targetTask.plannedEnd)
-    : succLeft + 120
+  const succLeft = targetTask ? toPx(parseDate(targetTask.plannedStart)) : Math.max(4, to.x - 6)
+  const succRight = targetTask ? inclusiveBarRightPx(targetTask.plannedEnd) : succLeft + 120
   return buildDependencyPathD(fromEnd, fromY, succLeft, to.y, laneX, succRight, !!nextDay)
 })
 
@@ -831,10 +846,7 @@ const dependencyDropTargetId = ref<string | null>(null)
 /** 拖曳預覽線終點（圖表區 px） */
 const dependencyDropChartPos = ref<{ x: number; y: number } | null>(null)
 
-function barHitZone(
-  barEl: HTMLElement,
-  clientX: number
-): 'left' | 'move' | 'right' | 'dependency' {
+function barHitZone(barEl: HTMLElement, clientX: number): 'left' | 'move' | 'right' | 'dependency' {
   const rect = barEl.getBoundingClientRect()
   const x = clientX - rect.left
   const w = Math.max(rect.width, 1)
@@ -861,17 +873,28 @@ function barHitZone(
   return 'move'
 }
 
+function setScheduleDragBaseline(task: GanttTask) {
+  scheduleDraftTask.value = null
+  scheduleDragBaseline.value = {
+    id: task.id,
+    start: task.plannedStart,
+    end: task.plannedEnd,
+  }
+}
+
 function onBarPointerDown(e: MouseEvent, task: GanttTask, barEl?: HTMLElement) {
   if (task.isRollup) return
   e.stopPropagation()
   const zone = barEl ? barHitZone(barEl, e.clientX) : 'move'
   if (task.isMilestone) {
+    setScheduleDragBaseline(task)
     draggingTask.value = task
     dragStartX.value = e.clientX
     dragStartPlannedStart.value = task.plannedStart
     return
   }
   if (zone === 'left') {
+    setScheduleDragBaseline(task)
     resizingLeftTask.value = task
     resizeStartPlannedStart.value = task.plannedStart
     resizeStartPlannedEnd.value = task.plannedEnd
@@ -879,6 +902,7 @@ function onBarPointerDown(e: MouseEvent, task: GanttTask, barEl?: HTMLElement) {
     return
   }
   if (zone === 'right') {
+    setScheduleDragBaseline(task)
     resizingRightTask.value = task
     resizeStartPlannedStart.value = task.plannedStart
     resizeStartPlannedEnd.value = task.plannedEnd
@@ -886,6 +910,8 @@ function onBarPointerDown(e: MouseEvent, task: GanttTask, barEl?: HTMLElement) {
     return
   }
   if (zone === 'dependency') {
+    scheduleDraftTask.value = null
+    scheduleDragBaseline.value = null
     dependencyDragFrom.value = task
     dependencyDragEnd.value = { x: e.clientX, y: e.clientY }
     const list = displayedTasks.value
@@ -896,6 +922,7 @@ function onBarPointerDown(e: MouseEvent, task: GanttTask, barEl?: HTMLElement) {
     dependencyDropTargetId.value = null
     return
   }
+  setScheduleDragBaseline(task)
   draggingTask.value = task
   dragStartX.value = e.clientX
   dragStartPlannedStart.value = task.plannedStart
@@ -918,7 +945,7 @@ function onBarPointerMove(e: MouseEvent) {
       plannedStart: start.toISOString().slice(0, 10),
       plannedEnd: resizeStartPlannedEnd.value,
     }
-    emit('update:task', updated)
+    scheduleDraftTask.value = updated
     dragStartX.value = e.clientX
     resizeStartPlannedStart.value = updated.plannedStart
     return
@@ -938,7 +965,7 @@ function onBarPointerMove(e: MouseEvent) {
       plannedStart: resizeStartPlannedStart.value,
       plannedEnd: end.toISOString().slice(0, 10),
     }
-    emit('update:task', updated)
+    scheduleDraftTask.value = updated
     dragStartX.value = e.clientX
     resizeStartPlannedEnd.value = updated.plannedEnd
     return
@@ -986,7 +1013,7 @@ function onBarPointerMove(e: MouseEvent) {
     plannedStart: start.toISOString().slice(0, 10),
     plannedEnd: end.toISOString().slice(0, 10),
   }
-  emit('update:task', updated)
+  scheduleDraftTask.value = updated
   dragStartX.value = e.clientX
   dragStartPlannedStart.value = updated.plannedStart
 }
@@ -1011,18 +1038,23 @@ function onDocMouseUp(e?: MouseEvent) {
     let targetId = dependencyDropTargetId.value
     if (!targetId && e) targetId = resolveDropTargetFromClientY(e.clientY) ?? null
     const fromT = dependencyDragFrom.value
-    const targetT = targetId
-      ? displayedTasks.value.find((t) => t.id === targetId)
-      : null
-    if (
-      targetId &&
-      targetT &&
-      !targetT.isRollup &&
-      !fromT.isRollup
-    ) {
+    const targetT = targetId ? displayedTasks.value.find((t) => t.id === targetId) : null
+    if (targetId && targetT && !targetT.isRollup && !fromT.isRollup) {
       emit('addDependency', fromT.id, targetId)
     }
   }
+  const draft = scheduleDraftTask.value
+  const base = scheduleDragBaseline.value
+  if (
+    draft &&
+    base &&
+    draft.id === base.id &&
+    (draft.plannedStart !== base.start || draft.plannedEnd !== base.end)
+  ) {
+    emit('update:task', draft)
+  }
+  scheduleDraftTask.value = null
+  scheduleDragBaseline.value = null
   draggingTask.value = null
   resizingLeftTask.value = null
   resizingRightTask.value = null
@@ -1049,10 +1081,7 @@ function onLeftTableHeaderWheel(e: WheelEvent) {
   if (dx === 0) return
   const b = leftTableHScrollRef.value
   if (!b) return
-  b.scrollLeft = Math.max(
-    0,
-    Math.min(b.scrollWidth - b.clientWidth, b.scrollLeft + dx),
-  )
+  b.scrollLeft = Math.max(0, Math.min(b.scrollWidth - b.clientWidth, b.scrollLeft + dx))
   leftTableHScrollPx.value = b.scrollLeft
   e.preventDefault()
 }
@@ -1124,840 +1153,965 @@ function onDragHandlePointerDown(e: PointerEvent, item: GanttLeftColumnItem) {
 
 <template>
   <TooltipProvider :delay-duration="350">
-  <!-- 固定寬度容器：表頭固定，僅下方資料列＋圖表區一起垂直捲動 -->
-  <div class="flex flex-col rounded-lg border border-border bg-card min-w-0 overflow-hidden">
-    <div class="flex flex-col min-h-0 max-h-[536px]">
-      <!-- 固定表頭列：左表頭 ＋ 圖表工具列＋里程碑＋時間軸 -->
-      <div class="flex shrink-0 flex-row border-b border-border">
-        <!-- 左表頭：總高與右側一致，欄位標題佔滿整格垂直空間 -->
-        <div
-          class="relative z-0 flex shrink-0 flex-col overflow-x-hidden border-r-2 border-border bg-card"
-          :style="{ width: leftWidthVal + 'px', minHeight: HEADER_TOTAL_HEIGHT + 'px' }"
-          @wheel="onLeftTableHeaderWheel"
-        >
+    <!-- 固定寬度容器：表頭固定，僅下方資料列＋圖表區一起垂直捲動 -->
+    <div class="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
+      <div class="flex min-h-0 flex-1 flex-col">
+        <!-- 固定表頭列：左表頭 ＋ 圖表工具列＋里程碑＋時間軸 -->
+        <div class="flex shrink-0 flex-row border-b border-border">
+          <!-- 左表頭：總高與右側一致，欄位標題佔滿整格垂直空間 -->
           <div
-            class="will-change-transform min-w-max"
-            :style="{ transform: `translateX(${-leftTableHScrollPx}px)` }"
-          >
-            <Table :scroll-container="false" class="[&_thead_tr]:border-0">
-              <TableHeader>
-                <TableRow
-                  class="hover:bg-transparent border-0 bg-card"
-                  :style="{ height: HEADER_TOTAL_HEIGHT + 'px' }"
-                >
-                  <TableHead
-                    class="text-muted-foreground w-[4.5rem] shrink-0 align-middle px-2 text-center text-xs font-semibold tabular-nums leading-snug"
-                    >WBS</TableHead
-                  >
-                  <TableHead
-                    class="text-muted-foreground min-w-[8rem] align-middle px-3 text-xs font-semibold leading-snug"
-                    >任務名稱</TableHead
-                  >
-                  <TableHead
-                    class="text-muted-foreground w-[3.75rem] shrink-0 align-middle px-2 text-right text-xs font-semibold tabular-nums"
-                    >工期</TableHead
-                  >
-                  <TableHead
-                    class="text-muted-foreground w-[5.25rem] shrink-0 align-middle px-2 text-right text-xs font-semibold tabular-nums leading-tight"
-                    >開始時間</TableHead
-                  >
-                  <TableHead
-                    class="text-muted-foreground w-[5.25rem] shrink-0 align-middle px-2 text-right text-xs font-semibold tabular-nums leading-tight"
-                    >完成時間</TableHead
-                  >
-                  <TableHead
-                    class="text-muted-foreground w-[5.5rem] shrink-0 align-middle px-2 text-center text-xs font-semibold"
-                    >前置</TableHead
-                  >
-                  <TableHead class="w-10 shrink-0 align-middle px-1" aria-label="編輯排程" />
-                </TableRow>
-              </TableHeader>
-            </Table>
-          </div>
-        </div>
-        <div
-          class="relative z-0 w-2 shrink-0 border-r border-border bg-muted/50"
-          aria-hidden="true"
-        />
-        <!-- 圖表固定表頭：層級高於左欄，拖曳寬度時時間軸區塊視覺在上 -->
-        <div
-          class="relative z-10 flex min-w-0 flex-1 flex-col border-border bg-card/80 shadow-sm"
-          :style="{ minWidth: 0 }"
-        >
-          <div
-            class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-2 text-sm"
-            :style="{ height: TOOLBAR_ROW_HEIGHT + 'px', minHeight: TOOLBAR_ROW_HEIGHT + 'px' }"
-          >
-            <span v-if="visibleYearMonth" class="shrink-0 font-medium tabular-nums text-foreground">
-              {{ visibleYearMonth.year }}年 {{ visibleYearMonth.month }}月
-            </span>
-            <div class="flex items-center gap-3">
-              <Label class="text-muted-foreground shrink-0 text-xs">尺度</Label>
-              <Select
-                size="sm"
-                :model-value="scaleModeVal"
-                @update:model-value="(v) => emit('update:scaleMode', v as GanttScaleMode)"
-              >
-                <SelectTrigger class="h-7 w-[80px]">
-                  <SelectValue placeholder="尺度" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="opt in SCALE_OPTIONS" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <div class="flex items-center gap-0.5">
-                <Button variant="outline" size="icon" class="h-7 w-7" @click="emit('zoomIn')">
-                  <ZoomIn class="size-3.5" />
-                </Button>
-                <Button variant="outline" size="icon" class="h-7 w-7" @click="emit('zoomOut')">
-                  <ZoomOut class="size-3.5" />
-                </Button>
-              </div>
-              <div class="flex items-center rounded-md border border-border">
-                <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0 rounded-r-none" title="上一段" aria-label="上一段" @click="emit('goToPrevPeriod')">
-                  <ChevronLeft class="size-3.5" />
-                </Button>
-                <Button variant="ghost" size="sm" class="h-7 shrink-0 rounded-none border-x border-border px-2 text-xs" title="捲動至今天" @click="emit('goToToday')">
-                  <Calendar class="mr-1 size-3.5" />
-                  今天
-                </Button>
-                <Button variant="ghost" size="icon" class="h-7 w-7 shrink-0 rounded-l-none" title="下一段" aria-label="下一段" @click="emit('goToNextPeriod')">
-                  <ChevronRight class="size-3.5" />
-                </Button>
-              </div>
-            </div>
-          </div>
-          <!-- 里程碑＋時間軸：不獨立捲動（無水平捲軸），以 translate 與下方圖表 scrollLeft 對齊 -->
-          <div
-            class="flex min-w-0 flex-1 shrink-0 flex-col overflow-hidden border-b border-border"
-            :style="{ height: MILESTONE_ROW_HEIGHT + TIME_RULER_HEIGHT + 'px' }"
+            class="relative z-0 flex shrink-0 flex-col overflow-x-hidden border-r-2 border-border bg-card"
+            :style="{ width: leftWidthVal + 'px', minHeight: HEADER_TOTAL_HEIGHT + 'px' }"
+            @wheel="onLeftTableHeaderWheel"
           >
             <div
-              class="flex shrink-0 flex-col will-change-transform"
-              :style="{
-                width: chartWidthVal + 'px',
-                minWidth: chartWidthVal + 'px',
-                transform: `translate3d(${-scrollLeftVal}px, 0, 0)`,
-              }"
+              class="will-change-transform min-w-max"
+              :style="{ transform: `translateX(${-leftTableHScrollPx}px)` }"
             >
-              <div class="relative z-10 flex shrink-0 items-end justify-center overflow-visible border-b border-border bg-background/50" :style="{ height: MILESTONE_ROW_HEIGHT + 'px' }">
-                <template v-if="showMilestoneLines">
-                  <template v-for="ml in milestoneLines" :key="'mh-' + ml.id">
-                    <div class="pointer-events-none absolute top-0 bottom-0 w-px" :style="{ left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px', backgroundColor: ml.color ?? 'var(--chart-3)' }" />
-                    <div class="absolute z-[1] flex items-center gap-0.5 rounded-md border border-border bg-card px-1.5 py-0.5 shadow-md" :style="{ left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px', transform: 'translateX(-50%)', top: '2px' }" :title="ml.label">
-                      <Flag class="size-3 text-muted-foreground" />
-                      <span class="max-w-[4rem] truncate text-[10px] font-medium text-foreground">{{ ml.label }}</span>
-                    </div>
-                  </template>
-                </template>
-              </div>
-              <div
-                class="relative flex shrink-0 flex-col overflow-hidden bg-background"
-                :style="{ height: TIME_RULER_HEIGHT + 'px' }"
-              >
-                <template v-for="tick in timeRulerTicks" :key="'th-' + tick.dateMs">
-                  <div class="absolute top-0 bottom-0 border-r border-border" :style="{ left: toPx(tick.dateMs) + 'px', width: '1px' }" />
-                </template>
-                <div v-if="showTodayLine && todayInRange" class="pointer-events-none absolute top-0 bottom-0 w-px bg-primary" :style="{ left: Math.floor(toPx(todayMs)) + 'px' }" title="今日" />
-                <template v-if="showMilestoneLines">
-                  <div v-for="ml in milestoneLines" :key="'ruler-h-' + ml.id" class="pointer-events-none absolute top-0 bottom-0 w-px" :style="{ left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px', backgroundColor: ml.color ?? 'var(--chart-3)' }" />
-                </template>
-                <div
-                  v-for="tick in timeRulerTicks"
-                  :key="'tl-' + tick.dateMs"
-                  class="absolute inset-y-0 flex items-center justify-center overflow-hidden border-r border-border/70"
-                  :style="{ left: toPx(tick.dateMs) + 'px', width: pxPerDayVal + 'px' }"
-                  :class="
-                    tick.dateMs === todayMs
-                      ? 'bg-primary text-primary-foreground'
-                      : [0, 6].includes(new Date(tick.dateMs).getDay())
-                        ? 'bg-muted/60'
-                        : 'bg-background'
-                  "
-                >
-                  <div
-                    class="flex flex-col items-center justify-center gap-0.5 px-1 text-center leading-tight"
+              <Table :scroll-container="false" class="[&_thead_tr]:border-0">
+                <TableHeader>
+                  <TableRow
+                    class="hover:bg-transparent border-0 bg-card"
+                    :style="{ height: HEADER_TOTAL_HEIGHT + 'px' }"
                   >
-                    <span class="text-xs font-semibold tabular-nums">{{ tick.labelDay }}</span>
-                    <span
-                      class="text-[10px] font-medium tabular-nums"
-                      :class="tick.dateMs === todayMs ? 'text-primary-foreground/90' : 'text-muted-foreground'"
-                      >{{ tick.labelWeekday }}</span
+                    <TableHead
+                      class="text-muted-foreground w-[4.5rem] shrink-0 align-middle px-2 text-center text-xs font-semibold tabular-nums leading-snug"
+                      >WBS</TableHead
                     >
+                    <TableHead
+                      class="text-muted-foreground min-w-[8rem] align-middle px-3 text-xs font-semibold leading-snug"
+                      >任務名稱</TableHead
+                    >
+                    <TableHead
+                      class="text-muted-foreground w-[3.75rem] shrink-0 align-middle px-2 text-right text-xs font-semibold tabular-nums"
+                      >工期</TableHead
+                    >
+                    <TableHead
+                      class="text-muted-foreground w-[5.25rem] shrink-0 align-middle px-2 text-right text-xs font-semibold tabular-nums leading-tight"
+                      >開始時間</TableHead
+                    >
+                    <TableHead
+                      class="text-muted-foreground w-[5.25rem] shrink-0 align-middle px-2 text-right text-xs font-semibold tabular-nums leading-tight"
+                      >完成時間</TableHead
+                    >
+                    <TableHead
+                      class="text-muted-foreground w-[5.5rem] shrink-0 align-middle px-2 text-center text-xs font-semibold"
+                      >前置</TableHead
+                    >
+                    <TableHead class="w-10 shrink-0 align-middle px-1" aria-label="編輯排程" />
+                  </TableRow>
+                </TableHeader>
+              </Table>
+            </div>
+          </div>
+          <div
+            class="relative z-0 w-2 shrink-0 border-r border-border bg-muted/50"
+            aria-hidden="true"
+          />
+          <!-- 圖表固定表頭：層級高於左欄，拖曳寬度時時間軸區塊視覺在上 -->
+          <div
+            class="relative z-10 flex min-w-0 flex-1 flex-col border-border bg-card/80 shadow-sm"
+            :style="{ minWidth: 0 }"
+          >
+            <div
+              class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-2 text-sm"
+              :style="{ height: TOOLBAR_ROW_HEIGHT + 'px', minHeight: TOOLBAR_ROW_HEIGHT + 'px' }"
+            >
+              <span
+                v-if="visibleYearMonth"
+                class="shrink-0 font-medium tabular-nums text-foreground"
+              >
+                {{ visibleYearMonth.year }}年 {{ visibleYearMonth.month }}月
+              </span>
+              <div class="flex items-center gap-3">
+                <Label class="text-muted-foreground shrink-0 text-xs">尺度</Label>
+                <Select
+                  size="sm"
+                  :model-value="scaleModeVal"
+                  @update:model-value="(v) => emit('update:scaleMode', v as GanttScaleMode)"
+                >
+                  <SelectTrigger class="h-7 w-[80px]">
+                    <SelectValue placeholder="尺度" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in SCALE_OPTIONS" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <div class="flex items-center gap-0.5">
+                  <Button variant="outline" size="icon" class="h-7 w-7" @click="emit('zoomIn')">
+                    <ZoomIn class="size-3.5" />
+                  </Button>
+                  <Button variant="outline" size="icon" class="h-7 w-7" @click="emit('zoomOut')">
+                    <ZoomOut class="size-3.5" />
+                  </Button>
+                </div>
+                <div class="flex items-center rounded-md border border-border">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-7 w-7 shrink-0 rounded-r-none"
+                    title="上一段"
+                    aria-label="上一段"
+                    @click="emit('goToPrevPeriod')"
+                  >
+                    <ChevronLeft class="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="h-7 shrink-0 rounded-none border-x border-border px-2 text-xs"
+                    title="捲動至今天"
+                    @click="emit('goToToday')"
+                  >
+                    <Calendar class="mr-1 size-3.5" />
+                    今天
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-7 w-7 shrink-0 rounded-l-none"
+                    title="下一段"
+                    aria-label="下一段"
+                    @click="emit('goToNextPeriod')"
+                  >
+                    <ChevronRight class="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <!-- 里程碑＋時間軸：不獨立捲動（無水平捲軸），以 translate 與下方圖表 scrollLeft 對齊 -->
+            <div
+              class="flex min-w-0 flex-1 shrink-0 flex-col overflow-hidden border-b border-border"
+              :style="{ height: MILESTONE_ROW_HEIGHT + TIME_RULER_HEIGHT + 'px' }"
+            >
+              <div
+                class="flex shrink-0 flex-col will-change-transform"
+                :style="{
+                  width: chartWidthVal + 'px',
+                  minWidth: chartWidthVal + 'px',
+                  transform: `translate3d(${-scrollLeftVal}px, 0, 0)`,
+                }"
+              >
+                <div
+                  class="relative z-10 flex shrink-0 items-end justify-center overflow-visible border-b border-border bg-background/50"
+                  :style="{ height: MILESTONE_ROW_HEIGHT + 'px' }"
+                >
+                  <template v-if="showMilestoneLines">
+                    <template v-for="ml in milestoneLines" :key="'mh-' + ml.id">
+                      <div
+                        class="pointer-events-none absolute top-0 bottom-0 w-px"
+                        :style="{
+                          left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px',
+                          backgroundColor: ml.color ?? 'var(--chart-3)',
+                        }"
+                      />
+                      <div
+                        class="absolute z-[1] flex items-center gap-0.5 rounded-md border border-border bg-card px-1.5 py-0.5 shadow-md"
+                        :style="{
+                          left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px',
+                          transform: 'translateX(-50%)',
+                          top: '2px',
+                        }"
+                        :title="ml.label"
+                      >
+                        <Flag class="size-3 text-muted-foreground" />
+                        <span
+                          class="max-w-[4rem] truncate text-[10px] font-medium text-foreground"
+                          >{{ ml.label }}</span
+                        >
+                      </div>
+                    </template>
+                  </template>
+                </div>
+                <div
+                  class="relative flex shrink-0 flex-col overflow-hidden bg-background"
+                  :style="{ height: TIME_RULER_HEIGHT + 'px' }"
+                >
+                  <template v-for="tick in timeRulerTicks" :key="'th-' + tick.dateMs">
+                    <div
+                      class="absolute top-0 bottom-0 border-r border-border"
+                      :style="{ left: toPx(tick.dateMs) + 'px', width: '1px' }"
+                    />
+                  </template>
+                  <div
+                    v-if="showTodayLine && todayInRange"
+                    class="pointer-events-none absolute top-0 bottom-0 w-px bg-primary"
+                    :style="{ left: Math.floor(toPx(todayMs)) + 'px' }"
+                    title="今日"
+                  />
+                  <template v-if="showMilestoneLines">
+                    <div
+                      v-for="ml in milestoneLines"
+                      :key="'ruler-h-' + ml.id"
+                      class="pointer-events-none absolute top-0 bottom-0 w-px"
+                      :style="{
+                        left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px',
+                        backgroundColor: ml.color ?? 'var(--chart-3)',
+                      }"
+                    />
+                  </template>
+                  <div
+                    v-for="tick in timeRulerTicks"
+                    :key="'tl-' + tick.dateMs"
+                    class="absolute inset-y-0 flex items-center justify-center overflow-hidden border-r border-border/70"
+                    :style="{ left: toPx(tick.dateMs) + 'px', width: pxPerDayVal + 'px' }"
+                    :class="
+                      tick.dateMs === todayMs
+                        ? 'bg-primary text-primary-foreground'
+                        : [0, 6].includes(new Date(tick.dateMs).getDay())
+                          ? 'bg-muted/60'
+                          : 'bg-background'
+                    "
+                  >
+                    <div
+                      class="flex flex-col items-center justify-center gap-0.5 px-1 text-center leading-tight"
+                    >
+                      <span class="text-xs font-semibold tabular-nums">{{ tick.labelDay }}</span>
+                      <span
+                        class="text-[10px] font-medium tabular-nums"
+                        :class="
+                          tick.dateMs === todayMs
+                            ? 'text-primary-foreground/90'
+                            : 'text-muted-foreground'
+                        "
+                        >{{ tick.labelWeekday }}</span
+                      >
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 可垂直捲動區：唯一垂直捲軸；左表不可內層捲動（Table scrollContainer=false） -->
-      <div
-        ref="sharedScrollRef"
-        class="flex flex-1 min-h-0 min-w-0 flex-row items-start overflow-y-auto overflow-x-hidden"
-      >
-        <!-- 左表 body -->
+        <!-- 可垂直捲動區：唯一垂直捲軸；左表不可內層捲動（Table scrollContainer=false） -->
         <div
-          ref="leftColumnBodyRef"
-          class="shrink-0 self-start overflow-x-hidden border-r-2 border-border bg-card"
-          :style="{ width: leftWidthVal + 'px' }"
+          ref="sharedScrollRef"
+          class="flex flex-1 min-h-0 min-w-0 flex-row items-start overflow-y-auto overflow-x-hidden"
         >
+          <!-- 左表 body -->
           <div
-            ref="leftTableHScrollRef"
-            class="max-w-full overflow-x-auto overflow-y-visible"
-            @scroll.passive="onLeftTableBodyHScroll"
+            ref="leftColumnBodyRef"
+            class="shrink-0 self-start overflow-x-hidden border-r-2 border-border bg-card"
+            :style="{ width: leftWidthVal + 'px' }"
           >
-          <div class="min-w-max">
-          <Table :scroll-container="false">
-            <TableBody>
-              <!-- 有 leftColumnItems：收合結構 + 拖移（與 WBS 一致） -->
-              <template v-if="leftColumnItems?.length">
-                <template v-for="(item, flatIndex) in leftColumnItems" :key="item.task.id">
-                  <tr
-                    v-if="dropInsertBeforeIndex === flatIndex"
-                    class="pointer-events-none"
-                    aria-hidden="true"
-                  >
-                    <td colspan="7" class="h-0 p-0 align-top">
-                      <div
-                        class="mx-2 rounded-full bg-primary/90 h-0.5 min-h-[2px] shadow-sm"
-                        style="margin-top: -1px"
-                      />
-                    </td>
-                  </tr>
-                  <TableRow
-                    :data-flat-index="flatIndex"
-                    :class="{ 'opacity-40': draggingItemId === item.task.id }"
-                    :style="{ height: ROW_HEIGHT + 'px' }"
-                  >
-                    <TableCell
-                      class="whitespace-nowrap py-1 pr-1 text-xs tabular-nums text-muted-foreground"
-                    >
-                      {{ item.task.wbsCode ?? '—' }}
-                    </TableCell>
-                    <TableCell
-                      class="py-1 pr-2 align-middle"
-                      :style="{ paddingLeft: 8 + (item.task.depth ?? 0) * 28 + 'px' }"
-                    >
-                      <div class="flex min-w-0 items-center gap-0.5 truncate">
-                        <div
-                          v-if="item.hasChildren"
-                          role="button"
-                          tabindex="0"
-                          class="flex shrink-0 cursor-pointer items-center justify-center rounded p-0.5 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                          aria-label="展開或收合"
-                          @click="emit('toggleExpand', item.task.id)"
+            <div
+              ref="leftTableHScrollRef"
+              class="max-w-full overflow-x-auto overflow-y-visible"
+              @scroll.passive="onLeftTableBodyHScroll"
+            >
+              <div class="min-w-max">
+                <Table :scroll-container="false">
+                  <TableBody>
+                    <!-- 有 leftColumnItems：收合結構 + 拖移（與 WBS 一致） -->
+                    <template v-if="leftColumnItems?.length">
+                      <template v-for="(item, flatIndex) in leftColumnItems" :key="item.task.id">
+                        <tr
+                          v-if="dropInsertBeforeIndex === flatIndex"
+                          class="pointer-events-none"
+                          aria-hidden="true"
                         >
-                          <ChevronDown v-if="item.isExpanded" class="size-4" />
-                          <ChevronRight v-else class="size-4" />
-                        </div>
-                        <span v-else class="size-5 shrink-0" aria-hidden="true" />
-                        <div
-                          v-if="!item.task.isProjectRoot"
-                          role="button"
-                          tabindex="0"
-                          class="flex shrink-0 cursor-grab touch-none items-center justify-center rounded p-0.5 text-muted-foreground/60 hover:bg-muted/80 hover:text-foreground active:cursor-grabbing"
-                          aria-label="拖移排序"
-                          @pointerdown="onDragHandlePointerDown($event, item)"
+                          <td colspan="7" class="h-0 p-0 align-top">
+                            <div
+                              class="mx-2 rounded-full bg-primary/90 h-0.5 min-h-[2px] shadow-sm"
+                              style="margin-top: -1px"
+                            />
+                          </td>
+                        </tr>
+                        <TableRow
+                          :data-flat-index="flatIndex"
+                          :class="{ 'opacity-40': draggingItemId === item.task.id }"
+                          :style="{ height: ROW_HEIGHT + 'px' }"
                         >
-                          <GripVertical class="size-4" />
-                        </div>
-                        <span v-else class="size-5 shrink-0" aria-hidden="true" />
-                        <div class="min-w-0 flex-1 truncate">
+                          <TableCell
+                            class="whitespace-nowrap py-1 pr-1 text-xs tabular-nums text-muted-foreground"
+                          >
+                            {{ item.task.wbsCode ?? '—' }}
+                          </TableCell>
+                          <TableCell
+                            class="py-1 pr-2 align-middle"
+                            :style="{ paddingLeft: 8 + (item.task.depth ?? 0) * 28 + 'px' }"
+                          >
+                            <div class="flex min-w-0 items-center gap-0.5 truncate">
+                              <div
+                                v-if="item.hasChildren"
+                                role="button"
+                                tabindex="0"
+                                class="flex shrink-0 cursor-pointer items-center justify-center rounded p-0.5 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                aria-label="展開或收合"
+                                @click="emit('toggleExpand', item.task.id)"
+                              >
+                                <ChevronDown v-if="item.isExpanded" class="size-4" />
+                                <ChevronRight v-else class="size-4" />
+                              </div>
+                              <span v-else class="size-5 shrink-0" aria-hidden="true" />
+                              <div
+                                v-if="!item.task.isProjectRoot"
+                                role="button"
+                                tabindex="0"
+                                class="flex shrink-0 cursor-grab touch-none items-center justify-center rounded p-0.5 text-muted-foreground/60 hover:bg-muted/80 hover:text-foreground active:cursor-grabbing"
+                                aria-label="拖移排序"
+                                @pointerdown="onDragHandlePointerDown($event, item)"
+                              >
+                                <GripVertical class="size-4" />
+                              </div>
+                              <span v-else class="size-5 shrink-0" aria-hidden="true" />
+                              <div class="min-w-0 flex-1 truncate">
+                                <span class="truncate text-sm font-medium text-foreground">{{
+                                  item.task.name
+                                }}</span>
+                                <template v-if="showAssignee || showProgress">
+                                  <span class="text-muted-foreground ml-1 truncate text-xs">
+                                    <template v-if="showAssignee && item.task.assignee">{{
+                                      item.task.assignee
+                                    }}</template>
+                                    <template
+                                      v-if="
+                                        showAssignee &&
+                                        item.task.assignee &&
+                                        showProgress &&
+                                        item.task.progress != null
+                                      "
+                                    >
+                                      ·
+                                    </template>
+                                    <template v-if="showProgress && item.task.progress != null"
+                                      >{{ item.task.progress }}%</template
+                                    >
+                                  </span>
+                                </template>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
+                          >
+                            <template v-if="editingTaskId === item.task.id">
+                              <Input
+                                v-model.number="editDurationDays"
+                                type="number"
+                                min="1"
+                                class="h-7 w-16 text-right text-xs"
+                                @keydown.enter="submitEditSchedule"
+                                @keydown.escape="cancelEditSchedule"
+                              />
+                              <span class="ml-0.5 text-muted-foreground">天</span>
+                            </template>
+                            <template v-else>
+                              <span
+                                v-if="item.task.isRollup"
+                                class="text-muted-foreground text-xs"
+                                title="由子項彙總"
+                                >彙總</span
+                              >
+                              <span v-else class="text-muted-foreground"
+                                >{{ durationDays(item.task) }} 天</span
+                              >
+                            </template>
+                          </TableCell>
+                          <TableCell
+                            class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
+                          >
+                            <template v-if="editingTaskId === item.task.id">
+                              <Input
+                                v-model="editPlannedStart"
+                                type="date"
+                                class="h-7 w-[7.5rem] text-xs"
+                                @keydown.enter="submitEditSchedule"
+                                @keydown.escape="cancelEditSchedule"
+                              />
+                            </template>
+                            <template v-else>
+                              <span class="text-muted-foreground">{{
+                                formatDateShort(item.task.plannedStart)
+                              }}</span>
+                            </template>
+                          </TableCell>
+                          <TableCell
+                            class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums text-muted-foreground"
+                          >
+                            <template v-if="editingTaskId === item.task.id">
+                              {{ editEndDate || '—' }}
+                            </template>
+                            <template v-else>
+                              {{ formatDateShort(item.task.plannedEnd) }}
+                            </template>
+                          </TableCell>
+                          <TableCell class="py-1 pr-1 align-middle">
+                            <GanttPredecessorCell
+                              v-if="editingTaskId !== item.task.id && !item.task.isRollup"
+                              :task="item.task"
+                              :all-tasks="displayedTasks"
+                              @update:dependencies="
+                                (ids: string[]) => emit('update:dependencies', item.task.id, ids)
+                              "
+                            />
+                            <span
+                              v-else-if="item.task.isRollup"
+                              class="text-muted-foreground text-xs"
+                              title="前置僅適用於葉節點"
+                              >—</span
+                            >
+                            <span v-else class="text-muted-foreground text-xs">—</span>
+                          </TableCell>
+                          <TableCell class="w-9 py-1 px-0 align-middle text-center">
+                            <template v-if="editingTaskId === item.task.id">
+                              <div class="flex items-center justify-center gap-0.5">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="size-7 text-primary hover:text-primary"
+                                  aria-label="儲存"
+                                  :disabled="
+                                    !editPlannedStart ||
+                                    editDurationDays === '' ||
+                                    Number(editDurationDays) < 1
+                                  "
+                                  @click="submitEditSchedule"
+                                >
+                                  <Check class="size-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="size-7 text-muted-foreground hover:text-destructive"
+                                  aria-label="取消"
+                                  @click="cancelEditSchedule"
+                                >
+                                  <X class="size-3.5" />
+                                </Button>
+                              </div>
+                            </template>
+                            <Button
+                              v-else-if="!item.task.isRollup"
+                              variant="ghost"
+                              size="icon"
+                              class="size-7 text-muted-foreground hover:text-foreground"
+                              aria-label="編輯開始時間與工期"
+                              @click="openEditSchedule(item.task)"
+                            >
+                              <Pencil class="size-3.5" />
+                            </Button>
+                            <span v-else class="inline-block size-7" aria-hidden="true" />
+                          </TableCell>
+                        </TableRow>
+                      </template>
+                    </template>
+                    <!-- 無 leftColumnItems：僅任務列 -->
+                    <template v-else>
+                      <TableRow
+                        v-for="task in displayedTasks"
+                        :key="task.id"
+                        :style="{ height: ROW_HEIGHT + 'px' }"
+                      >
+                        <TableCell
+                          class="whitespace-nowrap py-1 pr-1 text-xs tabular-nums text-muted-foreground"
+                        >
+                          {{ task.wbsCode ?? '—' }}
+                        </TableCell>
+                        <TableCell
+                          class="py-1 pr-2"
+                          :style="{ paddingLeft: 12 + (task.depth ?? 0) * 28 + 'px' }"
+                        >
                           <span class="truncate text-sm font-medium text-foreground">{{
-                            item.task.name
+                            task.name
                           }}</span>
                           <template v-if="showAssignee || showProgress">
                             <span class="text-muted-foreground ml-1 truncate text-xs">
-                              <template v-if="showAssignee && item.task.assignee">{{
-                                item.task.assignee
+                              <template v-if="showAssignee && task.assignee">{{
+                                task.assignee
                               }}</template>
                               <template
                                 v-if="
                                   showAssignee &&
-                                  item.task.assignee &&
+                                  task.assignee &&
                                   showProgress &&
-                                  item.task.progress != null
+                                  task.progress != null
                                 "
                               >
                                 ·
                               </template>
-                              <template v-if="showProgress && item.task.progress != null"
-                                >{{ item.task.progress }}%</template
+                              <template v-if="showProgress && task.progress != null"
+                                >{{ task.progress }}%</template
                               >
                             </span>
                           </template>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell
-                      class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
-                    >
-                      <template v-if="editingTaskId === item.task.id">
-                        <Input
-                          v-model.number="editDurationDays"
-                          type="number"
-                          min="1"
-                          class="h-7 w-16 text-right text-xs"
-                          @keydown.enter="submitEditSchedule"
-                          @keydown.escape="cancelEditSchedule"
-                        />
-                        <span class="ml-0.5 text-muted-foreground">天</span>
-                      </template>
-                      <template v-else>
-                        <span
-                          v-if="item.task.isRollup"
-                          class="text-muted-foreground text-xs"
-                          title="由子項彙總"
-                          >彙總</span
+                        </TableCell>
+                        <TableCell
+                          class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
                         >
-                        <span v-else class="text-muted-foreground">{{ durationDays(item.task) }} 天</span>
-                      </template>
-                    </TableCell>
-                    <TableCell
-                      class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
-                    >
-                      <template v-if="editingTaskId === item.task.id">
-                        <Input
-                          v-model="editPlannedStart"
-                          type="date"
-                          class="h-7 w-[7.5rem] text-xs"
-                          @keydown.enter="submitEditSchedule"
-                          @keydown.escape="cancelEditSchedule"
-                        />
-                      </template>
-                      <template v-else>
-                        <span class="text-muted-foreground">{{ formatDateShort(item.task.plannedStart) }}</span>
-                      </template>
-                    </TableCell>
-                    <TableCell
-                      class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums text-muted-foreground"
-                    >
-                      <template v-if="editingTaskId === item.task.id">
-                        {{ editEndDate || '—' }}
-                      </template>
-                      <template v-else>
-                        {{ formatDateShort(item.task.plannedEnd) }}
-                      </template>
-                    </TableCell>
-                    <TableCell class="py-1 pr-1 align-middle">
-                      <GanttPredecessorCell
-                        v-if="editingTaskId !== item.task.id && !item.task.isRollup"
-                        :task="item.task"
-                        :all-tasks="displayedTasks"
-                        @update:dependencies="(ids: string[]) => emit('update:dependencies', item.task.id, ids)"
-                      />
-                      <span
-                        v-else-if="item.task.isRollup"
-                        class="text-muted-foreground text-xs"
-                        title="前置僅適用於葉節點"
-                        >—</span
-                      >
-                      <span v-else class="text-muted-foreground text-xs">—</span>
-                    </TableCell>
-                    <TableCell class="w-9 py-1 px-0 align-middle text-center">
-                      <template v-if="editingTaskId === item.task.id">
-                        <div class="flex items-center justify-center gap-0.5">
+                          <template v-if="editingTaskId === task.id">
+                            <Input
+                              v-model.number="editDurationDays"
+                              type="number"
+                              min="1"
+                              class="h-7 w-16 text-right text-xs"
+                              @keydown.enter="submitEditSchedule"
+                              @keydown.escape="cancelEditSchedule"
+                            />
+                            <span class="ml-0.5 text-muted-foreground">天</span>
+                          </template>
+                          <template v-else>
+                            <span
+                              v-if="task.isRollup"
+                              class="text-muted-foreground text-xs"
+                              title="由子項彙總"
+                              >彙總</span
+                            >
+                            <span v-else class="text-muted-foreground"
+                              >{{ durationDays(task) }} 天</span
+                            >
+                          </template>
+                        </TableCell>
+                        <TableCell
+                          class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
+                        >
+                          <template v-if="editingTaskId === task.id">
+                            <Input
+                              v-model="editPlannedStart"
+                              type="date"
+                              class="h-7 w-[7.5rem] text-xs"
+                              @keydown.enter="submitEditSchedule"
+                              @keydown.escape="cancelEditSchedule"
+                            />
+                          </template>
+                          <template v-else>
+                            <span class="text-muted-foreground">{{
+                              formatDateShort(task.plannedStart)
+                            }}</span>
+                          </template>
+                        </TableCell>
+                        <TableCell
+                          class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums text-muted-foreground"
+                        >
+                          <template v-if="editingTaskId === task.id">
+                            {{ editEndDate || '—' }}
+                          </template>
+                          <template v-else>
+                            {{ formatDateShort(task.plannedEnd) }}
+                          </template>
+                        </TableCell>
+                        <TableCell class="py-1 pr-1 align-middle">
+                          <GanttPredecessorCell
+                            v-if="editingTaskId !== task.id && !task.isRollup"
+                            :task="task"
+                            :all-tasks="displayedTasks"
+                            @update:dependencies="
+                              (ids: string[]) => emit('update:dependencies', task.id, ids)
+                            "
+                          />
+                          <span v-else-if="task.isRollup" class="text-muted-foreground text-xs"
+                            >—</span
+                          >
+                          <span v-else class="text-muted-foreground text-xs">—</span>
+                        </TableCell>
+                        <TableCell class="w-9 py-1 px-0 align-middle text-center">
+                          <template v-if="editingTaskId === task.id">
+                            <div class="flex items-center justify-center gap-0.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="size-7 text-primary hover:text-primary"
+                                aria-label="儲存"
+                                :disabled="
+                                  !editPlannedStart ||
+                                  editDurationDays === '' ||
+                                  Number(editDurationDays) < 1
+                                "
+                                @click="submitEditSchedule"
+                              >
+                                <Check class="size-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="size-7 text-muted-foreground hover:text-destructive"
+                                aria-label="取消"
+                                @click="cancelEditSchedule"
+                              >
+                                <X class="size-3.5" />
+                              </Button>
+                            </div>
+                          </template>
                           <Button
+                            v-else-if="!task.isRollup"
                             variant="ghost"
                             size="icon"
-                            class="size-7 text-primary hover:text-primary"
-                            aria-label="儲存"
-                            :disabled="!editPlannedStart || editDurationDays === '' || Number(editDurationDays) < 1"
-                            @click="submitEditSchedule"
+                            class="size-7 text-muted-foreground hover:text-foreground"
+                            aria-label="編輯開始時間與工期"
+                            @click="openEditSchedule(task)"
                           >
-                            <Check class="size-3.5" />
+                            <Pencil class="size-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="size-7 text-muted-foreground hover:text-destructive"
-                            aria-label="取消"
-                            @click="cancelEditSchedule"
-                          >
-                            <X class="size-3.5" />
-                          </Button>
-                        </div>
-                      </template>
-                      <Button
-                        v-else-if="!item.task.isRollup"
-                        variant="ghost"
-                        size="icon"
-                        class="size-7 text-muted-foreground hover:text-foreground"
-                        aria-label="編輯開始時間與工期"
-                        @click="openEditSchedule(item.task)"
-                      >
-                        <Pencil class="size-3.5" />
-                      </Button>
-                      <span v-else class="inline-block size-7" aria-hidden="true" />
-                    </TableCell>
-                  </TableRow>
-                </template>
-              </template>
-              <!-- 無 leftColumnItems：僅任務列 -->
-              <template v-else>
-                <TableRow
-                  v-for="task in displayedTasks"
-                  :key="task.id"
-                  :style="{ height: ROW_HEIGHT + 'px' }"
-                >
-                  <TableCell
-                    class="whitespace-nowrap py-1 pr-1 text-xs tabular-nums text-muted-foreground"
-                  >
-                    {{ task.wbsCode ?? '—' }}
-                  </TableCell>
-                  <TableCell
-                    class="py-1 pr-2"
-                    :style="{ paddingLeft: 12 + (task.depth ?? 0) * 28 + 'px' }"
-                  >
-                    <span class="truncate text-sm font-medium text-foreground">{{
-                      task.name
-                    }}</span>
-                    <template v-if="showAssignee || showProgress">
-                      <span class="text-muted-foreground ml-1 truncate text-xs">
-                        <template v-if="showAssignee && task.assignee">{{
-                          task.assignee
-                        }}</template>
-                        <template
-                          v-if="
-                            showAssignee && task.assignee && showProgress && task.progress != null
-                          "
-                        >
-                          ·
-                        </template>
-                        <template v-if="showProgress && task.progress != null"
-                          >{{ task.progress }}%</template
-                        >
-                      </span>
+                          <span v-else class="inline-block size-7" aria-hidden="true" />
+                        </TableCell>
+                      </TableRow>
                     </template>
-                  </TableCell>
-                  <TableCell
-                    class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
-                  >
-                    <template v-if="editingTaskId === task.id">
-                      <Input
-                        v-model.number="editDurationDays"
-                        type="number"
-                        min="1"
-                        class="h-7 w-16 text-right text-xs"
-                        @keydown.enter="submitEditSchedule"
-                        @keydown.escape="cancelEditSchedule"
-                      />
-                      <span class="ml-0.5 text-muted-foreground">天</span>
-                    </template>
-                    <template v-else>
-                      <span
-                        v-if="task.isRollup"
-                        class="text-muted-foreground text-xs"
-                        title="由子項彙總"
-                        >彙總</span
-                      >
-                      <span v-else class="text-muted-foreground">{{ durationDays(task) }} 天</span>
-                    </template>
-                  </TableCell>
-                  <TableCell
-                    class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums"
-                  >
-                    <template v-if="editingTaskId === task.id">
-                      <Input
-                        v-model="editPlannedStart"
-                        type="date"
-                        class="h-7 w-[7.5rem] text-xs"
-                        @keydown.enter="submitEditSchedule"
-                        @keydown.escape="cancelEditSchedule"
-                      />
-                    </template>
-                    <template v-else>
-                      <span class="text-muted-foreground">{{ formatDateShort(task.plannedStart) }}</span>
-                    </template>
-                  </TableCell>
-                  <TableCell
-                    class="whitespace-nowrap py-1 pr-2 text-right text-xs tabular-nums text-muted-foreground"
-                  >
-                    <template v-if="editingTaskId === task.id">
-                      {{ editEndDate || '—' }}
-                    </template>
-                    <template v-else>
-                      {{ formatDateShort(task.plannedEnd) }}
-                    </template>
-                  </TableCell>
-                  <TableCell class="py-1 pr-1 align-middle">
-                    <GanttPredecessorCell
-                      v-if="editingTaskId !== task.id && !task.isRollup"
-                      :task="task"
-                      :all-tasks="displayedTasks"
-                      @update:dependencies="(ids: string[]) => emit('update:dependencies', task.id, ids)"
-                    />
-                    <span
-                      v-else-if="task.isRollup"
-                      class="text-muted-foreground text-xs"
-                      >—</span
-                    >
-                    <span v-else class="text-muted-foreground text-xs">—</span>
-                  </TableCell>
-                  <TableCell class="w-9 py-1 px-0 align-middle text-center">
-                    <template v-if="editingTaskId === task.id">
-                      <div class="flex items-center justify-center gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="size-7 text-primary hover:text-primary"
-                          aria-label="儲存"
-                          :disabled="!editPlannedStart || editDurationDays === '' || Number(editDurationDays) < 1"
-                          @click="submitEditSchedule"
-                        >
-                          <Check class="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="size-7 text-muted-foreground hover:text-destructive"
-                          aria-label="取消"
-                          @click="cancelEditSchedule"
-                        >
-                          <X class="size-3.5" />
-                        </Button>
-                      </div>
-                    </template>
-                    <Button
-                      v-else-if="!task.isRollup"
-                      variant="ghost"
-                      size="icon"
-                      class="size-7 text-muted-foreground hover:text-foreground"
-                      aria-label="編輯開始時間與工期"
-                      @click="openEditSchedule(task)"
-                    >
-                      <Pencil class="size-3.5" />
-                    </Button>
-                    <span v-else class="inline-block size-7" aria-hidden="true" />
-                  </TableCell>
-                </TableRow>
-              </template>
-            </TableBody>
-          </Table>
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </div>
-          </div>
-        </div>
 
-        <!-- 可拖曳分隔線 -->
-        <div
-          class="flex w-2 shrink-0 cursor-col-resize flex-col border-r border-border bg-muted/80 hover:bg-primary/30 transition-colors items-center justify-center self-stretch"
-          :class="{ 'bg-primary/40 border-primary/60': resizing }"
-          :style="{ minHeight: ganttBodyHeightPx + 'px' }"
-          aria-label="拖曳調整左側寬度"
-          @mousedown="onResizePointerDown"
-        >
-          <div class="w-1 shrink-0 rounded-full bg-muted-foreground/40" style="height: 2rem" />
-        </div>
-
-        <!-- 圖表區：高度與左欄資料列總高一致，僅橫向捲 -->
-        <div
-          ref="scrollContainerRef"
-          class="relative min-w-0 flex-1 shrink-0 overflow-x-auto overflow-y-hidden bg-muted/40 [scrollbar-width:thin]"
-          :style="{ height: ganttBodyHeightPx + 'px', minHeight: ganttBodyHeightPx + 'px' }"
-          :class="{
-            'cursor-grab': !isPanning && !draggingTask && !dependencyDragFrom,
-            'cursor-grabbing': isPanning,
-            'cursor-crosshair': !!dependencyDragFrom,
-          }"
-          @wheel="onWheel"
-          @mousedown="onChartPointerDown"
-          @mousemove="onChartPointerMove"
-          @mouseup="onChartPointerUp"
-          @mouseleave="onChartPointerUp"
-        >
+          <!-- 可拖曳分隔線 -->
           <div
-            class="shrink-0"
-            :style="{ width: chartWidthVal + 'px', minWidth: chartWidthVal + 'px' }"
+            class="flex w-2 shrink-0 cursor-col-resize flex-col border-r border-border bg-muted/80 hover:bg-primary/30 transition-colors items-center justify-center self-stretch"
+            :class="{ 'bg-primary/40 border-primary/60': resizing }"
+            :style="{ minHeight: ganttBodyHeightPx + 'px' }"
+            aria-label="拖曳調整左側寬度"
+            @mousedown="onResizePointerDown"
+          >
+            <div class="w-1 shrink-0 rounded-full bg-muted-foreground/40" style="height: 2rem" />
+          </div>
+
+          <!-- 圖表區：高度與左欄資料列總高一致，僅橫向捲 -->
+          <div
+            ref="scrollContainerRef"
+            class="relative min-w-0 flex-1 shrink-0 overflow-x-auto overflow-y-hidden bg-muted/40 [scrollbar-width:thin]"
+            :style="{ height: ganttBodyHeightPx + 'px', minHeight: ganttBodyHeightPx + 'px' }"
+            :class="{
+              'cursor-grab': !isPanning && !draggingTask && !dependencyDragFrom,
+              'cursor-grabbing': isPanning,
+              'cursor-crosshair': !!dependencyDragFrom,
+            }"
+            @wheel="onWheel"
+            @mousedown="onChartPointerDown"
+            @mousemove="onChartPointerMove"
+            @mouseup="onChartPointerUp"
+            @mouseleave="onChartPointerUp"
           >
             <div
-              data-gantt-chart-area
-              class="relative overflow-x-hidden overflow-y-hidden"
-              :style="{
-                width: chartWidthVal + 'px',
-                minWidth: chartWidthVal + 'px',
-                height: displayedTasks.length * ROW_HEIGHT + 'px',
-              }"
+              class="shrink-0"
+              :style="{ width: chartWidthVal + 'px', minWidth: chartWidthVal + 'px' }"
             >
-              <!-- 六、日灰色背景 -->
               <div
-                v-for="(range, wi) in weekendRangesVal"
-                :key="'w-' + wi"
-                class="pointer-events-none absolute top-0 bottom-0 bg-muted/65"
+                data-gantt-chart-area
+                class="relative overflow-x-hidden overflow-y-hidden"
                 :style="{
-                  left: range.leftPx + 'px',
-                  width: range.widthPx + 'px',
+                  width: chartWidthVal + 'px',
+                  minWidth: chartWidthVal + 'px',
+                  height: displayedTasks.length * ROW_HEIGHT + 'px',
                 }"
-              />
-              <!-- 圖表區網格線（垂直＋水平皆加深） -->
-              <!-- 水平線：每列底邊 -->
-              <svg
-                class="pointer-events-none absolute left-0 top-0 border-0"
-                :width="chartWidthVal"
-                :height="displayedTasks.length * ROW_HEIGHT"
-                aria-hidden="true"
               >
-                <path
-                  :d="chartHorizontalGridPathD"
-                  fill="none"
-                  stroke="var(--muted-foreground)"
-                  stroke-opacity="0.25"
-                  stroke-width="1"
+                <!-- 六、日灰色背景 -->
+                <div
+                  v-for="(range, wi) in weekendRangesVal"
+                  :key="'w-' + wi"
+                  class="pointer-events-none absolute top-0 bottom-0 bg-muted/65"
+                  :style="{
+                    left: range.leftPx + 'px',
+                    width: range.widthPx + 'px',
+                  }"
                 />
-              </svg>
-              <!-- 垂直線：日/週＝每天一刀；月/年＝刻度線 -->
-              <svg
-                v-if="useDailyGrid"
-                class="pointer-events-none absolute left-0 top-0 border-0"
-                :width="chartWidthVal"
-                :height="displayedTasks.length * ROW_HEIGHT"
-                aria-hidden="true"
-              >
-                <path
-                  :d="dailyGridPathD"
-                  fill="none"
-                  stroke="var(--muted-foreground)"
-                  stroke-opacity="0.25"
-                  stroke-width="1"
+                <!-- 圖表區網格線（垂直＋水平皆加深） -->
+                <!-- 水平線：每列底邊 -->
+                <svg
+                  class="pointer-events-none absolute left-0 top-0 border-0"
+                  :width="chartWidthVal"
+                  :height="displayedTasks.length * ROW_HEIGHT"
+                  aria-hidden="true"
+                >
+                  <path
+                    :d="chartHorizontalGridPathD"
+                    fill="none"
+                    stroke="var(--muted-foreground)"
+                    stroke-opacity="0.25"
+                    stroke-width="1"
+                  />
+                </svg>
+                <!-- 垂直線：日/週＝每天一刀；月/年＝刻度線 -->
+                <svg
+                  v-if="useDailyGrid"
+                  class="pointer-events-none absolute left-0 top-0 border-0"
+                  :width="chartWidthVal"
+                  :height="displayedTasks.length * ROW_HEIGHT"
+                  aria-hidden="true"
+                >
+                  <path
+                    :d="dailyGridPathD"
+                    fill="none"
+                    stroke="var(--muted-foreground)"
+                    stroke-opacity="0.25"
+                    stroke-width="1"
+                  />
+                </svg>
+                <div v-else class="absolute inset-0 flex gap-0">
+                  <template v-for="(tick, i) in scaleTicksVal" :key="'g' + i">
+                    <div
+                      v-if="i > 0"
+                      class="absolute top-0 bottom-0 border-r-2 border-border"
+                      :style="{ left: toPx(tick.dateMs) + 'px', width: '2px' }"
+                    />
+                  </template>
+                </div>
+
+                <!-- 今日線：與表頭一致，在「今天」格子左邊界 -->
+                <div
+                  v-if="showTodayLine && todayInRange"
+                  class="pointer-events-none absolute top-0 bottom-0 w-px bg-primary"
+                  :style="{ left: Math.floor(toPx(todayMs)) + 'px' }"
+                  title="今日"
                 />
-              </svg>
-              <div v-else class="absolute inset-0 flex gap-0">
-                <template v-for="(tick, i) in scaleTicksVal" :key="'g' + i">
+
+                <!-- 任務條（依賴線畫在上方，箭頭與線段才不會被擋） -->
+                <div
+                  v-for="(task, idx) in displayedTasks"
+                  :key="task.id"
+                  class="absolute left-0 flex items-center"
+                  :style="{
+                    top: idx * ROW_HEIGHT + 'px',
+                    height: ROW_HEIGHT + 'px',
+                    width: chartWidthVal + 'px',
+                  }"
+                >
+                  <!-- 計劃條（底色） -->
                   <div
-                    v-if="i > 0"
-                    class="absolute top-0 bottom-0 border-r-2 border-border"
-                    :style="{ left: toPx(tick.dateMs) + 'px', width: '2px' }"
+                    v-if="showActualPlan"
+                    data-gantt-bar
+                    class="absolute h-6 rounded-md border border-border opacity-60"
+                    :class="[
+                      task.isRollup
+                        ? 'border-dashed bg-muted/40'
+                        : showCriticalPath && criticalPathMapVal.get(task.id)?.isCritical
+                          ? 'bg-destructive/20'
+                          : 'bg-muted',
+                    ]"
+                    :style="{
+                      left: toPx(parseDate(task.plannedStart)) + 'px',
+                      width: inclusiveBarWidthPx(task.plannedStart, task.plannedEnd) + 'px',
+                    }"
+                    @mousedown.stop
+                  />
+                  <!-- 實際／計劃條（主條）：左／右緣調整時程；右側內緣拉關聯線（MS Project 式） -->
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <div
+                        data-gantt-bar
+                        class="group absolute h-6 rounded-md border border-border select-none outline-none"
+                        :class="[
+                          task.isRollup
+                            ? 'cursor-default border-dashed bg-muted/50'
+                            : showCriticalPath && criticalPathMapVal.get(task.id)?.isCritical
+                              ? 'bg-destructive'
+                              : 'bg-primary',
+                          !task.isRollup &&
+                            (task.isMilestone
+                              ? 'cursor-grab active:cursor-grabbing'
+                              : 'cursor-grab active:cursor-grabbing'),
+                        ]"
+                        :style="{
+                          left: toPx(parseDate(task.actualStart ?? task.plannedStart)) + 'px',
+                          width:
+                            (task.isMilestone
+                              ? 0
+                              : inclusiveBarWidthPx(
+                                  task.actualStart ?? task.plannedStart,
+                                  task.actualEnd ?? task.plannedEnd
+                                )) + 'px',
+                          minWidth: task.isMilestone ? '14px' : undefined,
+                        }"
+                        @mousedown="
+                          (e: MouseEvent) =>
+                            onBarPointerDown(e, task, e.currentTarget as HTMLElement)
+                        "
+                      >
+                        <!-- 左緣：調整開始日 -->
+                        <span
+                          v-if="!task.isMilestone && !task.isRollup"
+                          class="absolute left-0 top-0 bottom-0 z-[1] w-[14px] min-w-[14px] cursor-ew-resize rounded-l-md ring-inset hover:bg-primary-foreground/25"
+                          title="拖曳左緣調整開始日"
+                          aria-label="調整開始日"
+                        />
+                        <!-- 右側內緣：由此拖出關聯線至其他任務 -->
+                        <span
+                          v-if="!task.isMilestone && !task.isRollup"
+                          class="absolute top-0 bottom-0 z-[1] w-6 min-w-[24px] cursor-crosshair hover:bg-primary-foreground/20"
+                          style="right: 14px"
+                          title="由此拖曳至其他任務列以建立前置關係"
+                          aria-label="建立前置連線"
+                        />
+                        <!-- 最右緣：調整完成日 -->
+                        <span
+                          v-if="!task.isMilestone && !task.isRollup"
+                          class="absolute right-0 top-0 bottom-0 z-[1] w-[14px] min-w-[14px] cursor-ew-resize rounded-r-md ring-inset hover:bg-primary-foreground/25"
+                          title="拖曳右緣調整完成日"
+                          aria-label="調整完成日"
+                        />
+                        <!-- Hover 時顯示連接線箭頭（參考 MS Project） -->
+                        <div
+                          v-if="!task.isMilestone && !task.isRollup"
+                          class="pointer-events-none absolute top-1/2 z-0 flex -translate-y-1/2 items-center opacity-0 transition-opacity group-hover:opacity-100"
+                          style="right: 26px"
+                          aria-hidden="true"
+                        >
+                          <svg
+                            width="20"
+                            height="10"
+                            class="text-foreground drop-shadow-sm"
+                            viewBox="0 0 20 10"
+                          >
+                            <line
+                              x1="0"
+                              y1="5"
+                              x2="11"
+                              y2="5"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            />
+                            <path d="M11 1.5 L18 5 L11 8.5 Z" fill="currentColor" />
+                          </svg>
+                        </div>
+                        <!-- 里程碑：菱形點 -->
+                        <template v-if="task.isMilestone">
+                          <div
+                            class="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-2 border-primary-foreground bg-primary"
+                            :class="
+                              showCriticalPath && criticalPathMapVal.get(task.id)?.isCritical
+                                ? 'border-destructive-foreground bg-destructive'
+                                : ''
+                            "
+                          />
+                        </template>
+                        <!-- 進度％ 顯示在條內 -->
+                        <template v-else-if="showProgress && task.progress > 0">
+                          <div
+                            class="absolute inset-y-0 left-0 rounded-l-md bg-primary-foreground/30"
+                            :style="{ width: task.progress + '%' }"
+                          />
+                        </template>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      class="max-w-xs border-border bg-popover px-3 py-2 text-popover-foreground shadow-md"
+                      :side-offset="6"
+                    >
+                      <div class="space-y-0.5 text-left text-xs">
+                        <p
+                          v-for="(line, li) in ganttBarTooltipLines(task)"
+                          :key="li"
+                          :class="li === 0 ? 'text-[10px] font-medium text-muted-foreground' : ''"
+                        >
+                          {{ line }}
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                  <!-- 負責人：顯示在任務條後方（圖表區） -->
+                  <div
+                    v-if="showAssignee && task.assignee"
+                    class="pointer-events-none absolute top-0 flex h-6 items-center overflow-hidden"
+                    :style="{
+                      left: inclusiveBarRightPx(task.actualEnd ?? task.plannedEnd) + 6 + 'px',
+                      maxWidth:
+                        Math.max(
+                          0,
+                          chartWidthVal -
+                            inclusiveBarRightPx(task.actualEnd ?? task.plannedEnd) -
+                            12
+                        ) + 'px',
+                    }"
+                  >
+                    <span class="truncate pl-1 text-xs text-muted-foreground">{{
+                      task.assignee
+                    }}</span>
+                  </div>
+                </div>
+
+                <svg
+                  class="pointer-events-none absolute left-0 top-0 z-20 overflow-visible"
+                  :width="chartWidthVal"
+                  :height="displayedTasks.length * ROW_HEIGHT"
+                >
+                  <defs>
+                    <marker
+                      id="gantt-arrow"
+                      markerWidth="8"
+                      markerHeight="8"
+                      refX="6"
+                      refY="4"
+                      orient="auto"
+                      markerUnits="userSpaceOnUse"
+                    >
+                      <path d="M0,0 L8,4 L0,8 Z" fill="var(--muted-foreground)" />
+                    </marker>
+                    <marker
+                      id="gantt-arrow-critical"
+                      markerWidth="8"
+                      markerHeight="8"
+                      refX="6"
+                      refY="4"
+                      orient="auto"
+                      markerUnits="userSpaceOnUse"
+                    >
+                      <path d="M0,0 L8,4 L0,8 Z" fill="var(--destructive)" />
+                    </marker>
+                    <marker
+                      id="gantt-arrow-preview"
+                      markerWidth="8"
+                      markerHeight="8"
+                      refX="6"
+                      refY="4"
+                      orient="auto"
+                      markerUnits="userSpaceOnUse"
+                    >
+                      <path d="M0,0 L8,4 L0,8 Z" fill="var(--primary)" />
+                    </marker>
+                  </defs>
+                  <path
+                    v-for="seg in dependencyPaths"
+                    :key="seg.key"
+                    :d="seg.pathD"
+                    fill="none"
+                    :stroke="
+                      showCriticalPath && seg.isCritical
+                        ? 'var(--destructive)'
+                        : 'var(--muted-foreground)'
+                    "
+                    stroke-width="showCriticalPath && seg.isCritical ? 2 : 1.75"
+                    :stroke-dasharray="showCriticalPath && seg.isCritical ? 'none' : '5 3'"
+                    stroke-linecap="square"
+                    stroke-linejoin="miter"
+                    :marker-end="
+                      seg.arrow
+                        ? showCriticalPath && seg.isCritical
+                          ? 'url(#gantt-arrow-critical)'
+                          : 'url(#gantt-arrow)'
+                        : 'none'
+                    "
+                  />
+                  <path
+                    v-if="dependencyPreviewPathD"
+                    :d="dependencyPreviewPathD"
+                    fill="none"
+                    stroke="var(--primary)"
+                    stroke-width="2"
+                    stroke-dasharray="6 3"
+                    stroke-linecap="square"
+                    marker-end="url(#gantt-arrow-preview)"
+                  />
+                </svg>
+                <!-- 使用者里程碑線＋標籤：最上層，不被任務條／依賴線蓋住 -->
+                <template v-if="showMilestoneLines">
+                  <div
+                    v-for="ml in milestoneLines"
+                    :key="'chart-ml-' + ml.id"
+                    class="pointer-events-none absolute inset-y-0 z-30 w-px"
+                    :style="{
+                      left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px',
+                      backgroundColor: ml.color ?? 'var(--chart-3)',
+                    }"
+                    :title="ml.label"
                   />
                 </template>
               </div>
-
-            <!-- 今日線：與表頭一致，在「今天」格子左邊界 -->
-            <div
-              v-if="showTodayLine && todayInRange"
-              class="pointer-events-none absolute top-0 bottom-0 w-px bg-primary"
-              :style="{ left: Math.floor(toPx(todayMs)) + 'px' }"
-              title="今日"
-            />
-
-              <!-- 任務條（依賴線畫在上方，箭頭與線段才不會被擋） -->
-              <div
-                v-for="(task, idx) in displayedTasks"
-                :key="task.id"
-                class="absolute left-0 flex items-center"
-                :style="{
-                  top: idx * ROW_HEIGHT + 'px',
-                  height: ROW_HEIGHT + 'px',
-                  width: chartWidthVal + 'px',
-                }"
-              >
-                <!-- 計劃條（底色） -->
-                <div
-                  v-if="showActualPlan"
-                  data-gantt-bar
-                  class="absolute h-6 rounded-md border border-border opacity-60"
-                  :class="[
-                    task.isRollup
-                      ? 'border-dashed bg-muted/40'
-                      : showCriticalPath && criticalPathMapVal.get(task.id)?.isCritical
-                        ? 'bg-destructive/20'
-                        : 'bg-muted',
-                  ]"
-                  :style="{
-                    left: toPx(parseDate(task.plannedStart)) + 'px',
-                    width: inclusiveBarWidthPx(task.plannedStart, task.plannedEnd) + 'px',
-                  }"
-                  @mousedown.stop
-                />
-                <!-- 實際／計劃條（主條）：左／右緣調整時程；右側內緣拉關聯線（MS Project 式） -->
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <div
-                      data-gantt-bar
-                      class="group absolute h-6 rounded-md border border-border select-none outline-none"
-                      :class="[
-                        task.isRollup
-                          ? 'cursor-default border-dashed bg-muted/50'
-                          : showCriticalPath && criticalPathMapVal.get(task.id)?.isCritical
-                            ? 'bg-destructive'
-                            : 'bg-primary',
-                        !task.isRollup &&
-                          (task.isMilestone
-                            ? 'cursor-grab active:cursor-grabbing'
-                            : 'cursor-grab active:cursor-grabbing'),
-                      ]"
-                      :style="{
-                        left: toPx(parseDate(task.actualStart ?? task.plannedStart)) + 'px',
-                        width:
-                          (task.isMilestone
-                            ? 0
-                            : inclusiveBarWidthPx(
-                                task.actualStart ?? task.plannedStart,
-                                task.actualEnd ?? task.plannedEnd
-                              )) + 'px',
-                        minWidth: task.isMilestone ? '14px' : undefined,
-                      }"
-                      @mousedown="
-                        (e: MouseEvent) => onBarPointerDown(e, task, (e.currentTarget as HTMLElement))
-                      "
-                    >
-                  <!-- 左緣：調整開始日 -->
-                  <span
-                    v-if="!task.isMilestone && !task.isRollup"
-                    class="absolute left-0 top-0 bottom-0 z-[1] w-[14px] min-w-[14px] cursor-ew-resize rounded-l-md ring-inset hover:bg-primary-foreground/25"
-                    title="拖曳左緣調整開始日"
-                    aria-label="調整開始日"
-                  />
-                  <!-- 右側內緣：由此拖出關聯線至其他任務 -->
-                  <span
-                    v-if="!task.isMilestone && !task.isRollup"
-                    class="absolute top-0 bottom-0 z-[1] w-6 min-w-[24px] cursor-crosshair hover:bg-primary-foreground/20"
-                    style="right: 14px"
-                    title="由此拖曳至其他任務列以建立前置關係"
-                    aria-label="建立前置連線"
-                  />
-                  <!-- 最右緣：調整完成日 -->
-                  <span
-                    v-if="!task.isMilestone && !task.isRollup"
-                    class="absolute right-0 top-0 bottom-0 z-[1] w-[14px] min-w-[14px] cursor-ew-resize rounded-r-md ring-inset hover:bg-primary-foreground/25"
-                    title="拖曳右緣調整完成日"
-                    aria-label="調整完成日"
-                  />
-                  <!-- Hover 時顯示連接線箭頭（參考 MS Project） -->
-                  <div
-                    v-if="!task.isMilestone && !task.isRollup"
-                    class="pointer-events-none absolute top-1/2 z-0 flex -translate-y-1/2 items-center opacity-0 transition-opacity group-hover:opacity-100"
-                    style="right: 26px"
-                    aria-hidden="true"
-                  >
-                    <svg
-                      width="20"
-                      height="10"
-                      class="text-foreground drop-shadow-sm"
-                      viewBox="0 0 20 10"
-                    >
-                      <line
-                        x1="0"
-                        y1="5"
-                        x2="11"
-                        y2="5"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      />
-                      <path d="M11 1.5 L18 5 L11 8.5 Z" fill="currentColor" />
-                    </svg>
-                  </div>
-                  <!-- 里程碑：菱形點 -->
-                  <template v-if="task.isMilestone">
-                    <div
-                      class="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-2 border-primary-foreground bg-primary"
-                      :class="
-                        showCriticalPath && criticalPathMapVal.get(task.id)?.isCritical
-                          ? 'border-destructive-foreground bg-destructive'
-                          : ''
-                      "
-                    />
-                  </template>
-                  <!-- 進度％ 顯示在條內 -->
-                  <template v-else-if="showProgress && task.progress > 0">
-                    <div
-                      class="absolute inset-y-0 left-0 rounded-l-md bg-primary-foreground/30"
-                      :style="{ width: task.progress + '%' }"
-                    />
-                  </template>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="top"
-                    class="max-w-xs border-border bg-popover px-3 py-2 text-popover-foreground shadow-md"
-                    :side-offset="6"
-                  >
-                    <div class="space-y-0.5 text-left text-xs">
-                      <p
-                        v-for="(line, li) in ganttBarTooltipLines(task)"
-                        :key="li"
-                        :class="li === 0 ? 'text-[10px] font-medium text-muted-foreground' : ''"
-                      >
-                        {{ line }}
-                      </p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-
-              <svg
-                class="pointer-events-none absolute left-0 top-0 z-20 overflow-visible"
-                :width="chartWidthVal"
-                :height="displayedTasks.length * ROW_HEIGHT"
-              >
-                <defs>
-                  <marker
-                    id="gantt-arrow"
-                    markerWidth="8"
-                    markerHeight="8"
-                    refX="6"
-                    refY="4"
-                    orient="auto"
-                    markerUnits="userSpaceOnUse"
-                  >
-                    <path d="M0,0 L8,4 L0,8 Z" fill="var(--muted-foreground)" />
-                  </marker>
-                  <marker
-                    id="gantt-arrow-preview"
-                    markerWidth="8"
-                    markerHeight="8"
-                    refX="6"
-                    refY="4"
-                    orient="auto"
-                    markerUnits="userSpaceOnUse"
-                  >
-                    <path d="M0,0 L8,4 L0,8 Z" fill="var(--primary)" />
-                  </marker>
-                </defs>
-                <path
-                  v-for="seg in dependencyPaths"
-                  :key="seg.key"
-                  :d="seg.pathD"
-                  fill="none"
-                  stroke="var(--muted-foreground)"
-                  stroke-width="1.75"
-                  stroke-dasharray="5 3"
-                  stroke-linecap="square"
-                  stroke-linejoin="miter"
-                  :marker-end="seg.arrow ? 'url(#gantt-arrow)' : 'none'"
-                />
-                <path
-                  v-if="dependencyPreviewPathD"
-                  :d="dependencyPreviewPathD"
-                  fill="none"
-                  stroke="var(--primary)"
-                  stroke-width="2"
-                  stroke-dasharray="6 3"
-                  stroke-linecap="square"
-                  marker-end="url(#gantt-arrow-preview)"
-                />
-              </svg>
-              <!-- 使用者里程碑線＋標籤：最上層，不被任務條／依賴線蓋住 -->
-              <template v-if="showMilestoneLines">
-                <div
-                  v-for="ml in milestoneLines"
-                  :key="'chart-ml-' + ml.id"
-                  class="pointer-events-none absolute inset-y-0 z-30 w-px"
-                  :style="{
-                    left: toPx(new Date(ml.date).setHours(0, 0, 0, 0)) + 'px',
-                    backgroundColor: ml.color ?? 'var(--chart-3)',
-                  }"
-                  :title="ml.label"
-                />
-              </template>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
   </TooltipProvider>
 </template>

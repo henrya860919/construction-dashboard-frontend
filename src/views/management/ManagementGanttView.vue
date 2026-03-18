@@ -317,18 +317,40 @@ async function moveNodeToFlatIndex(nodeId: string, insertBeforeIndex: number) {
   }
 }
 
-async function fetchWbs() {
+function patchWbsNodeSchedule(
+  nodes: WbsNode[],
+  nodeId: string,
+  startDate: string,
+  durationDays: number
+): WbsNode[] {
+  const endDate = wbsEndDateInclusive(startDate, durationDays)
+  return nodes.map((node) => {
+    if (node.id === nodeId) {
+      return { ...node, startDate, durationDays, endDate }
+    }
+    if (node.children?.length) {
+      return {
+        ...node,
+        children: patchWbsNodeSchedule(node.children, nodeId, startDate, durationDays),
+      }
+    }
+    return node
+  })
+}
+
+async function fetchWbs(options?: { silent?: boolean }) {
   const id = projectId.value
   if (!id) return
-  loading.value = true
+  const silent = options?.silent === true
+  if (!silent) loading.value = true
   try {
     const tree = await listProjectWbs(id)
     wbsTree.value = tree
     expandAll()
   } catch {
-    wbsTree.value = []
+    if (!silent) wbsTree.value = []
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
@@ -341,7 +363,7 @@ async function runFsSyncLeaves() {
     taskDependencies.value,
     defaultStart,
     updateWbsNode,
-    fetchWbs
+    async () => fetchWbs({ silent: true })
   )
 }
 
@@ -435,12 +457,12 @@ async function updateTask(updated: GanttTask) {
   const durationDays = wbsDurationInclusiveDays(updated.plannedStart, updated.plannedEnd)
   try {
     await updateWbsNode(id, updated.id, { startDate, durationDays })
-    await fetchWbs()
+    wbsTree.value = patchWbsNodeSchedule(wbsTree.value, updated.id, startDate, durationDays)
     if (hasAnyTaskDependencies(taskDependencies.value)) {
       await runFsSyncLeaves()
     }
   } catch {
-    // 可選：toast 錯誤
+    await fetchWbs({ silent: true })
   }
 }
 
@@ -473,6 +495,25 @@ function setScaleMode(v: GanttScaleMode) {
   scaleMode.value = v
 }
 
+function setShowActualPlan(v: boolean) {
+  showActualPlan.value = v
+}
+function setShowCriticalPath(v: boolean) {
+  showCriticalPath.value = v
+}
+function setShowTodayLine(v: boolean) {
+  showTodayLine.value = v
+}
+function setShowMilestoneLines(v: boolean) {
+  showMilestoneLines.value = v
+}
+function setShowAssignee(v: boolean) {
+  showAssignee.value = v
+}
+function setShowProgress(v: boolean) {
+  showProgress.value = v
+}
+
 /** 以當前可見範圍的「中間時間」為中心縮放，縮放後該時間仍保持在視窗中央 */
 function zoomInAroundCenter() {
   const chart = ganttChartRef.value
@@ -501,21 +542,23 @@ function zoomOutAroundCenter() {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <header class="flex flex-wrap items-center justify-between gap-4">
+  <div
+    class="flex h-[calc(100dvh-11.5rem)] min-h-[20rem] flex-col gap-3 overflow-hidden md:h-[calc(100dvh-10.25rem)] md:gap-4"
+  >
+    <header class="flex shrink-0 flex-wrap items-center justify-between gap-4">
       <h1 class="text-xl font-semibold text-foreground">甘特圖</h1>
     </header>
-    <p class="text-xs text-muted-foreground max-w-3xl">
+    <p class="max-w-3xl shrink-0 text-xs text-muted-foreground">
       <strong class="text-foreground">虛線橫條</strong>為父層由子項彙總之區間，不可拖曳或改期；排程與前置請在<strong
         class="text-foreground"
         >葉節點</strong
       >（無子項）操作。
     </p>
 
-    <p v-if="loading" class="text-sm text-muted-foreground">載入 WBS…</p>
+    <p v-if="loading" class="shrink-0 text-sm text-muted-foreground">載入 WBS…</p>
 
     <!-- 第二行：開關與新增里程碑靠右（年月、尺度、縮放、今天已移至圖表時間軸上方） -->
-    <div class="flex flex-wrap items-center justify-end">
+    <div class="flex shrink-0 flex-wrap items-center justify-end">
       <GanttToolbar
         :show-actual-plan="showActualPlan"
         :show-critical-path="showCriticalPath"
@@ -523,21 +566,22 @@ function zoomOutAroundCenter() {
         :show-milestone-lines="showMilestoneLines"
         :show-assignee="showAssignee"
         :show-progress="showProgress"
-        @update:show-actual-plan="(v: boolean) => (showActualPlan = v)"
-        @update:show-critical-path="(v: boolean) => (showCriticalPath = v)"
-        @update:show-today-line="(v: boolean) => (showTodayLine = v)"
-        @update:show-milestone-lines="(v: boolean) => (showMilestoneLines = v)"
-        @update:show-assignee="(v: boolean) => (showAssignee = v)"
-        @update:show-progress="(v: boolean) => (showProgress = v)"
+        @update:show-actual-plan="setShowActualPlan"
+        @update:show-critical-path="setShowCriticalPath"
+        @update:show-today-line="setShowTodayLine"
+        @update:show-milestone-lines="setShowMilestoneLines"
+        @update:show-assignee="setShowAssignee"
+        @update:show-progress="setShowProgress"
         @add-milestone-line="addMilestoneLine"
       />
     </div>
 
-    <!-- 甘特圖固定寬度容器，橫向捲動僅發生在圖表區內 -->
-    <div class="min-w-0 overflow-hidden">
+    <!-- 佔滿主內容剩餘高度，底部不留空 -->
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <GanttChart
         ref="ganttChartRef"
         v-show="!loading"
+        class="min-h-0 flex-1"
         :tasks="tasks"
         :left-column-items="leftColumnItems"
         :date-to-px="gantt.dateToPx"
@@ -570,6 +614,9 @@ function zoomOutAroundCenter() {
         @update:task="updateTask"
         @update:dependencies="updateDependencies"
         @add-dependency="addDependency"
+        @update:show-critical-path="setShowCriticalPath"
+        @update:show-milestone-lines="setShowMilestoneLines"
+        @update:show-assignee="setShowAssignee"
       />
     </div>
 

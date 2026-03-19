@@ -30,7 +30,7 @@ watch(
       :open="sidebarStore.mobileOpen"
       @update:open="(v: boolean) => sidebarStore.setMobileOpen(v)"
     >
-      <SheetContent side="left" class="w-64 p-0">
+      <SheetContent side="left" class="w-[210px] p-0">
         <div class="flex h-full flex-col pt-6">
           <AppSidebar :collapsed="false" />
         </div>
@@ -40,7 +40,7 @@ watch(
     <!-- 桌面：左側固定側欄 -->
     <aside
       class="hidden border-r border-border bg-card md:block md:shrink-0 md:transition-[width]"
-      :class="sidebarStore.collapsed ? 'md:w-14' : 'md:w-56'"
+      :class="sidebarStore.collapsed ? 'md:w-14' : 'md:w-[210px]'"
     >
       <div class="flex h-full w-full flex-col">
         <AppSidebar :collapsed="sidebarStore.collapsed" />

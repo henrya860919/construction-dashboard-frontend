@@ -72,6 +72,14 @@ export const ROUTE_PATH = {
   PROJECT_MANAGEMENT_GANTT: '/management/gantt',
   PROJECT_MANAGEMENT_OVERVIEW: '/management/overview',
 
+  /** 施工管理：自主檢查、施工日誌、缺失改善 */
+  PROJECT_CONSTRUCTION_SELF_CHECK: '/construction/self-check',
+  PROJECT_CONSTRUCTION_DIARY: '/construction/diary',
+  PROJECT_CONSTRUCTION_DEFECTS: '/construction/defects',
+  /** 報修管理 */
+  PROJECT_REPAIR_OVERVIEW: '/repair/overview',
+  PROJECT_REPAIR_RECORDS: '/repair/records',
+
   /** 單租後台（租戶自管） */
   ADMIN: '/admin',
   ADMIN_TENANT_INFO: '/admin/tenant-info',
@@ -137,6 +145,11 @@ export const ROUTE_NAME = {
   PROJECT_MANAGEMENT_SCHEDULE: 'project-management-schedule',
   PROJECT_MANAGEMENT_GANTT: 'project-management-gantt',
   PROJECT_MANAGEMENT_OVERVIEW: 'project-management-overview',
+  PROJECT_CONSTRUCTION_SELF_CHECK: 'project-construction-self-check',
+  PROJECT_CONSTRUCTION_DIARY: 'project-construction-diary',
+  PROJECT_CONSTRUCTION_DEFECTS: 'project-construction-defects',
+  PROJECT_REPAIR_OVERVIEW: 'project-repair-overview',
+  PROJECT_REPAIR_RECORDS: 'project-repair-records',
   ADMIN: 'admin',
   ADMIN_TENANT_INFO: 'admin-tenant-info',
   ADMIN_PROJECTS: 'admin-projects',

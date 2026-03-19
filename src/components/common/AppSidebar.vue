@@ -7,10 +7,10 @@ import {
   FolderKanban,
   FolderOpen,
   ClipboardCheck,
-  Table2,
   Building2,
   Activity,
   AlertTriangle,
+  AlertCircle,
   Cpu,
   Image,
   FileText,
@@ -21,6 +21,7 @@ import {
   CalendarClock,
   Flag,
   ArrowLeft,
+  ChevronRight,
   Users,
   Settings,
   ShieldCheck,
@@ -33,14 +34,20 @@ import {
   Library,
   CalendarDays,
   ChartGantt,
+  HardHat,
+  Wrench,
+  BookOpen,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  PROJECT_SIDEBAR_GROUPS,
-  GLOBAL_SIDEBAR_ENTRIES,
+  LAYER1_ENTRIES,
+  LAYER2_ITEMS,
+  LAYER3_PROJECT_MGMT,
+  LAYER3_CONSTRUCTION,
+  LAYER3_REPAIR,
   ADMIN_SIDEBAR_ENTRIES,
   PLATFORM_ADMIN_SIDEBAR_GROUPS,
 } from '@/constants/navigation'
@@ -49,6 +56,7 @@ import { buildProjectPath, ROUTE_PATH } from '@/constants/routes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { useTenantBrandingStore } from '@/stores/tenantBranding'
+import { useSidebarStore } from '@/stores/sidebar'
 import { useTenantLogoUrl } from '@/composables/useTenantLogoUrl'
 import { getProject } from '@/api/project'
 import { cn } from '@/lib/utils'
@@ -59,9 +67,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FolderKanban,
   FolderOpen,
   ClipboardCheck,
-  Table2,
   Activity,
   AlertTriangle,
+  AlertCircle,
   Cpu,
   Image,
   FileText,
@@ -85,6 +93,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Library,
   CalendarDays,
   ChartGantt,
+  HardHat,
+  Wrench,
+  BookOpen,
 }
 
 withDefaults(
@@ -99,6 +110,7 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const authStore = useAuthStore()
 const tenantBrandingStore = useTenantBrandingStore()
+const sidebarStore = useSidebarStore()
 
 /** Sidebar 標題：專案內 = 專案名稱，未進專案 = 公司名稱（無則 Construction Dashboard） */
 const sidebarTitle = computed(() => {
@@ -112,10 +124,8 @@ const sidebarTitle = computed(() => {
 const hasLogo = computed(() => tenantBrandingStore.hasLogo)
 const { objectUrl: tenantLogoUrl } = useTenantLogoUrl(hasLogo)
 
-/** 無租戶 logo 時顯示預設圖示（平台方與一般租戶皆適用） */
 const showDefaultLogoIcon = computed(() => !tenantLogoUrl.value)
 
-/** 登入且有租戶時拉取品牌；登出時清空 */
 watch(
   () => authStore.isAuthenticated && authStore.user?.tenantId,
   (shouldLoad) => {
@@ -140,14 +150,12 @@ onMounted(() => {
 const projectId = computed(() => route.params.projectId as string | undefined)
 const isProjectScope = computed(() => !!projectId.value)
 
-/** 是否在多租後台（平台方） */
 const isPlatformAdminScope = computed(() => route.path.startsWith('/platform-admin'))
-/** 是否在單租後台（廠商管理員） */
 const isAdminScope = computed(() => route.path.startsWith('/admin'))
 
-/** 非專案內且非後台時：專案列表 + 廠商管理員顯示「後台管理」 */
-const globalSidebarEntries = computed(() => {
-  const entries = [...GLOBAL_SIDEBAR_ENTRIES]
+/** Layer 1 條目（未進專案）：專案列表 + 有權限時後台管理 */
+const layer1Entries = computed(() => {
+  const entries = [...LAYER1_ENTRIES]
   if (authStore.canAccessAdmin && !authStore.isPlatformAdmin) {
     entries.push({
       id: 'admin',
@@ -159,38 +167,89 @@ const globalSidebarEntries = computed(() => {
   return entries
 })
 
-/** 同步 route 的 projectId 到 store（供麵包屑、API 等使用） */
 watch(
   projectId,
   (id) => {
     projectStore.setCurrentProjectId(id ?? null)
-    // 重新整理後 projectNameMap 為空，依 projectId 拉專案名稱避免標題顯示 id
     if (id && !projectStore.projectNameMap[id]) {
       getProject(id).then((project) => {
         if (project?.name) projectStore.setProjectName(id, project.name)
       })
     }
+    if (id) {
+      sidebarStore.setPanelFromRoute(route.path)
+    } else {
+      sidebarStore.resetPanel()
+    }
   },
   { immediate: true }
+)
+
+/** 進入專案內時依 path 同步 panel */
+watch(
+  () => route.path,
+  (path) => {
+    if (isProjectScope.value) {
+      sidebarStore.setPanelFromRoute(path)
+    }
+  }
 )
 
 function isItemActive(path: string) {
   return route.path === path || (path !== '/' && route.path.startsWith(path))
 }
 
-/** 平台後台側欄：僅精確比對 path，避免父路徑（如 /monitoring）與子路徑（如 /monitoring/audit-logs）同時亮起 */
 function isPlatformItemActive(path: string) {
   return route.path === path
 }
 
-/** 專案內子項的完整 path */
 function projectChildPath(pathSuffix: string): string {
   return projectId.value ? buildProjectPath(projectId.value, pathSuffix) : '/projects'
 }
 
-/** 專案內子項是否為當前頁（僅精確比對，避免父路徑與子路徑同時亮起，例如 /files 與 /files/photos） */
 function isProjectChildActive(pathSuffix: string): boolean {
   return route.path === projectChildPath(pathSuffix)
+}
+
+function goToProjectPath(pathSuffix: string) {
+  if (projectId.value) {
+    router.push(buildProjectPath(projectId.value, pathSuffix))
+  }
+}
+
+/** Layer 3 目前列表（與 Layer 2 同結構，僅項目列表） */
+const layer3Items = computed(() => {
+  const panel = sidebarStore.currentPanel
+  if (panel === 'project-mgmt') return LAYER3_PROJECT_MGMT
+  if (panel === 'construction') return LAYER3_CONSTRUCTION
+  if (panel === 'repair') return LAYER3_REPAIR
+  return []
+})
+
+/** 各 Layer 3 模組的第一個頁面 pathSuffix，drill 進入時導向該頁 */
+function getFirstPathSuffixForPanel(panelId: 'project-mgmt' | 'construction' | 'repair'): string {
+  const first = {
+    'project-mgmt': LAYER3_PROJECT_MGMT[0]?.pathSuffix ?? '/management/overview',
+    construction: LAYER3_CONSTRUCTION[0]?.pathSuffix ?? '/monitoring/history',
+    repair: LAYER3_REPAIR[0]?.pathSuffix ?? '/repair/overview',
+  }
+  return first[panelId]
+}
+
+function handleDrillIn(panelId: 'project-mgmt' | 'construction' | 'repair') {
+  sidebarStore.drillIn(panelId)
+  goToProjectPath(getFirstPathSuffixForPanel(panelId))
+}
+
+/** Layer 2 第一個功能頁 pathSuffix，從 Layer 3 返回時導向該頁 */
+function getFirstLayer2PathSuffix(): string {
+  const first = LAYER2_ITEMS.find((i) => i.type === 'link')
+  return first?.type === 'link' ? first.pathSuffix : '/dashboard'
+}
+
+function handleDrillOut() {
+  sidebarStore.drillOut()
+  goToProjectPath(getFirstLayer2PathSuffix())
 }
 </script>
 
@@ -201,7 +260,6 @@ function isProjectChildActive(pathSuffix: string): boolean {
         class="flex shrink-0 items-center gap-3 border-border bg-muted/30 px-3 py-4"
         :class="collapsed ? 'justify-center px-2' : ''"
       >
-        <!-- 租戶 Logo 或平台方預設 Logo -->
         <div
           v-if="tenantLogoUrl"
           class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-zinc-200 shadow-sm"
@@ -226,8 +284,8 @@ function isProjectChildActive(pathSuffix: string): boolean {
         </div>
       </header>
 
-      <nav class="flex flex-col gap-2 p-2" :class="collapsed ? 'items-center' : ''">
-        <!-- 多租後台（平台方）：依群組顯示（租戶與組織、監控、營運、系統） -->
+      <nav class="relative flex flex-col gap-2 p-2" :class="collapsed ? 'items-center' : ''">
+        <!-- 多租後台（平台方）：不變 -->
         <template v-if="isPlatformAdminScope">
           <template v-for="group in PLATFORM_ADMIN_SIDEBAR_GROUPS" :key="group.id">
             <div class="space-y-1">
@@ -288,7 +346,7 @@ function isProjectChildActive(pathSuffix: string): boolean {
           </template>
         </template>
 
-        <!-- 單租後台（廠商管理員）：專案列表返回 + 專案管理、成員管理、公司設定 -->
+        <!-- 單租後台（廠商管理員）：不變 -->
         <template v-else-if="isAdminScope">
           <RouterLink v-slot="{ navigate }" to="/projects" custom>
             <div :class="collapsed ? 'flex justify-center' : 'pl-3'">
@@ -352,52 +410,176 @@ function isProjectChildActive(pathSuffix: string): boolean {
           </div>
         </template>
 
-        <!-- 專案內：當前專案名稱 + 切換專案 + 概況/監測/契約 -->
+        <!-- 專案內：翻頁式 Layer 2 / Layer 3 -->
         <template v-else-if="isProjectScope">
-          <RouterLink v-slot="{ navigate }" to="/projects" custom>
-            <div :class="collapsed ? 'flex justify-center' : 'pl-3'">
-              <Tooltip v-if="collapsed">
-                <TooltipTrigger as-child>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="h-9 w-9 shrink-0"
-                    :class="isItemActive('/projects') && 'bg-accent text-accent-foreground'"
-                    @click="navigate"
+          <div class="relative min-h-[200px] w-full overflow-hidden">
+            <!-- 滑動容器：兩 panel 並排，依 currentPanel 位移 -->
+            <div
+              class="flex w-[200%]"
+              :style="{
+                transform:
+                  sidebarStore.currentPanel === 'root' ? 'translateX(0)' : 'translateX(-50%)',
+                transition: 'transform 260ms cubic-bezier(0.4, 0, 0.2, 1)',
+              }"
+            >
+              <!-- Panel Layer 2（專案內第一層） -->
+              <div class="w-1/2 shrink-0 px-1">
+                <RouterLink v-slot="{ navigate }" to="/projects" custom>
+                  <div :class="collapsed ? 'flex justify-center' : 'pl-3'">
+                    <Tooltip v-if="collapsed">
+                      <TooltipTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-9 w-9 shrink-0"
+                          @click="navigate"
+                        >
+                          <ArrowLeft class="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">切換專案</TooltipContent>
+                    </Tooltip>
+                    <Button
+                      v-else
+                      variant="ghost"
+                      class="h-9 w-full justify-start gap-3 rounded-md px-3"
+                      @click="navigate"
+                    >
+                      <ArrowLeft class="size-4 shrink-0" />
+                      <span class="truncate">切換專案</span>
+                    </Button>
+                  </div>
+                </RouterLink>
+                <template
+                  v-for="(item, idx) in LAYER2_ITEMS"
+                  :key="item.type === 'group' ? `group-${idx}` : item.id"
+                >
+                  <!-- 群組標籤：不可點擊 -->
+                  <div
+                    v-if="item.type === 'group'"
+                    v-show="!collapsed"
+                    class="px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-default"
                   >
-                    <ArrowLeft class="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">切換專案</TooltipContent>
-              </Tooltip>
-              <Button
-                v-else
-                variant="ghost"
-                class="h-9 w-full justify-start gap-3 rounded-md px-3"
-                :class="isItemActive('/projects') && 'bg-accent text-accent-foreground'"
-                @click="navigate"
-              >
-                <ArrowLeft class="size-4 shrink-0" />
-                <span class="truncate">切換專案</span>
-              </Button>
-            </div>
-          </RouterLink>
-          <template v-for="group in PROJECT_SIDEBAR_GROUPS" :key="group.id">
-            <div class="space-y-1">
-              <div
-                v-show="!collapsed"
-                class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"
-              >
-                {{ group.label }}
+                    {{ item.label }}
+                  </div>
+                  <!-- 直接連結 -->
+                  <div
+                    v-else-if="item.type === 'link'"
+                    class="flex min-h-9 items-center rounded-md"
+                    :class="collapsed ? 'justify-center' : 'pl-3'"
+                  >
+                    <Tooltip v-if="collapsed">
+                      <TooltipTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          :class="
+                            cn(
+                              'h-9 w-9 shrink-0 justify-center rounded-md',
+                              isProjectChildActive(item.pathSuffix) &&
+                                'bg-accent text-accent-foreground'
+                            )
+                          "
+                          @click="goToProjectPath(item.pathSuffix)"
+                        >
+                          <component
+                            :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                            class="size-4 shrink-0"
+                          />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{{ item.label }}</TooltipContent>
+                    </Tooltip>
+                    <Button
+                      v-else
+                      variant="ghost"
+                      :class="
+                        cn(
+                          'h-9 w-full justify-start gap-3 rounded-md px-3',
+                          isProjectChildActive(item.pathSuffix) &&
+                            'bg-accent text-accent-foreground'
+                        )
+                      "
+                      @click="goToProjectPath(item.pathSuffix)"
+                    >
+                      <component
+                        :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                        class="size-4 shrink-0"
+                      />
+                      <span class="truncate">{{ item.label }}</span>
+                    </Button>
+                  </div>
+                  <!-- Drill 進 Layer 3（hover 時按鈕內顯示向右箭頭表示可再進入） -->
+                  <div
+                    v-else
+                    class="group flex min-h-9 items-center rounded-md"
+                    :class="collapsed ? 'justify-center' : 'pl-3'"
+                  >
+                    <Tooltip v-if="collapsed">
+                      <TooltipTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-9 w-9 shrink-0 justify-center rounded-md"
+                          @click="handleDrillIn(item.panelId)"
+                        >
+                          <component
+                            :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                            class="size-4 shrink-0"
+                          />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{{ item.label }}</TooltipContent>
+                    </Tooltip>
+                    <Button
+                      v-else
+                      variant="ghost"
+                      class="h-9 w-full justify-start gap-3 rounded-md px-3"
+                      @click="handleDrillIn(item.panelId)"
+                    >
+                      <component
+                        :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                        class="size-4 shrink-0"
+                      />
+                      <span class="min-w-0 truncate">{{ item.label }}</span>
+                      <ChevronRight
+                        class="ml-auto size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-hidden
+                      />
+                    </Button>
+                  </div>
+                </template>
               </div>
-              <RouterLink
-                v-for="child in group.children"
-                :key="child.id"
-                v-slot="{ navigate }"
-                :to="projectChildPath(child.pathSuffix)"
-                custom
-              >
+
+              <!-- Panel Layer 3（與 Layer 2 相同 UI：主畫面 + 項目列表） -->
+              <div v-if="layer3Items.length" class="w-1/2 shrink-0 px-1">
+                <div :class="collapsed ? 'flex justify-center' : 'pl-3'">
+                  <Tooltip v-if="collapsed">
+                    <TooltipTrigger as-child>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-9 w-9 shrink-0"
+                        @click="handleDrillOut()"
+                      >
+                        <ArrowLeft class="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">主畫面</TooltipContent>
+                  </Tooltip>
+                  <Button
+                    v-else
+                    variant="ghost"
+                    class="h-9 w-full justify-start gap-3 rounded-md px-3"
+                    @click="handleDrillOut()"
+                  >
+                    <ArrowLeft class="size-4 shrink-0" />
+                    <span class="truncate">主畫面</span>
+                  </Button>
+                </div>
                 <div
+                  v-for="child in layer3Items"
+                  :key="child.id"
                   class="flex min-h-9 items-center rounded-md"
                   :class="collapsed ? 'justify-center' : 'pl-3'"
                 >
@@ -413,7 +595,7 @@ function isProjectChildActive(pathSuffix: string): boolean {
                               'bg-accent text-accent-foreground'
                           )
                         "
-                        @click="navigate"
+                        @click="goToProjectPath(child.pathSuffix)"
                       >
                         <component
                           :is="ICON_MAP[child.icon] ?? LayoutDashboard"
@@ -432,7 +614,7 @@ function isProjectChildActive(pathSuffix: string): boolean {
                         isProjectChildActive(child.pathSuffix) && 'bg-accent text-accent-foreground'
                       )
                     "
-                    @click="navigate"
+                    @click="goToProjectPath(child.pathSuffix)"
                   >
                     <component
                       :is="ICON_MAP[child.icon] ?? LayoutDashboard"
@@ -441,15 +623,15 @@ function isProjectChildActive(pathSuffix: string): boolean {
                     <span class="truncate">{{ child.label }}</span>
                   </Button>
                 </div>
-              </RouterLink>
+              </div>
             </div>
-          </template>
+          </div>
         </template>
 
-        <!-- 非專案內（專案列表頁等）：專案列表 + 廠商管理員顯示後台管理 -->
+        <!-- 未進專案（專案列表頁等）：Layer 1 -->
         <template v-else>
           <RouterLink
-            v-for="item in globalSidebarEntries"
+            v-for="item in layer1Entries"
             :key="item.id"
             v-slot="{ navigate }"
             :to="item.path"

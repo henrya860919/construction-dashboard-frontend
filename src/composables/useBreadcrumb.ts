@@ -1,6 +1,10 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { BREADCRUMB_LABELS, BREADCRUMB_PROJECT_SUFFIX_LABELS } from '@/constants/breadcrumb'
+import {
+  BREADCRUMB_LABELS,
+  BREADCRUMB_PROJECT_SUFFIX_LABELS,
+  getBreadcrumbModuleForSuffix,
+} from '@/constants/breadcrumb'
 import { useDeviceBreadcrumbStore } from '@/stores/deviceBreadcrumb'
 import { useProjectStore } from '@/stores/project'
 import { useTenantStore } from '@/stores/tenant'
@@ -58,13 +62,17 @@ export function useBreadcrumb() {
       if (rest.length > 0) {
         const isDeviceDetail =
           rest[0] === 'monitoring' && rest[1] === 'devices' && rest.length === 3
-        let label =
+        let pageLabel =
           BREADCRUMB_PROJECT_SUFFIX_LABELS[suffix] ??
           rest[rest.length - 1]
         if (isDeviceDetail && deviceBreadcrumbStore.currentDeviceName) {
-          label = deviceBreadcrumbStore.currentDeviceName
+          pageLabel = deviceBreadcrumbStore.currentDeviceName
         }
-        result.push({ label })
+        const moduleName = getBreadcrumbModuleForSuffix(suffix)
+        if (moduleName) {
+          result.push({ label: moduleName })
+        }
+        result.push({ label: pageLabel })
       }
 
       return result

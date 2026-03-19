@@ -52,3 +52,17 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/repair/overview': '報修總覽',
   '/repair/records': '報修紀錄表',
 }
+
+/** 專案內 path 後綴屬於哪個「工作執行」模組（用於麵包屑：工作執行 › 模組名 › 頁名） */
+export function getBreadcrumbModuleForSuffix(suffix: string): string | null {
+  if (suffix.startsWith('/management/') || suffix === '/contract/schedule') return '專案管理'
+  if (
+    suffix.startsWith('/monitoring/') ||
+    suffix.startsWith('/construction/') ||
+    suffix === '/files/photos'
+  ) {
+    return '施工管理'
+  }
+  if (suffix.startsWith('/repair/')) return '報修管理'
+  return null
+}

@@ -240,6 +240,17 @@ function handleDrillIn(panelId: 'project-mgmt' | 'construction' | 'repair') {
   sidebarStore.drillIn(panelId)
   goToProjectPath(getFirstPathSuffixForPanel(panelId))
 }
+
+/** Layer 2 第一個功能頁 pathSuffix，從 Layer 3 返回時導向該頁 */
+function getFirstLayer2PathSuffix(): string {
+  const first = LAYER2_ITEMS.find((i) => i.type === 'link')
+  return first?.type === 'link' ? first.pathSuffix : '/dashboard'
+}
+
+function handleDrillOut() {
+  sidebarStore.drillOut()
+  goToProjectPath(getFirstLayer2PathSuffix())
+}
 </script>
 
 <template>
@@ -473,13 +484,13 @@ function handleDrillIn(panelId: 'project-mgmt' | 'construction' | 'repair') {
                 <div :class="collapsed ? 'flex justify-center' : 'pl-3'">
                   <Tooltip v-if="collapsed">
                     <TooltipTrigger as-child>
-                      <Button variant="ghost" size="icon" class="h-9 w-9 shrink-0" @click="sidebarStore.drillOut()">
+                      <Button variant="ghost" size="icon" class="h-9 w-9 shrink-0" @click="handleDrillOut()">
                         <ArrowLeft class="size-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="right">主畫面</TooltipContent>
                   </Tooltip>
-                  <Button v-else variant="ghost" class="h-9 w-full justify-start gap-3 rounded-md px-3" @click="sidebarStore.drillOut()">
+                  <Button v-else variant="ghost" class="h-9 w-full justify-start gap-3 rounded-md px-3" @click="handleDrillOut()">
                     <ArrowLeft class="size-4 shrink-0" />
                     <span class="truncate">主畫面</span>
                   </Button>

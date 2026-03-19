@@ -81,6 +81,31 @@ const router = createRouter({
           component: () => import('@/views/mobile/defects/MobileDefectDetailView.vue'),
         },
         {
+          path: 'p/:projectId/repair/new',
+          name: ROUTE_NAME.MOBILE_REPAIR_NEW,
+          component: () => import('@/views/mobile/repairs/MobileRepairNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId/records/new',
+          name: ROUTE_NAME.MOBILE_REPAIR_RECORD_NEW,
+          component: () => import('@/views/mobile/repairs/MobileRepairRecordNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId/records/:recordId',
+          name: ROUTE_NAME.MOBILE_REPAIR_RECORD_DETAIL,
+          component: () => import('@/views/mobile/repairs/MobileRepairRecordDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId/edit',
+          name: ROUTE_NAME.MOBILE_REPAIR_EDIT,
+          component: () => import('@/views/mobile/repairs/MobileRepairEditView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId',
+          name: ROUTE_NAME.MOBILE_REPAIR_DETAIL,
+          component: () => import('@/views/mobile/repairs/MobileRepairDetailView.vue'),
+        },
+        {
           path: 'p/:projectId/repair',
           name: ROUTE_NAME.MOBILE_REPAIR,
           component: () => import('@/views/mobile/MobileRepairView.vue'),

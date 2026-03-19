@@ -107,7 +107,14 @@ const pageTitle = computed(() => {
     if (route.params.defectId) return '缺失詳情'
     return '缺失改善'
   }
-  if (route.path.includes('/repair')) return '報修'
+  if (route.path.includes('/repair')) {
+    if (route.name === ROUTE_NAME.MOBILE_REPAIR_RECORD_NEW) return '新增報修紀錄'
+    if (route.name === ROUTE_NAME.MOBILE_REPAIR_RECORD_DETAIL) return '報修紀錄'
+    if (route.name === ROUTE_NAME.MOBILE_REPAIR_NEW) return '新增報修'
+    if (route.name === ROUTE_NAME.MOBILE_REPAIR_EDIT) return '編輯報修'
+    if (route.params.repairId) return '報修詳情'
+    return '報修'
+  }
   if (name === ROUTE_NAME.MOBILE_PHOTO_VIEWER) return '查看照片'
   return '現場查驗'
 })

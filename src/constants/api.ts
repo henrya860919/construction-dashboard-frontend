@@ -105,6 +105,15 @@ export const API_PATH = {
     `${API_V1}/projects/${projectId}/defect-improvements/${defectId}/records`,
   PROJECT_DEFECT_IMPROVEMENT_RECORD: (projectId: string, defectId: string, recordId: string) =>
     `${API_V1}/projects/${projectId}/defect-improvements/${defectId}/records/${recordId}`,
+  /** 報修（手機／現場） */
+  PROJECT_REPAIR_REQUESTS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/repair-requests`,
+  PROJECT_REPAIR_REQUEST: (projectId: string, repairId: string) =>
+    `${API_V1}/projects/${projectId}/repair-requests/${repairId}`,
+  PROJECT_REPAIR_REQUEST_RECORDS: (projectId: string, repairId: string) =>
+    `${API_V1}/projects/${projectId}/repair-requests/${repairId}/records`,
+  PROJECT_REPAIR_REQUEST_RECORD: (projectId: string, repairId: string, recordId: string) =>
+    `${API_V1}/projects/${projectId}/repair-requests/${repairId}/records/${recordId}`,
   /** 即時警報（目前假資料；之後接 CWA） */
   ALERTS_CURRENT: `${API_V1}/alerts/current`,
   /** 歷史警報（query: projectId?, startDate, endDate, limit?） */

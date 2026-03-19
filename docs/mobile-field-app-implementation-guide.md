@@ -39,6 +39,8 @@
 | `MOBILE_DEFECT_DETAIL` | 單筆缺失詳情（含詳細／執行紀錄 Tab） |
 | `MOBILE_DEFECT_NEW` / `MOBILE_DEFECT_EDIT` | 新增／編輯缺失 |
 | `MOBILE_DEFECT_RECORD_NEW` / `MOBILE_DEFECT_RECORD_DETAIL` | 新增／檢視執行紀錄 |
+| `MOBILE_REPAIR_NEW` / `MOBILE_REPAIR_DETAIL` / `MOBILE_REPAIR_EDIT` | 新增／詳情／編輯報修 |
+| `MOBILE_REPAIR_RECORD_NEW` / `MOBILE_REPAIR_RECORD_DETAIL` | 新增／檢視報修紀錄 |
 | `MOBILE_PHOTO_VIEWER` | 通用檢視照片（全螢幕） |
 
 ---
@@ -131,14 +133,25 @@
 
 ### 7.1 通用照片檢視
 
-- Store：`src/stores/photoViewer.ts`
-- Composable：`src/composables/usePhotoViewer.ts` → 導向 **`MOBILE_PHOTO_VIEWER`**
+- Store：`src/stores/photoViewer.ts`（關閉／換一批時會 `revoke` 先前建立的 `blob:` URL）
+- Composable：`src/composables/usePhotoViewer.ts` → 以 **`apiClient` + `responseType: 'blob'`** 帶 JWT 取檔後建立 `blob:` URL，再導向 **`MOBILE_PHOTO_VIEWER`**（不可直接用 `<img :src="完整 API URL">`，瀏覽器請求不會帶 `Authorization`）
 - 頁面：`src/views/mobile/MobilePhotoViewerView.vue`  
 其他模組要「看大圖」可沿用同一套。
 
 ### 7.2 列表互動（參考）
 
 - 左滑刪除、分頁內左右滑切 Tab 等：**觸控閾值**與「直向捲動誤觸」需分離（見 `MobileDefectsView.vue` 內註解與常數）。
+
+### 7.3 報修模組（列表 + 詳情 Tab「詳細內容／報修紀錄」+ 表單）
+
+| 區塊 | 位置 |
+|------|------|
+| 列表 | `src/views/mobile/MobileRepairView.vue` |
+| 詳情 | `src/views/mobile/repairs/MobileRepairDetailView.vue` |
+| 表單 | `MobileRepairNewView.vue`、`MobileRepairEditView.vue` |
+| 報修紀錄 | `MobileRepairRecordNewView.vue`、`MobileRepairRecordDetailView.vue` |
+| API | `src/api/repair-requests.ts` |
+| 後端 | `construction-dashboard-backend`：`/api/v1/projects/:projectId/repair-requests` 與 `.../records` |
 
 ---
 

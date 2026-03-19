@@ -41,6 +41,11 @@ export const ROUTE_PATH = {
   MOBILE_DEFECT_RECORD_DETAIL: 'defects/:defectId/records/:recordId',
   MOBILE_PHOTO_VIEWER: 'photo-viewer',
   MOBILE_REPAIR: 'repair',
+  MOBILE_REPAIR_NEW: 'repair/new',
+  MOBILE_REPAIR_DETAIL: 'repair/:repairId',
+  MOBILE_REPAIR_EDIT: 'repair/:repairId/edit',
+  MOBILE_REPAIR_RECORD_NEW: 'repair/:repairId/records/new',
+  MOBILE_REPAIR_RECORD_DETAIL: 'repair/:repairId/records/:recordId',
 
   /** 以下為專案內路徑「樣板」，實際連結請用 buildProjectPath(projectId, subPath) */
   PROJECT_DASHBOARD: '/dashboard',
@@ -106,6 +111,11 @@ export const ROUTE_NAME = {
   MOBILE_DEFECT_RECORD_DETAIL: 'mobile-defect-record-detail',
   MOBILE_PHOTO_VIEWER: 'mobile-photo-viewer',
   MOBILE_REPAIR: 'mobile-repair',
+  MOBILE_REPAIR_NEW: 'mobile-repair-new',
+  MOBILE_REPAIR_DETAIL: 'mobile-repair-detail',
+  MOBILE_REPAIR_EDIT: 'mobile-repair-edit',
+  MOBILE_REPAIR_RECORD_NEW: 'mobile-repair-record-new',
+  MOBILE_REPAIR_RECORD_DETAIL: 'mobile-repair-record-detail',
   PROJECT_DASHBOARD: 'project-dashboard',
   PROJECT_OVERVIEW_EVENTS: 'project-overview-events',
   PROJECT_OVERVIEW_MILESTONES: 'project-overview-milestones',

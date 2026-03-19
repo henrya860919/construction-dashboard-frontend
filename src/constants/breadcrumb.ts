@@ -10,6 +10,7 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   '/admin/projects': '專案管理',
   '/admin/members': '成員管理',
   '/admin/form-templates': '表單樣板',
+  '/admin/self-inspection-templates': '自主檢查樣板',
   '/admin/settings': '公司設定',
   '/platform-admin': '平台管理',
   '/platform-admin/tenants': '租戶管理',

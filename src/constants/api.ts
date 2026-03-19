@@ -24,6 +24,20 @@ export const API_PATH = {
   ADMIN_COMPANY_SETTINGS: `${API_V1}/admin/company-settings`,
   ADMIN_TENANT_LOGO: `${API_V1}/admin/tenant-logo`,
   ADMIN_FORM_TEMPLATES: `${API_V1}/admin/form-templates`,
+  ADMIN_SELF_INSPECTION_TEMPLATES: `${API_V1}/admin/self-inspection-templates`,
+  ADMIN_SELF_INSPECTION_TEMPLATE: (id: string) => `${API_V1}/admin/self-inspection-templates/${id}`,
+  ADMIN_SELF_INSPECTION_TEMPLATE_BLOCKS: (templateId: string) =>
+    `${API_V1}/admin/self-inspection-templates/${templateId}/blocks`,
+  ADMIN_SELF_INSPECTION_TEMPLATE_BLOCK: (templateId: string, blockId: string) =>
+    `${API_V1}/admin/self-inspection-templates/${templateId}/blocks/${blockId}`,
+  ADMIN_SELF_INSPECTION_TEMPLATE_BLOCK_ITEMS: (templateId: string, blockId: string) =>
+    `${API_V1}/admin/self-inspection-templates/${templateId}/blocks/${blockId}/items`,
+  ADMIN_SELF_INSPECTION_TEMPLATE_BLOCK_ITEM: (
+    templateId: string,
+    blockId: string,
+    itemId: string
+  ) =>
+    `${API_V1}/admin/self-inspection-templates/${templateId}/blocks/${blockId}/items/${itemId}`,
   /** 專案表單樣板（GET 列表、POST 新增） */
   PROJECT_FORM_TEMPLATES: (projectId: string) => `${API_V1}/projects/${projectId}/form-templates`,
   /** 單一表單樣板（GET 下載、PATCH、DELETE） */
@@ -114,6 +128,19 @@ export const API_PATH = {
     `${API_V1}/projects/${projectId}/repair-requests/${repairId}/records`,
   PROJECT_REPAIR_REQUEST_RECORD: (projectId: string, repairId: string, recordId: string) =>
     `${API_V1}/projects/${projectId}/repair-requests/${repairId}/records/${recordId}`,
+  /** 自主查驗（專案內：樣板、紀錄） */
+  PROJECT_SELF_INSPECTIONS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/self-inspections`,
+  PROJECT_SELF_INSPECTION_TEMPLATES_AVAILABLE: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/self-inspections/templates/available`,
+  PROJECT_SELF_INSPECTION_TEMPLATES_IMPORT_CATALOG: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/self-inspections/templates/import-catalog`,
+  PROJECT_SELF_INSPECTION_TEMPLATE: (projectId: string, templateId: string) =>
+    `${API_V1}/projects/${projectId}/self-inspections/templates/${templateId}`,
+  PROJECT_SELF_INSPECTION_RECORDS: (projectId: string, templateId: string) =>
+    `${API_V1}/projects/${projectId}/self-inspections/templates/${templateId}/records`,
+  PROJECT_SELF_INSPECTION_RECORD: (projectId: string, templateId: string, recordId: string) =>
+    `${API_V1}/projects/${projectId}/self-inspections/templates/${templateId}/records/${recordId}`,
   /** 即時警報（目前假資料；之後接 CWA） */
   ALERTS_CURRENT: `${API_V1}/alerts/current`,
   /** 歷史警報（query: projectId?, startDate, endDate, limit?） */

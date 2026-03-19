@@ -244,6 +244,21 @@ const router = createRouter({
           component: () => import('@/views/management/ManagementOverviewView.vue'),
         },
         {
+          path: 'p/:projectId/construction/self-check/:templateId/records/:recordId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_RECORD,
+          component: () => import('@/views/construction/ConstructionSelfCheckRecordDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/self-check/:templateId/new',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_NEW,
+          component: () => import('@/views/construction/ConstructionSelfCheckRecordNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/self-check/:templateId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_TEMPLATE,
+          component: () => import('@/views/construction/ConstructionSelfCheckTemplateView.vue'),
+        },
+        {
           path: 'p/:projectId/construction/self-check',
           name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK,
           component: () => import('@/views/construction/ConstructionSelfCheckView.vue'),
@@ -252,6 +267,11 @@ const router = createRouter({
           path: 'p/:projectId/construction/diary',
           name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY,
           component: () => import('@/views/construction/ConstructionDiaryView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/defects/:defectId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DEFECT_DETAIL,
+          component: () => import('@/views/construction/ConstructionDefectDetailView.vue'),
         },
         {
           path: 'p/:projectId/construction/defects',
@@ -267,6 +287,11 @@ const router = createRouter({
           path: 'p/:projectId/repair/records',
           name: ROUTE_NAME.PROJECT_REPAIR_RECORDS,
           component: () => import('@/views/repair/RepairRecordsView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/records/:repairId',
+          name: ROUTE_NAME.PROJECT_REPAIR_RECORD_DETAIL,
+          component: () => import('@/views/repair/RepairRecordDetailView.vue'),
         },
         // 單租後台（共用 DefaultLayout，sidebar 依路由切換為後台選單）
         { path: 'admin', redirect: ROUTE_PATH.ADMIN_PROJECTS },
@@ -289,6 +314,16 @@ const router = createRouter({
           path: 'admin/form-templates',
           name: ROUTE_NAME.ADMIN_FORM_TEMPLATES,
           component: () => import('@/views/admin/AdminFormTemplatesView.vue'),
+        },
+        {
+          path: 'admin/self-inspection-templates',
+          name: ROUTE_NAME.ADMIN_SELF_INSPECTION_TEMPLATES,
+          component: () => import('@/views/admin/AdminSelfInspectionTemplatesView.vue'),
+        },
+        {
+          path: 'admin/self-inspection-templates/:templateId',
+          name: ROUTE_NAME.ADMIN_SELF_INSPECTION_TEMPLATE_DETAIL,
+          component: () => import('@/views/admin/AdminSelfInspectionTemplateDetailView.vue'),
         },
         {
           path: 'admin/settings',

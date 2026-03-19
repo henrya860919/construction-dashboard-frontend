@@ -281,6 +281,12 @@ export const ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
     path: '/admin/form-templates',
     icon: 'FileText',
   },
+  {
+    id: 'admin-self-inspection-templates',
+    label: '自主檢查樣板',
+    path: '/admin/self-inspection-templates',
+    icon: 'ClipboardCheck',
+  },
   { id: 'admin-settings', label: '公司設定', path: '/admin/settings', icon: 'Settings' },
 ]
 

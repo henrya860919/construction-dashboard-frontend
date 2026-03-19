@@ -74,11 +74,16 @@ export const ROUTE_PATH = {
 
   /** 施工管理：自主檢查、施工日誌、缺失改善 */
   PROJECT_CONSTRUCTION_SELF_CHECK: '/construction/self-check',
+  PROJECT_CONSTRUCTION_SELF_CHECK_TEMPLATE: '/construction/self-check/:templateId',
+  PROJECT_CONSTRUCTION_SELF_CHECK_NEW: '/construction/self-check/:templateId/new',
+  PROJECT_CONSTRUCTION_SELF_CHECK_RECORD: '/construction/self-check/:templateId/records/:recordId',
   PROJECT_CONSTRUCTION_DIARY: '/construction/diary',
   PROJECT_CONSTRUCTION_DEFECTS: '/construction/defects',
+  PROJECT_CONSTRUCTION_DEFECT_DETAIL: '/construction/defects/:defectId',
   /** 報修管理 */
   PROJECT_REPAIR_OVERVIEW: '/repair/overview',
   PROJECT_REPAIR_RECORDS: '/repair/records',
+  PROJECT_REPAIR_RECORD_DETAIL: '/repair/records/:repairId',
 
   /** 單租後台（租戶自管） */
   ADMIN: '/admin',
@@ -86,6 +91,8 @@ export const ROUTE_PATH = {
   ADMIN_PROJECTS: '/admin/projects',
   ADMIN_MEMBERS: '/admin/members',
   ADMIN_FORM_TEMPLATES: '/admin/form-templates',
+  ADMIN_SELF_INSPECTION_TEMPLATES: '/admin/self-inspection-templates',
+  ADMIN_SELF_INSPECTION_TEMPLATE_DETAIL: '/admin/self-inspection-templates/:templateId',
   ADMIN_SETTINGS: '/admin/settings',
   /** 多租後台（平台營運） */
   PLATFORM_ADMIN: '/platform-admin',
@@ -146,15 +153,22 @@ export const ROUTE_NAME = {
   PROJECT_MANAGEMENT_GANTT: 'project-management-gantt',
   PROJECT_MANAGEMENT_OVERVIEW: 'project-management-overview',
   PROJECT_CONSTRUCTION_SELF_CHECK: 'project-construction-self-check',
+  PROJECT_CONSTRUCTION_SELF_CHECK_TEMPLATE: 'project-construction-self-check-template',
+  PROJECT_CONSTRUCTION_SELF_CHECK_NEW: 'project-construction-self-check-new',
+  PROJECT_CONSTRUCTION_SELF_CHECK_RECORD: 'project-construction-self-check-record',
   PROJECT_CONSTRUCTION_DIARY: 'project-construction-diary',
   PROJECT_CONSTRUCTION_DEFECTS: 'project-construction-defects',
+  PROJECT_CONSTRUCTION_DEFECT_DETAIL: 'project-construction-defect-detail',
   PROJECT_REPAIR_OVERVIEW: 'project-repair-overview',
   PROJECT_REPAIR_RECORDS: 'project-repair-records',
+  PROJECT_REPAIR_RECORD_DETAIL: 'project-repair-record-detail',
   ADMIN: 'admin',
   ADMIN_TENANT_INFO: 'admin-tenant-info',
   ADMIN_PROJECTS: 'admin-projects',
   ADMIN_MEMBERS: 'admin-members',
   ADMIN_FORM_TEMPLATES: 'admin-form-templates',
+  ADMIN_SELF_INSPECTION_TEMPLATES: 'admin-self-inspection-templates',
+  ADMIN_SELF_INSPECTION_TEMPLATE_DETAIL: 'admin-self-inspection-template-detail',
   ADMIN_SETTINGS: 'admin-settings',
   PLATFORM_ADMIN: 'platform-admin',
   PLATFORM_ADMIN_TENANTS: 'platform-admin-tenants',

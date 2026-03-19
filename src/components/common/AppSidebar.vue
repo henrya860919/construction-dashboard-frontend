@@ -207,11 +207,7 @@ function isProjectChildActive(pathSuffix: string): boolean {
           class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-zinc-200 shadow-sm"
           aria-hidden
         >
-          <img
-            :src="tenantLogoUrl"
-            alt=""
-            class="size-full object-cover"
-          />
+          <img :src="tenantLogoUrl" alt="" class="size-full object-cover" />
         </div>
         <div
           v-else-if="showDefaultLogoIcon"
@@ -280,7 +276,10 @@ function isProjectChildActive(pathSuffix: string): boolean {
                     "
                     @click="navigate"
                   >
-                    <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                    <component
+                      :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                      class="size-4 shrink-0"
+                    />
                     <span class="truncate">{{ item.label }}</span>
                   </Button>
                 </RouterLink>
@@ -331,10 +330,7 @@ function isProjectChildActive(pathSuffix: string): boolean {
                   "
                   @click="router.push(item.path)"
                 >
-                  <component
-                    :is="ICON_MAP[item.icon] ?? LayoutDashboard"
-                    class="size-4 shrink-0"
-                  />
+                  <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">{{ item.label }}</TooltipContent>
@@ -433,8 +429,7 @@ function isProjectChildActive(pathSuffix: string): boolean {
                     :class="
                       cn(
                         'h-9 w-full justify-start gap-3 rounded-md px-3',
-                        isProjectChildActive(child.pathSuffix) &&
-                          'bg-accent text-accent-foreground'
+                        isProjectChildActive(child.pathSuffix) && 'bg-accent text-accent-foreground'
                       )
                     "
                     @click="navigate"

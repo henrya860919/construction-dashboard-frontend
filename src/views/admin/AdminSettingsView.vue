@@ -35,9 +35,11 @@ async function fetchTenant() {
     tenant.value = await getAdminTenantInfo()
     nameInput.value = tenant.value?.name ?? ''
   } catch (e: unknown) {
-    const msg = e && typeof e === 'object' && 'response' in e
-      ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-      : null
+    const msg =
+      e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+            ?.message
+        : null
     error.value = msg ?? '無法載入公司資訊'
     tenant.value = null
   } finally {
@@ -58,9 +60,10 @@ async function saveName() {
     await fetchTenant()
     await tenantBrandingStore.fetch()
   } catch (e: unknown) {
-    const res = e && typeof e === 'object' && 'response' in e
-      ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
-      : null
+    const res =
+      e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+        : null
     saveNameError.value = res?.message ?? '儲存失敗'
   } finally {
     saveNameLoading.value = false
@@ -87,9 +90,10 @@ async function onLogoChange(ev: Event) {
     await tenantBrandingStore.fetch()
     await reloadLogo()
   } catch (e: unknown) {
-    const res = e && typeof e === 'object' && 'response' in e
-      ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
-      : null
+    const res =
+      e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+        : null
     logoUploadError.value = res?.message ?? '上傳失敗'
   } finally {
     logoUploadLoading.value = false
@@ -104,9 +108,7 @@ onMounted(() => fetchTenant())
   <div class="space-y-6">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight text-foreground">公司設定</h1>
-      <p class="mt-1 text-sm text-muted-foreground">
-        設定公司名稱與 Logo，之後可於系統中呈現。
-      </p>
+      <p class="mt-1 text-sm text-muted-foreground">設定公司名稱與 Logo，之後可於系統中呈現。</p>
     </div>
 
     <p v-if="error" class="text-sm text-destructive">
@@ -128,9 +130,7 @@ onMounted(() => fetchTenant())
             <Building2 class="size-4" />
             公司名稱
           </CardTitle>
-          <CardDescription>
-            顯示於系統中的公司／租戶名稱
-          </CardDescription>
+          <CardDescription> 顯示於系統中的公司／租戶名稱 </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="grid gap-2">
@@ -164,13 +164,10 @@ onMounted(() => fetchTenant())
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="flex flex-wrap items-start gap-6">
-            <div class="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
-              <img
-                v-if="logoUrl"
-                :src="logoUrl"
-                alt="公司 Logo"
-                class="size-full object-contain"
-              >
+            <div
+              class="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted"
+            >
+              <img v-if="logoUrl" :src="logoUrl" alt="公司 Logo" class="size-full object-contain" />
               <span v-else class="text-xs text-muted-foreground">尚無 Logo</span>
             </div>
             <div class="space-y-2">
@@ -181,7 +178,7 @@ onMounted(() => fetchTenant())
                 class="sr-only"
                 :disabled="logoUploadLoading"
                 @change="onLogoChange"
-              >
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -192,9 +189,7 @@ onMounted(() => fetchTenant())
                 <Loader2 v-if="logoUploadLoading" class="mr-2 size-4 animate-spin" />
                 {{ logoUploadLoading ? '上傳中…' : '選擇圖片上傳' }}
               </Button>
-              <p class="text-xs text-muted-foreground">
-                點擊按鈕選擇圖片，上傳後會自動更新預覽
-              </p>
+              <p class="text-xs text-muted-foreground">點擊按鈕選擇圖片，上傳後會自動更新預覽</p>
             </div>
           </div>
           <p v-if="logoUploadError" class="text-sm text-destructive">{{ logoUploadError }}</p>

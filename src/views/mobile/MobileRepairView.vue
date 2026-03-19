@@ -2,6 +2,8 @@
 import { useRoute } from 'vue-router'
 import { Wrench } from 'lucide-vue-next'
 
+defineOptions({ name: 'MobileRepairView' })
+
 useRoute()
 
 // 手機版獨立：報修列表（之後接 API）

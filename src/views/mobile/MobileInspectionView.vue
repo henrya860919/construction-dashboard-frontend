@@ -6,6 +6,8 @@ import { buildMobileProjectPath } from '@/constants/routes'
 import { ROUTE_PATH } from '@/constants/routes'
 import { Button } from '@/components/ui/button'
 
+defineOptions({ name: 'MobileInspectionView' })
+
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => route.params.projectId as string)

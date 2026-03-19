@@ -20,15 +20,20 @@ const router = createRouter({
       ],
     },
     // 手機版（PWA／現場查驗）— 完全獨立路由與 Layout
-    {
-      path: ROUTE_PATH.MOBILE,
-      component: MobileLayout,
-      children: [
         {
-          path: '',
-          name: ROUTE_NAME.MOBILE_PROJECT_PICKER,
-          component: () => import('@/views/mobile/MobileProjectPickerView.vue'),
-        },
+          path: ROUTE_PATH.MOBILE,
+          component: MobileLayout,
+          children: [
+            {
+              path: '',
+              name: ROUTE_NAME.MOBILE_PROJECT_PICKER,
+              component: () => import('@/views/mobile/MobileProjectPickerView.vue'),
+            },
+            {
+              path: 'photo-viewer',
+              name: ROUTE_NAME.MOBILE_PHOTO_VIEWER,
+              component: () => import('@/views/mobile/MobilePhotoViewerView.vue'),
+            },
         {
           path: 'p/:projectId',
           redirect: (to) => ({
@@ -49,6 +54,31 @@ const router = createRouter({
           path: 'p/:projectId/defects',
           name: ROUTE_NAME.MOBILE_DEFECTS,
           component: () => import('@/views/mobile/MobileDefectsView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/new',
+          name: ROUTE_NAME.MOBILE_DEFECT_NEW,
+          component: () => import('@/views/mobile/defects/MobileDefectNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId/edit',
+          name: ROUTE_NAME.MOBILE_DEFECT_EDIT,
+          component: () => import('@/views/mobile/defects/MobileDefectEditView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId/records/new',
+          name: ROUTE_NAME.MOBILE_DEFECT_RECORD_NEW,
+          component: () => import('@/views/mobile/defects/MobileDefectRecordNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId/records/:recordId',
+          name: ROUTE_NAME.MOBILE_DEFECT_RECORD_DETAIL,
+          component: () => import('@/views/mobile/defects/MobileDefectRecordDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId',
+          name: ROUTE_NAME.MOBILE_DEFECT_DETAIL,
+          component: () => import('@/views/mobile/defects/MobileDefectDetailView.vue'),
         },
         {
           path: 'p/:projectId/repair',

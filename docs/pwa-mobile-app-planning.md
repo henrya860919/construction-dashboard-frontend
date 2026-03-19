@@ -1,5 +1,8 @@
 # PWA 手機查驗 App 架構規劃與分析
 
+> **已落地實作的操作指南**（路由、Layout、歷史堆疊、iOS 鍵盤等）請見：**[mobile-field-app-implementation-guide.md](./mobile-field-app-implementation-guide.md)**。  
+> 本文件以**規劃、方案比較與願景**為主。
+
 本文件說明如何將現有 Construction Dashboard 前端擴充為 **同一程式碼庫、雙端呈現**：桌面版維持完整系統，手機端（含 PWA 安裝）僅呈現現場查驗相關功能，並可離線填單、連線後同步。
 
 ---

@@ -1,13 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FolderKanban } from 'lucide-vue-next'
 import { buildProjectPath } from '@/constants/routes'
@@ -61,9 +55,7 @@ function openProject(projectId: string, projectName: string) {
       {{ errorMessage }}
     </p>
 
-    <div v-if="loading" class="text-sm text-muted-foreground">
-      載入中…
-    </div>
+    <div v-if="loading" class="text-sm text-muted-foreground">載入中…</div>
 
     <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Card
@@ -73,7 +65,9 @@ function openProject(projectId: string, projectName: string) {
         @click="openProject(p.id, p.name)"
       >
         <CardHeader class="flex flex-row items-center gap-3 pb-2">
-          <div class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div
+            class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+          >
             <FolderKanban class="size-6" />
           </div>
           <div class="min-w-0 flex-1">
@@ -84,9 +78,7 @@ function openProject(projectId: string, projectName: string) {
           </div>
         </CardHeader>
         <CardContent class="pt-0">
-          <Button variant="outline" size="sm" class="w-full">
-            進入工作區
-          </Button>
+          <Button variant="outline" size="sm" class="w-full"> 進入工作區 </Button>
         </CardContent>
       </Card>
     </div>

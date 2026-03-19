@@ -1,0 +1,38 @@
+---
+description: 手機／PWA 現場查驗實作規範（路由、Layout、歷史堆疊、iOS）；詳見 docs/mobile-field-app-implementation-guide.md
+alwaysApply: false
+---
+
+# 手機／PWA 現場查驗（實作規範）
+
+完整說明與檢查清單：**`docs/mobile-field-app-implementation-guide.md`**（規劃願景另見 `docs/pwa-mobile-app-planning.md`）。
+
+## 路由與檔案
+
+- 手機路由掛在 **`/mobile`**，`MobileLayout`；專案內路徑為 **`/mobile/p/:projectId/...`**。
+- 新增頁面：同步 **`src/constants/routes.ts`**（`ROUTE_PATH` / `ROUTE_NAME`）與 **`src/router/index.ts`**。
+- 連結與導航優先 **`buildMobileProjectPath(projectId, subPath)`** 或具名路由 + `params`，勿硬編路徑字串。
+
+## 導航與歷史堆疊（必守）
+
+- 從「列表／詳情」進入**表單／編輯**用 `push`；表單**儲存成功**或**取消**要回到上一頁時，用 **`router.back()`**，**不要**再 `push` 到詳情／列表（否則返回鍵會回到表單）。
+- 若返回後需保留詳情內狀態（例如分頁）：先用 **`router.replace`** 更新目前頁的 **URL query**（如 `?tab=records`），再 `push` 子頁。參考：`MobileDefectDetailView.vue` 與執行紀錄相關導航。
+
+## Layout 與 UI
+
+- **`MobileLayout`**：`ROOT_ROUTE_NAMES` 與 **`App.vue` 的 `MOBILE_ROOT_NAMES`**（iOS 根頁防護）新增 Tab 根頁時要一併維護。
+- **`projectId`**：除 `route.params` 外，必要時從 **`path` 解析備援**（避免返回時 Tab 列消失）；見 `MobileLayout.vue`。
+- 底部 **`MobileNavTabs`**：勿對包住 icon 的容器下整塊 **`filter`**（會導致 SVG 不顯示）；固定底欄可 class **`pwa-fixed-bottom`**。
+- 樣式遵守 **`theme-support.mdc`**（語意 token、深淺模式）。
+
+## PWA／iOS
+
+- **`App.vue`**：僅 **iOS + standalone** 啟用根頁 `history` / 邊緣手勢、`--vh`、`keyboard-open`。
+- **`main.css`**：`ios-pwa-standalone`、`keyboard-open` 與固定底欄、`scrollbar-hide`、表單 16px 防縮放。
+- 區網開發：**`VITE_API_URL`** 須與實際連線之後端位址一致；**`vite` HMR host** 若與瀏覽器所用 IP 不一致可能異常。
+
+## 擴充新模組
+
+- 參考 **`src/views/mobile/defects/`**（列表、詳情、表單、子頁、`router.back` 模式、可選 `usePhotoViewer`）。
+- API 放 **`src/api/`**；後端維持專案下資源路徑與權限檢查。
+- 變更後執行 **`npm run build`**。

@@ -192,10 +192,7 @@ const photosGroupedByYearMonth = computed(() => {
 const photosGroupedByDate = computed(() => {
   const items = photoGridItems.value
   if (!items.length) return []
-  const yearMap = new Map<
-    number,
-    Map<number, Map<number, PhotoGridItem[]>>
-  >()
+  const yearMap = new Map<number, Map<number, Map<number, PhotoGridItem[]>>>()
   for (const item of items) {
     const d = new Date(item.createdAt)
     const y = d.getFullYear()
@@ -208,7 +205,10 @@ const photosGroupedByDate = computed(() => {
     if (!dayMap.has(day)) dayMap.set(day, [])
     dayMap.get(day)!.push(item)
   }
-  const result: { year: number; months: { month: number; days: { day: number; items: PhotoGridItem[] }[] }[] }[] = []
+  const result: {
+    year: number
+    months: { month: number; days: { day: number; items: PhotoGridItem[] }[] }[]
+  }[] = []
   const years = Array.from(yearMap.keys()).sort((a, b) => a - b)
   for (const year of years) {
     const monthMap = yearMap.get(year)!
@@ -279,7 +279,9 @@ async function fetchFavorites() {
 function loadPhotos() {
   if (activeView.value === 'favorites') {
     loadingPhotos.value = true
-    fetchFavorites().finally(() => { loadingPhotos.value = false })
+    fetchFavorites().finally(() => {
+      loadingPhotos.value = false
+    })
   } else if (activeView.value === 'library' || activeView.value === 'recent') {
     fetchLibraryPhotos()
   } else if (activeView.value) {
@@ -374,9 +376,8 @@ function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
   const idx = list.findIndex((p) => p.id === item.id)
   if (selectionMode.value) {
     if (e.shiftKey) {
-      const lastIdx = lastClickedId.value != null
-        ? list.findIndex((p) => p.id === lastClickedId.value)
-        : -1
+      const lastIdx =
+        lastClickedId.value != null ? list.findIndex((p) => p.id === lastClickedId.value) : -1
       const from = lastIdx >= 0 ? Math.min(lastIdx, idx) : idx
       const to = lastIdx >= 0 ? Math.max(lastIdx, idx) : idx
       const next = new Set(selectedIds.value)
@@ -401,9 +402,8 @@ function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
     return
   }
   if (e.shiftKey) {
-    const lastIdx = lastClickedId.value != null
-      ? list.findIndex((p) => p.id === lastClickedId.value)
-      : -1
+    const lastIdx =
+      lastClickedId.value != null ? list.findIndex((p) => p.id === lastClickedId.value) : -1
     const from = lastIdx >= 0 ? Math.min(lastIdx, idx) : idx
     const to = lastIdx >= 0 ? Math.max(lastIdx, idx) : idx
     const next = new Set(selectedIds.value)
@@ -423,7 +423,8 @@ function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
   selectedIds.value = new Set()
   lastClickedId.value = item.id
   // 僅在「全部」tab 或非圖庫檢視（相簿／我的最愛等）時才開啟 lightbox；年／月 tab 點擊精選不開 modal
-  const inYearOrMonthTab = activeView.value === 'library' && (photoTab.value === 'year' || photoTab.value === 'month')
+  const inYearOrMonthTab =
+    activeView.value === 'library' && (photoTab.value === 'year' || photoTab.value === 'month')
   if (!inYearOrMonthTab) {
     goToAllAndOpenLightbox(item.id)
   }
@@ -463,7 +464,8 @@ async function submitCreateAlbum() {
     createAlbumOpen.value = false
     activeView.value = album.id
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
+    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+      ?.error?.message
     createAlbumError.value = msg ?? '建立失敗，請稍後再試'
   } finally {
     createAlbumLoading.value = false
@@ -515,7 +517,13 @@ function toggleAddToAlbumSelection(id: string) {
 
 async function submitAddToAlbum() {
   const albumId = activeView.value
-  if (!albumId || typeof albumId !== 'string' || !projectId.value || addToAlbumSelectedIds.value.size === 0) return
+  if (
+    !albumId ||
+    typeof albumId !== 'string' ||
+    !projectId.value ||
+    addToAlbumSelectedIds.value.size === 0
+  )
+    return
   addToAlbumLoading.value = true
   addToAlbumError.value = ''
   try {
@@ -525,7 +533,8 @@ async function submitAddToAlbum() {
     addToAlbumOpen.value = false
     await fetchAlbumPhotos(albumId)
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
+    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+      ?.error?.message
     addToAlbumError.value = msg ?? '加入失敗，請稍後再試'
   } finally {
     addToAlbumLoading.value = false
@@ -539,7 +548,11 @@ const libraryPhotoItems = computed(() =>
 /** 從圖庫加入對話框：只顯示尚未在此相簿的照片 */
 const libraryPhotoItemsForAddToAlbum = computed(() => {
   const items = libraryPhotoItems.value
-  if (activeView.value === 'library' || activeView.value === 'recent' || typeof activeView.value !== 'string') {
+  if (
+    activeView.value === 'library' ||
+    activeView.value === 'recent' ||
+    typeof activeView.value !== 'string'
+  ) {
     return items
   }
   const inAlbumIds = new Set(albumPhotos.value.map((p) => p.id))
@@ -634,7 +647,8 @@ async function confirmAddSelectedToAlbum() {
     closeAddSelectedToAlbum()
     if (activeView.value === albumId) await fetchAlbumPhotos(albumId)
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
+    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+      ?.error?.message
     addSelectedToAlbumError.value = msg ?? '加入失敗，請稍後再試'
   } finally {
     addSelectedToAlbumLoading.value = false
@@ -782,7 +796,9 @@ async function confirmAddSelectedToAlbum() {
               @change="onFileInputChange"
             />
             <Button
-              v-if="activeView !== 'favorites' && activeView !== 'library' && activeView !== 'recent'"
+              v-if="
+                activeView !== 'favorites' && activeView !== 'library' && activeView !== 'recent'
+              "
               variant="outline"
               size="sm"
               :disabled="!libraryPhotoItems.length || addToAlbumLoading"
@@ -793,9 +809,7 @@ async function confirmAddSelectedToAlbum() {
             <template v-if="selectionMode || selectedIds.size > 0">
               <span class="text-sm text-muted-foreground">已選 {{ selectedIds.size }} 張</span>
               <ButtonGroup>
-                <Button variant="outline" size="sm" @click="clearSelection">
-                  取消選取
-                </Button>
+                <Button variant="outline" size="sm" @click="clearSelection"> 取消選取 </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -817,19 +831,8 @@ async function confirmAddSelectedToAlbum() {
                 </Button>
               </ButtonGroup>
             </template>
-            <Button
-              v-else
-              variant="outline"
-              size="sm"
-              @click="toggleSelectionMode"
-            >
-              選取
-            </Button>
-            <Button
-              size="sm"
-              :disabled="uploadInProgress || !projectId"
-              @click="triggerUpload"
-            >
+            <Button v-else variant="outline" size="sm" @click="toggleSelectionMode"> 選取 </Button>
+            <Button size="sm" :disabled="uploadInProgress || !projectId" @click="triggerUpload">
               <Loader2 v-if="uploadInProgress" class="mr-2 size-4 animate-spin" />
               <Upload v-else class="mr-2 size-4" />
               上傳照片
@@ -837,7 +840,9 @@ async function confirmAddSelectedToAlbum() {
           </div>
         </div>
         <!-- 避免按 Shift／Cmd 多選時觸發 focus-visible 出現橫線 -->
-        <ScrollArea class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:focus-visible:outline-none [&_[data-slot=scroll-area-viewport]]:focus-visible:ring-0">
+        <ScrollArea
+          class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:focus-visible:outline-none [&_[data-slot=scroll-area-viewport]]:focus-visible:ring-0"
+        >
           <div v-if="loadingPhotos" class="flex flex-col items-center justify-center py-24">
             <Loader2 class="size-10 animate-spin text-muted-foreground" />
             <p class="mt-3 text-sm text-muted-foreground">載入中…</p>
@@ -849,7 +854,13 @@ async function confirmAddSelectedToAlbum() {
             <ImageIcon class="size-16 text-muted-foreground/50" />
             <p class="mt-4 text-sm font-medium text-foreground">尚無照片</p>
             <p class="mt-1 text-xs text-muted-foreground">
-              {{ activeView === 'favorites' ? '尚未加入任何最愛，在照片上點擊星號即可加入' : isLibrary ? '上傳照片後會顯示於圖庫與最近儲存' : '在此相簿加入照片後會顯示於此' }}
+              {{
+                activeView === 'favorites'
+                  ? '尚未加入任何最愛，在照片上點擊星號即可加入'
+                  : isLibrary
+                    ? '上傳照片後會顯示於圖庫與最近儲存'
+                    : '在此相簿加入照片後會顯示於此'
+              }}
             </p>
             <Button v-if="isLibrary" class="mt-4" size="sm" @click="triggerUpload">
               <Upload class="mr-2 size-4" />
@@ -865,27 +876,33 @@ async function confirmAddSelectedToAlbum() {
                   <template v-if="group.items.slice(0, FEATURED_PER_GROUP).length">
                     <div class="mb-4">
                       <p class="mb-2 text-sm font-medium text-muted-foreground">精選</p>
-                      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                       <div
-                        v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
-                        :key="item.id"
-                        :class="[
-                          'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-                          isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
-                        ]"
-                        @click="handlePhotoClick(item, $event)"
+                        class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
                       >
-                        <PhotoThumbnail :file-id="item.id" />
                         <div
-                          v-if="selectionMode"
-                          class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
-                          aria-hidden
+                          v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
+                          :key="item.id"
+                          :class="[
+                            'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                            isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
+                          ]"
+                          @click="handlePhotoClick(item, $event)"
                         >
-                          <CheckCircle2 v-if="isSelected(item.id)" class="size-3.5 text-primary" fill="currentColor" />
-                          <Circle v-else class="size-3.5" />
+                          <PhotoThumbnail :file-id="item.id" />
+                          <div
+                            v-if="selectionMode"
+                            class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
+                            aria-hidden
+                          >
+                            <CheckCircle2
+                              v-if="isSelected(item.id)"
+                              class="size-3.5 text-primary"
+                              fill="currentColor"
+                            />
+                            <Circle v-else class="size-3.5" />
+                          </div>
                         </div>
                       </div>
-                    </div>
                     </div>
                   </template>
                 </section>
@@ -893,40 +910,54 @@ async function confirmAddSelectedToAlbum() {
             </div>
             <!-- 月：每個月份底下僅「該月精選」（僅圖庫時顯示） -->
             <div v-show="activeView === 'library' && photoTab === 'month'" class="space-y-8 p-4">
-              <template v-for="group in photosGroupedByYearMonth" :key="`${group.year}-${group.month}`">
+              <template
+                v-for="group in photosGroupedByYearMonth"
+                :key="`${group.year}-${group.month}`"
+              >
                 <section class="group">
-                  <h3 class="mb-3 text-lg font-semibold text-foreground/90">{{ group.year }} 年 {{ group.month }} 月</h3>
+                  <h3 class="mb-3 text-lg font-semibold text-foreground/90">
+                    {{ group.year }} 年 {{ group.month }} 月
+                  </h3>
                   <template v-if="group.items.slice(0, FEATURED_PER_GROUP).length">
                     <div class="mb-4">
                       <p class="mb-2 text-sm font-medium text-muted-foreground">精選</p>
-                      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                       <div
-                        v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
-                        :key="item.id"
-                        :class="[
-                          'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-                          isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
-                        ]"
-                        @click="handlePhotoClick(item, $event)"
+                        class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
                       >
-                        <PhotoThumbnail :file-id="item.id" />
                         <div
-                          v-if="selectionMode"
-                          class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
-                          aria-hidden
+                          v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
+                          :key="item.id"
+                          :class="[
+                            'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                            isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
+                          ]"
+                          @click="handlePhotoClick(item, $event)"
                         >
-                          <CheckCircle2 v-if="isSelected(item.id)" class="size-3.5 text-primary" fill="currentColor" />
-                          <Circle v-else class="size-3.5" />
+                          <PhotoThumbnail :file-id="item.id" />
+                          <div
+                            v-if="selectionMode"
+                            class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
+                            aria-hidden
+                          >
+                            <CheckCircle2
+                              v-if="isSelected(item.id)"
+                              class="size-3.5 text-primary"
+                              fill="currentColor"
+                            />
+                            <Circle v-else class="size-3.5" />
+                          </div>
                         </div>
                       </div>
-                    </div>
                     </div>
                   </template>
                 </section>
               </template>
             </div>
             <!-- 全部：年 > 月 > 日，可刪除（圖庫時依 tab，其餘檢視一律顯示此塊） -->
-            <div v-show="(activeView === 'library' && photoTab === 'all') || activeView !== 'library'" class="space-y-8 p-4">
+            <div
+              v-show="(activeView === 'library' && photoTab === 'all') || activeView !== 'library'"
+              class="space-y-8 p-4"
+            >
               <template v-for="group in photosGroupedByDate" :key="group.year">
                 <section>
                   <h3 class="sticky top-0 z-10 mb-3 py-1 text-lg font-semibold text-foreground/90">
@@ -939,12 +970,17 @@ async function confirmAddSelectedToAlbum() {
                           {{ monthGroup.month }} 月
                         </h4>
                         <div class="space-y-4">
-                          <template v-for="dayGroup in monthGroup.days" :key="`${monthGroup.month}-${dayGroup.day}`">
+                          <template
+                            v-for="dayGroup in monthGroup.days"
+                            :key="`${monthGroup.month}-${dayGroup.day}`"
+                          >
                             <div>
                               <p class="mb-2 text-xs font-medium text-muted-foreground/90">
                                 {{ dayGroup.day }} 日
                               </p>
-                              <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                              <div
+                                class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                              >
                                 <div
                                   v-for="item in dayGroup.items"
                                   :key="item.id"
@@ -962,7 +998,11 @@ async function confirmAddSelectedToAlbum() {
                                     class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
                                     aria-hidden
                                   >
-                                    <CheckCircle2 v-if="isSelected(item.id)" class="size-3.5 text-primary" fill="currentColor" />
+                                    <CheckCircle2
+                                      v-if="isSelected(item.id)"
+                                      class="size-3.5 text-primary"
+                                      fill="currentColor"
+                                    />
                                     <Circle v-else class="size-3.5" />
                                   </div>
                                   <template v-if="!selectionMode">
@@ -973,7 +1013,10 @@ async function confirmAddSelectedToAlbum() {
                                       @click.stop="toggleFavorite(item)"
                                     >
                                       <Star
-                                        :class="['size-4', isFavorite(item.id) ? 'fill-primary text-primary' : '']"
+                                        :class="[
+                                          'size-4',
+                                          isFavorite(item.id) ? 'fill-primary text-primary' : '',
+                                        ]"
                                       />
                                     </button>
                                     <Button
@@ -1038,10 +1081,7 @@ async function confirmAddSelectedToAlbum() {
       </div>
       <DialogFooter>
         <Button variant="outline" @click="createAlbumOpen = false">取消</Button>
-        <Button
-          :disabled="!newAlbumName.trim() || createAlbumLoading"
-          @click="submitCreateAlbum"
-        >
+        <Button :disabled="!newAlbumName.trim() || createAlbumLoading" @click="submitCreateAlbum">
           <Loader2 v-if="createAlbumLoading" class="mr-2 size-4 animate-spin" />
           建立
         </Button>
@@ -1058,7 +1098,10 @@ async function confirmAddSelectedToAlbum() {
       <p v-if="addToAlbumError" class="shrink-0 text-sm text-destructive">{{ addToAlbumError }}</p>
       <div class="min-h-0 max-h-[50vh] flex-1 overflow-hidden rounded-md border border-border">
         <ScrollArea v-if="!addToAlbumFetching" class="h-full min-h-0">
-          <div v-if="libraryPhotoItemsForAddToAlbum.length === 0" class="py-12 text-center text-sm text-muted-foreground">
+          <div
+            v-if="libraryPhotoItemsForAddToAlbum.length === 0"
+            class="py-12 text-center text-sm text-muted-foreground"
+          >
             圖庫中尚無可加入的照片，或已全部加入此相簿。
           </div>
           <div v-else class="grid grid-cols-3 gap-2 p-4 sm:grid-cols-4 md:grid-cols-5">
@@ -1125,9 +1168,7 @@ async function confirmAddSelectedToAlbum() {
       <DialogHeader>
         <DialogTitle>刪除照片</DialogTitle>
       </DialogHeader>
-      <p class="text-sm text-muted-foreground">
-        確定要刪除此照片？刪除後無法復原。
-      </p>
+      <p class="text-sm text-muted-foreground">確定要刪除此照片？刪除後無法復原。</p>
       <DialogFooter>
         <Button variant="outline" @click="closeDeletePhoto">取消</Button>
         <Button variant="destructive" :disabled="deletePhotoLoading" @click="confirmDeletePhoto">
@@ -1149,7 +1190,11 @@ async function confirmAddSelectedToAlbum() {
       </p>
       <DialogFooter>
         <Button variant="outline" @click="closeDeleteSelected">取消</Button>
-        <Button variant="destructive" :disabled="deleteSelectedLoading" @click="confirmDeleteSelected">
+        <Button
+          variant="destructive"
+          :disabled="deleteSelectedLoading"
+          @click="confirmDeleteSelected"
+        >
           <Loader2 v-if="deleteSelectedLoading" class="mr-2 size-4 animate-spin" />
           刪除
         </Button>
@@ -1163,7 +1208,9 @@ async function confirmAddSelectedToAlbum() {
       <DialogHeader>
         <DialogTitle>加入到相簿</DialogTitle>
       </DialogHeader>
-      <p class="text-sm text-muted-foreground">將所選 {{ selectedIds.size }} 張照片加入至以下相簿：</p>
+      <p class="text-sm text-muted-foreground">
+        將所選 {{ selectedIds.size }} 張照片加入至以下相簿：
+      </p>
       <div class="grid gap-2">
         <label class="text-sm font-medium text-foreground">選擇相簿</label>
         <select
@@ -1173,7 +1220,9 @@ async function confirmAddSelectedToAlbum() {
           <option value="">請選擇相簿</option>
           <option v-for="a in albums" :key="a.id" :value="a.id">{{ a.name }}</option>
         </select>
-        <p v-if="addSelectedToAlbumError" class="text-sm text-destructive">{{ addSelectedToAlbumError }}</p>
+        <p v-if="addSelectedToAlbumError" class="text-sm text-destructive">
+          {{ addSelectedToAlbumError }}
+        </p>
       </div>
       <DialogFooter>
         <Button variant="outline" @click="closeAddSelectedToAlbum">取消</Button>

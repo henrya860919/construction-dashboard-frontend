@@ -41,7 +41,7 @@ function switchToDesktop() {
 </script>
 
 <template>
-  <div class="mobile-layout flex h-[100dvh] flex-col overflow-hidden bg-background">
+  <div class="mobile-layout">
     <MobileHeader
       :title="pageTitle"
       :can-go-back="canGoBack"
@@ -51,10 +51,7 @@ function switchToDesktop() {
       @switch-to-desktop="switchToDesktop"
     />
 
-    <main
-      class="mobile-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-behavior-y-contain"
-      style="-webkit-overflow-scrolling: touch"
-    >
+    <main class="mobile-main">
       <router-view />
     </main>
 
@@ -64,10 +61,21 @@ function switchToDesktop() {
 
 <style scoped>
 .mobile-layout {
-  /* 安全區域：避免 notch / 底部橫條遮擋 */
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  height: 100vh;
+  max-height: 100dvh;
+  max-height: 100vh;
+  overflow: hidden;
+  background: var(--background);
 }
 .mobile-main {
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 </style>

@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+/* PWA／手機：layout 填滿一屏、不讓整頁出現捲軸 */
+html {
+  height: 100%;
+}
+body {
+  height: 100%;
+  min-height: -webkit-fill-available;
+  overflow: hidden;
+}
+#app {
+  height: 100%;
+}
+
 /* 官網 Neutral 主題（oklch），與 shadcn-vue 文件一致 */
 @theme {
   --color-background: var(--background);

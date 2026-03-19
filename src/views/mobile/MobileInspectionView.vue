@@ -22,13 +22,9 @@ function goAdd() {
   <div class="mobile-page px-4 pb-6 pt-4">
     <div class="mb-4 flex items-center justify-between">
       <h2 class="text-lg font-semibold text-foreground">自主檢查</h2>
-      <Button
-        size="sm"
-        class="min-h-12 touch-manipulation"
-        @click="goAdd"
-      >
+      <Button size="sm" class="min-h-12 touch-manipulation" @click="goAdd">
         <Plus class="size-5" aria-hidden />
-        <span class="ml-1">新增</span>
+        <span class="ml-1">新增123abc</span>
       </Button>
     </div>
 

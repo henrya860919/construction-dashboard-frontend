@@ -2,6 +2,8 @@
 import { useRoute } from 'vue-router'
 import { BookOpen } from 'lucide-vue-next'
 
+defineOptions({ name: 'MobileDiaryView' })
+
 useRoute()
 
 // 手機版獨立：施工日誌（之後接 API）

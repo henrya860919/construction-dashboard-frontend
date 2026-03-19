@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchActiveAnnouncements, markAnnouncementRead as apiMarkRead, type ActiveAnnouncementItem } from '@/api/announcements'
+import {
+  fetchActiveAnnouncements,
+  markAnnouncementRead as apiMarkRead,
+  type ActiveAnnouncementItem,
+} from '@/api/announcements'
 
 export const useAnnouncementStore = defineStore('announcements', () => {
   const list = ref<ActiveAnnouncementItem[]>([])

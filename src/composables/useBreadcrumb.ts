@@ -1,7 +1,14 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { BREADCRUMB_LABELS, BREADCRUMB_PROJECT_SUFFIX_LABELS } from '@/constants/breadcrumb'
+import {
+  BREADCRUMB_LABELS,
+  BREADCRUMB_PROJECT_SUFFIX_LABELS,
+  getBreadcrumbModuleForSuffix,
+} from '@/constants/breadcrumb'
 import { useDeviceBreadcrumbStore } from '@/stores/deviceBreadcrumb'
+import { useRepairBreadcrumbStore } from '@/stores/repairBreadcrumb'
+import { useSelfInspectionTemplateBreadcrumbStore } from '@/stores/selfInspectionTemplateBreadcrumb'
+import { useSelfCheckBreadcrumbStore } from '@/stores/selfCheckBreadcrumb'
 import { useProjectStore } from '@/stores/project'
 import { useTenantStore } from '@/stores/tenant'
 
@@ -19,6 +26,9 @@ export type { BreadcrumbItem }
 export function useBreadcrumb() {
   const route = useRoute()
   const deviceBreadcrumbStore = useDeviceBreadcrumbStore()
+  const repairBreadcrumbStore = useRepairBreadcrumbStore()
+  const selfInspectionTemplateBreadcrumbStore = useSelfInspectionTemplateBreadcrumbStore()
+  const selfCheckBreadcrumbStore = useSelfCheckBreadcrumbStore()
   const projectStore = useProjectStore()
 
   const tenantStore = useTenantStore()
@@ -30,6 +40,25 @@ export function useBreadcrumb() {
     }
 
     const segments = path.split('/').filter(Boolean)
+
+    // 租戶後台：自主檢查樣板詳情 /admin/self-inspection-templates/:templateId
+    if (
+      segments[0] === 'admin' &&
+      segments[1] === 'self-inspection-templates' &&
+      segments.length === 3
+    ) {
+      const templateName =
+        selfInspectionTemplateBreadcrumbStore.currentTitle ?? '樣板詳情'
+      return [
+        { label: BREADCRUMB_LABELS['/'] ?? '首頁', to: '/' },
+        { label: BREADCRUMB_LABELS['/admin'] ?? '後台', to: '/admin/projects' },
+        {
+          label: BREADCRUMB_LABELS['/admin/self-inspection-templates'] ?? '自主檢查樣板',
+          to: '/admin/self-inspection-templates',
+        },
+        { label: templateName },
+      ]
+    }
 
     // 平台方租戶管理詳情：/platform-admin/tenants/:tenantId
     if (segments[0] === 'platform-admin' && segments[1] === 'tenants' && segments.length === 3) {
@@ -58,13 +87,38 @@ export function useBreadcrumb() {
       if (rest.length > 0) {
         const isDeviceDetail =
           rest[0] === 'monitoring' && rest[1] === 'devices' && rest.length === 3
-        let label =
+        const isDefectDetail =
+          rest[0] === 'construction' && rest[1] === 'defects' && rest.length === 3
+        const isRepairRecordDetail =
+          rest[0] === 'repair' && rest[1] === 'records' && rest.length === 3
+        const isSelfCheckSub =
+          rest[0] === 'construction' && rest[1] === 'self-check' && rest.length >= 3
+        let pageLabel =
           BREADCRUMB_PROJECT_SUFFIX_LABELS[suffix] ??
           rest[rest.length - 1]
         if (isDeviceDetail && deviceBreadcrumbStore.currentDeviceName) {
-          label = deviceBreadcrumbStore.currentDeviceName
+          pageLabel = deviceBreadcrumbStore.currentDeviceName
         }
-        result.push({ label })
+        if (isDefectDetail) {
+          pageLabel = '缺失詳情'
+        }
+        if (isRepairRecordDetail) {
+          pageLabel = repairBreadcrumbStore.currentTitle ?? '報修詳情'
+        }
+        if (isSelfCheckSub) {
+          if (rest.length === 3) {
+            pageLabel = selfCheckBreadcrumbStore.templateTitle ?? rest[2]
+          } else if (rest.length === 4 && rest[3] === 'new') {
+            pageLabel = '新增查驗紀錄'
+          } else if (rest.length === 5 && rest[3] === 'records') {
+            pageLabel = '查驗紀錄詳情'
+          }
+        }
+        const moduleName = getBreadcrumbModuleForSuffix(suffix)
+        if (moduleName) {
+          result.push({ label: moduleName })
+        }
+        result.push({ label: pageLabel })
       }
 
       return result

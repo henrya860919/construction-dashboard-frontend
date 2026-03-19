@@ -30,6 +30,7 @@ alwaysApply: true
 - `src/stores/` - Pinia stores
 - `src/types/` - 共用 TypeScript 型別（API、auth、領域）
 - `src/views/` - 頁面級元件，對應路由
+  - **`src/views/mobile/`** - 手機／PWA 現場查驗（路由前綴 `/mobile`）；實作規範見 **`docs/mobile-field-app-implementation-guide.md`**、規則 **`.cursor/rules/mobile-pwa-field-app.mdc`**
 
 ## 依賴方向
 
@@ -54,3 +55,4 @@ alwaysApply: true
 
 - **做新頁面或列表／表格頁時，請先讀 `.cursor/rules/ui-ux-principles.mdc`**，依其中版面、按鈕、表格、多選、導航等原則與檢查清單實作。
 - 同時依情境參考：project-routes.mdc（專案內路徑與側欄）、theme-support.mdc（深淺色）、api-contract.mdc（API 與錯誤）、shadcn-vue-official.mdc（UI 元件）。
+- **手機／PWA 現場查驗新功能**：讀 **`docs/mobile-field-app-implementation-guide.md`** 與 **`mobile-pwa-field-app.mdc`**（歷史堆疊、`MobileLayout`、iOS PWA 等）。

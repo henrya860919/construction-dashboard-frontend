@@ -18,6 +18,8 @@ const tabs = [
 
 <template>
   <nav class="mobile-tabbar" role="tablist">
+    <!-- 陰影用獨立層，避免 filter 導致子層 icon (SVG) 消失 -->
+    <div class="mobile-tabbar-shadow" aria-hidden="true" />
     <div class="mobile-tabbar-row">
       <RouterLink
         v-for="tab in tabs"
@@ -37,15 +39,33 @@ const tabs = [
 
 <style scoped>
 .mobile-tabbar {
+  position: relative;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   background: var(--card);
-  /* 底部留白：無 safe area 時至少 0.5rem；有 safe area 時用 2.7 倍（依實際機型微調） */
-  padding-bottom: max(0.5rem, calc(env(safe-area-inset-bottom, 0px) * 2.7));
+  /* 左上、右上圓角，底部貼齊螢幕 */
+  border-radius: 1.25rem 1.25rem 0 0;
+  /* 底部留白：僅 safe area */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* 陰影獨立層：避免 filter 造成子層 SVG icon 不渲染 */
+.mobile-tabbar-shadow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--card);
+  filter: drop-shadow(0 -2px 10px rgb(0 0 0 / 0.08)) drop-shadow(0 -1px 3px rgb(0 0 0 / 0.05));
+  pointer-events: none;
+  z-index: 0;
+}
+.dark .mobile-tabbar-shadow {
+  filter: drop-shadow(0 -2px 10px rgb(0 0 0 / 0.3)) drop-shadow(0 -1px 3px rgb(0 0 0 / 0.2));
 }
 .mobile-tabbar-row {
+  position: relative;
+  z-index: 1;
   display: flex;
-  height: 3.5rem;
+  height: 3.9rem;
   align-items: stretch;
   justify-content: space-around;
   flex-shrink: 0;

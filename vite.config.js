@@ -3,6 +3,20 @@ import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
+import os from 'node:os';
+/** 取得本機第一個非內部 IPv4，供手機連線時 HMR WebSocket 使用 */
+function getNetworkHost() {
+    const ifaces = os.networkInterfaces();
+    for (const list of Object.values(ifaces ?? {})) {
+        if (!list)
+            continue;
+        for (const iface of list) {
+            if (iface.family === 'IPv4' && !iface.internal)
+                return iface.address;
+        }
+    }
+    return undefined;
+}
 export default defineConfig({
     plugins: [
         vue(),
@@ -49,6 +63,11 @@ export default defineConfig({
     server: {
         port: 5175,
         host: '0.0.0.0',
+        hmr: {
+            host: getNetworkHost() ?? 'localhost',
+            port: 5175,
+            protocol: 'ws',
+        },
         proxy: {
             '/api': {
                 target: 'http://localhost:3003',

@@ -20,20 +20,43 @@ const router = createRouter({
       ],
     },
     // 手機版（PWA／現場查驗）— 完全獨立路由與 Layout
-    {
-      path: ROUTE_PATH.MOBILE,
-      component: MobileLayout,
-      children: [
         {
-          path: '',
-          name: ROUTE_NAME.MOBILE_PROJECT_PICKER,
-          component: () => import('@/views/mobile/MobileProjectPickerView.vue'),
-        },
+          path: ROUTE_PATH.MOBILE,
+          component: MobileLayout,
+          children: [
+            {
+              path: '',
+              name: ROUTE_NAME.MOBILE_PROJECT_PICKER,
+              component: () => import('@/views/mobile/MobileProjectPickerView.vue'),
+            },
+            {
+              path: 'photo-viewer',
+              name: ROUTE_NAME.MOBILE_PHOTO_VIEWER,
+              component: () => import('@/views/mobile/MobilePhotoViewerView.vue'),
+            },
         {
           path: 'p/:projectId',
           redirect: (to) => ({
             path: buildMobileProjectPath(to.params.projectId as string, ROUTE_PATH.MOBILE_INSPECTION),
           }),
+        },
+        {
+          path: 'p/:projectId/inspection/:templateId/records/:recordId',
+          name: ROUTE_NAME.MOBILE_INSPECTION_RECORD_DETAIL,
+          component: () =>
+            import('@/views/mobile/inspection/MobileSelfInspectionRecordDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/inspection/:templateId/new',
+          name: ROUTE_NAME.MOBILE_INSPECTION_RECORD_NEW,
+          component: () =>
+            import('@/views/mobile/inspection/MobileSelfInspectionRecordNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/inspection/:templateId',
+          name: ROUTE_NAME.MOBILE_INSPECTION_TEMPLATE,
+          component: () =>
+            import('@/views/mobile/inspection/MobileSelfInspectionTemplateView.vue'),
         },
         {
           path: 'p/:projectId/inspection',
@@ -49,6 +72,56 @@ const router = createRouter({
           path: 'p/:projectId/defects',
           name: ROUTE_NAME.MOBILE_DEFECTS,
           component: () => import('@/views/mobile/MobileDefectsView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/new',
+          name: ROUTE_NAME.MOBILE_DEFECT_NEW,
+          component: () => import('@/views/mobile/defects/MobileDefectNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId/edit',
+          name: ROUTE_NAME.MOBILE_DEFECT_EDIT,
+          component: () => import('@/views/mobile/defects/MobileDefectEditView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId/records/new',
+          name: ROUTE_NAME.MOBILE_DEFECT_RECORD_NEW,
+          component: () => import('@/views/mobile/defects/MobileDefectRecordNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId/records/:recordId',
+          name: ROUTE_NAME.MOBILE_DEFECT_RECORD_DETAIL,
+          component: () => import('@/views/mobile/defects/MobileDefectRecordDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/defects/:defectId',
+          name: ROUTE_NAME.MOBILE_DEFECT_DETAIL,
+          component: () => import('@/views/mobile/defects/MobileDefectDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/new',
+          name: ROUTE_NAME.MOBILE_REPAIR_NEW,
+          component: () => import('@/views/mobile/repairs/MobileRepairNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId/records/new',
+          name: ROUTE_NAME.MOBILE_REPAIR_RECORD_NEW,
+          component: () => import('@/views/mobile/repairs/MobileRepairRecordNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId/records/:recordId',
+          name: ROUTE_NAME.MOBILE_REPAIR_RECORD_DETAIL,
+          component: () => import('@/views/mobile/repairs/MobileRepairRecordDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId/edit',
+          name: ROUTE_NAME.MOBILE_REPAIR_EDIT,
+          component: () => import('@/views/mobile/repairs/MobileRepairEditView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/:repairId',
+          name: ROUTE_NAME.MOBILE_REPAIR_DETAIL,
+          component: () => import('@/views/mobile/repairs/MobileRepairDetailView.vue'),
         },
         {
           path: 'p/:projectId/repair',
@@ -188,6 +261,61 @@ const router = createRouter({
           name: ROUTE_NAME.PROJECT_MANAGEMENT_OVERVIEW,
           component: () => import('@/views/management/ManagementOverviewView.vue'),
         },
+        {
+          path: 'p/:projectId/construction/self-check/:templateId/records/:recordId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_RECORD,
+          component: () => import('@/views/construction/ConstructionSelfCheckRecordDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/self-check/:templateId/new',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_NEW,
+          component: () => import('@/views/construction/ConstructionSelfCheckRecordNewView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/self-check/:templateId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_TEMPLATE,
+          component: () => import('@/views/construction/ConstructionSelfCheckTemplateView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/self-check',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK,
+          component: () => import('@/views/construction/ConstructionSelfCheckView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY,
+          component: () => import('@/views/construction/ConstructionDiaryView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/drawings',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DRAWINGS,
+          component: () => import('@/views/construction/ConstructionDrawingsView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/defects/:defectId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DEFECT_DETAIL,
+          component: () => import('@/views/construction/ConstructionDefectDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/defects',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DEFECTS,
+          component: () => import('@/views/construction/ConstructionDefectsView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/overview',
+          name: ROUTE_NAME.PROJECT_REPAIR_OVERVIEW,
+          component: () => import('@/views/repair/RepairOverviewView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/records',
+          name: ROUTE_NAME.PROJECT_REPAIR_RECORDS,
+          component: () => import('@/views/repair/RepairRecordsView.vue'),
+        },
+        {
+          path: 'p/:projectId/repair/records/:repairId',
+          name: ROUTE_NAME.PROJECT_REPAIR_RECORD_DETAIL,
+          component: () => import('@/views/repair/RepairRecordDetailView.vue'),
+        },
         // 單租後台（共用 DefaultLayout，sidebar 依路由切換為後台選單）
         { path: 'admin', redirect: ROUTE_PATH.ADMIN_PROJECTS },
         {
@@ -209,6 +337,16 @@ const router = createRouter({
           path: 'admin/form-templates',
           name: ROUTE_NAME.ADMIN_FORM_TEMPLATES,
           component: () => import('@/views/admin/AdminFormTemplatesView.vue'),
+        },
+        {
+          path: 'admin/self-inspection-templates',
+          name: ROUTE_NAME.ADMIN_SELF_INSPECTION_TEMPLATES,
+          component: () => import('@/views/admin/AdminSelfInspectionTemplatesView.vue'),
+        },
+        {
+          path: 'admin/self-inspection-templates/:templateId',
+          name: ROUTE_NAME.ADMIN_SELF_INSPECTION_TEMPLATE_DETAIL,
+          component: () => import('@/views/admin/AdminSelfInspectionTemplateDetailView.vue'),
         },
         {
           path: 'admin/settings',

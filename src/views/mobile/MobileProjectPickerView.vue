@@ -47,17 +47,13 @@ function selectProject(projectId: string, projectName: string) {
     <IOSInstallPrompt />
 
     <h2 class="mb-1 text-lg font-semibold text-foreground">選擇專案</h2>
-    <p class="mb-4 text-sm text-muted-foreground">
-      選擇要進行現場查驗的專案
-    </p>
+    <p class="mb-4 text-sm text-muted-foreground">選擇要進行現場查驗的專案</p>
 
     <p v-if="errorMessage" class="mb-4 text-sm text-destructive">
       {{ errorMessage }}
     </p>
 
-    <div v-if="loading" class="py-8 text-center text-sm text-muted-foreground">
-      載入中…
-    </div>
+    <div v-if="loading" class="py-8 text-center text-sm text-muted-foreground">載入中…</div>
 
     <ul v-else class="flex flex-col gap-3">
       <li v-for="p in projects" :key="p.id">
@@ -76,7 +72,10 @@ function selectProject(projectId: string, projectName: string) {
           </span>
         </button>
       </li>
-      <li v-if="!loading && projects.length === 0" class="py-8 text-center text-sm text-muted-foreground">
+      <li
+        v-if="!loading && projects.length === 0"
+        class="py-8 text-center text-sm text-muted-foreground"
+      >
         尚無專案
       </li>
     </ul>

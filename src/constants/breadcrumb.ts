@@ -10,6 +10,7 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   '/admin/projects': '專案管理',
   '/admin/members': '成員管理',
   '/admin/form-templates': '表單樣板',
+  '/admin/self-inspection-templates': '自主檢查樣板',
   '/admin/settings': '公司設定',
   '/platform-admin': '平台管理',
   '/platform-admin/tenants': '租戶管理',
@@ -46,4 +47,24 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/management/schedule': '排班表',
   '/management/gantt': '甘特圖',
   '/management/overview': '總覽',
+  '/construction/self-check': '自主檢查',
+  '/construction/diary': '施工日誌',
+  '/construction/drawings': '圖說管理',
+  '/construction/defects': '缺失改善',
+  '/repair/overview': '報修總覽',
+  '/repair/records': '報修紀錄表',
+}
+
+/** 專案內 path 後綴屬於哪個「工作執行」模組（用於麵包屑：工作執行 › 模組名 › 頁名） */
+export function getBreadcrumbModuleForSuffix(suffix: string): string | null {
+  if (suffix.startsWith('/management/') || suffix === '/contract/schedule') return '專案管理'
+  if (
+    suffix.startsWith('/monitoring/') ||
+    suffix.startsWith('/construction/') ||
+    suffix === '/files/photos'
+  ) {
+    return '施工管理'
+  }
+  if (suffix.startsWith('/repair/')) return '報修管理'
+  return null
 }

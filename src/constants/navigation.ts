@@ -150,6 +150,12 @@ export const LAYER3_CONSTRUCTION: NavItemProject[] = [
 export const LAYER3_REPAIR: NavItemProject[] = [
   { id: 'repair-overview', label: '總覽', pathSuffix: '/repair/overview', icon: 'LayoutDashboard' },
   { id: 'repair-records', label: '報修紀錄表', pathSuffix: '/repair/records', icon: 'FileText' },
+  {
+    id: 'repair-demo-table',
+    label: '商品報修表範本',
+    pathSuffix: '/repair/product-repair-demo',
+    icon: 'TableProperties',
+  },
 ]
 
 /** 專案內側欄：概況、監測、契約（path 用 pathSuffix，由 AppSidebar 搭配 projectId 組出） */

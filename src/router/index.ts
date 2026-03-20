@@ -312,6 +312,11 @@ const router = createRouter({
           component: () => import('@/views/repair/RepairRecordsView.vue'),
         },
         {
+          path: 'p/:projectId/repair/product-repair-demo',
+          name: ROUTE_NAME.PROJECT_REPAIR_DEMO_TABLE,
+          component: () => import('@/views/repair/ProductRepairDataTableTemplateView.vue'),
+        },
+        {
           path: 'p/:projectId/repair/records/:repairId',
           name: ROUTE_NAME.PROJECT_REPAIR_RECORD_DETAIL,
           component: () => import('@/views/repair/RepairRecordDetailView.vue'),

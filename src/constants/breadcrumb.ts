@@ -53,6 +53,7 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/construction/defects': '缺失改善',
   '/repair/overview': '報修總覽',
   '/repair/records': '報修紀錄表',
+  '/repair/product-repair-demo': '商品報修表範本',
 }
 
 /** 專案內 path 後綴屬於哪個「工作執行」模組（用於麵包屑：工作執行 › 模組名 › 頁名） */

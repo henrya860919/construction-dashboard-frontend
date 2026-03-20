@@ -38,6 +38,7 @@ import {
   Wrench,
   BookOpen,
   DraftingCompass,
+  TableProperties,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -98,6 +99,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Wrench,
   BookOpen,
   DraftingCompass,
+  TableProperties,
 }
 
 withDefaults(

@@ -89,6 +89,8 @@ export const ROUTE_PATH = {
   PROJECT_REPAIR_OVERVIEW: '/repair/overview',
   PROJECT_REPAIR_RECORDS: '/repair/records',
   PROJECT_REPAIR_RECORD_DETAIL: '/repair/records/:repairId',
+  /** 商品報修表 · 進階資料表 UI 範本（假資料） */
+  PROJECT_REPAIR_DEMO_TABLE: '/repair/product-repair-demo',
 
   /** 單租後台（租戶自管） */
   ADMIN: '/admin',
@@ -171,6 +173,7 @@ export const ROUTE_NAME = {
   PROJECT_REPAIR_OVERVIEW: 'project-repair-overview',
   PROJECT_REPAIR_RECORDS: 'project-repair-records',
   PROJECT_REPAIR_RECORD_DETAIL: 'project-repair-record-detail',
+  PROJECT_REPAIR_DEMO_TABLE: 'project-repair-demo-table',
   ADMIN: 'admin',
   ADMIN_TENANT_INFO: 'admin-tenant-info',
   ADMIN_PROJECTS: 'admin-projects',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,11 @@ import { getAdminTenantInfo, updateCompanyName, uploadCompanyLogo } from '@/api/
 import type { AdminTenantInfo } from '@/api/admin'
 import { useTenantLogoUrl } from '@/composables/useTenantLogoUrl'
 import { useTenantBrandingStore } from '@/stores/tenantBranding'
+import { useAuthStore } from '@/stores/auth'
+import { useAdminStore } from '@/stores/admin'
+
+const authStore = useAuthStore()
+const adminStore = useAdminStore()
 
 const loading = ref(true)
 const tenant = ref<AdminTenantInfo | null>(null)
@@ -31,8 +36,15 @@ function triggerLogoSelect() {
 async function fetchTenant() {
   loading.value = true
   error.value = null
+  if (authStore.isPlatformAdmin && !adminStore.selectedTenantId) {
+    error.value = '請先於後台頂部選擇租戶'
+    tenant.value = null
+    loading.value = false
+    return
+  }
+  const tid = authStore.isPlatformAdmin ? adminStore.selectedTenantId ?? undefined : undefined
   try {
-    tenant.value = await getAdminTenantInfo()
+    tenant.value = await getAdminTenantInfo(tid)
     nameInput.value = tenant.value?.name ?? ''
   } catch (e: unknown) {
     const msg =
@@ -102,6 +114,13 @@ async function onLogoChange(ev: Event) {
 }
 
 onMounted(() => fetchTenant())
+
+watch(
+  () => adminStore.selectedTenantId,
+  () => {
+    if (authStore.isPlatformAdmin) void fetchTenant()
+  }
+)
 </script>
 
 <template>

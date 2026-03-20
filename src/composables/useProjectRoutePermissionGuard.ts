@@ -9,7 +9,7 @@ import {
 import { buildProjectPath } from '@/constants/routes'
 
 /**
- * 專案內路由：project_user 若對當前頁對應模組無 read，導向儀表板或專案列表
+ * 專案內路由：若對當前頁對應模組無 read，導向儀表板或專案列表（platform_admin 略過）
  */
 export function useProjectRoutePermissionGuard() {
   const route = useRoute()
@@ -29,7 +29,7 @@ export function useProjectRoutePermissionGuard() {
       const m = path.match(/^\/p\/([^/]+)/)
       if (!m) return
       const projectId = m[1]
-      if (role === 'platform_admin' || role === 'tenant_admin') return
+      if (role === 'platform_admin') return
 
       await permStore.ensureLoaded(projectId)
       const suffix = resolvePermissionPathSuffix(path)

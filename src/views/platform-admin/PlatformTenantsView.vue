@@ -19,7 +19,6 @@ import {
   resetUserPassword,
   type TenantItem,
   type CreateTenantPayload,
-  type UpdateTenantPayload,
   type PlatformUserItem,
 } from '@/api/platform'
 import { apiClient } from '@/api/client'
@@ -58,7 +57,9 @@ import DataTablePagination from '@/components/common/data-table/DataTablePaginat
 import PlatformTenantsRowActions from '@/views/platform-admin/PlatformTenantsRowActions.vue'
 import { buildTenantManagePath } from '@/constants/routes'
 import { Plus, Loader2, Trash2 } from 'lucide-vue-next'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const list = ref<TenantItem[]>([])
 const rowSelection = ref<Record<string, boolean>>({})
@@ -69,14 +70,6 @@ const createDialogOpen = ref(false)
 const createForm = ref({ name: '', slug: '', status: 'active' as 'active' | 'suspended', expiresAt: '', userLimit: '' as string | number, fileSizeLimitMb: '', storageQuotaMb: '' })
 const createSubmitting = ref(false)
 const createErrorMessage = ref('')
-
-const editDialogOpen = ref(false)
-const editingTenant = ref<TenantItem | null>(null)
-const editForm = ref<{ name: string; slug: string; status: 'active' | 'suspended'; expiresAt: string; userLimit: string; fileSizeLimitMb: string; storageQuotaMb: string }>({ name: '', slug: '', status: 'active', expiresAt: '', userLimit: '', fileSizeLimitMb: '', storageQuotaMb: '' })
-const editSubmitting = ref(false)
-const editErrorMessage = ref('')
-const editTenantUsers = ref<PlatformUserItem[]>([])
-const editTenantUsersLoading = ref(false)
 
 const addUserDialogOpen = ref(false)
 const selectedTenant = ref<TenantItem | null>(null)
@@ -161,75 +154,8 @@ async function submitCreate() {
   }
 }
 
-async function openEditDialog(tenant: TenantItem) {
-  editingTenant.value = tenant
-  const exp = tenant.expiresAt ? tenant.expiresAt.slice(0, 10) : ''
-  editForm.value = {
-    name: tenant.name,
-    slug: tenant.slug ?? '',
-    status: tenant.status === 'suspended' ? 'suspended' : 'active',
-    expiresAt: exp,
-    userLimit: tenant.userLimit != null ? String(tenant.userLimit) : '',
-    fileSizeLimitMb: tenant.fileSizeLimitMb != null ? String(tenant.fileSizeLimitMb) : '',
-    storageQuotaMb: tenant.storageQuotaMb != null ? String(tenant.storageQuotaMb) : '',
-  }
-  editErrorMessage.value = ''
-  editTenantUsers.value = []
-  editDialogOpen.value = true
-  editTenantUsersLoading.value = true
-  try {
-    const { list: users } = await fetchPlatformUsers({
-      tenantId: tenant.id,
-      systemRole: 'tenant_admin',
-      limit: 50,
-    })
-    editTenantUsers.value = users ?? []
-  } catch {
-    editTenantUsers.value = []
-  } finally {
-    editTenantUsersLoading.value = false
-  }
-}
-
-function closeEditDialog() {
-  editDialogOpen.value = false
-  editingTenant.value = null
-  editTenantUsers.value = []
-  editErrorMessage.value = ''
-}
-
-async function submitEdit() {
-  const tenant = editingTenant.value
-  if (!tenant) return
-  const name = editForm.value.name?.trim()
-  if (!name) {
-    editErrorMessage.value = '請輸入租戶名稱'
-    return
-  }
-  editSubmitting.value = true
-  editErrorMessage.value = ''
-  try {
-    const payload: UpdateTenantPayload = {
-      name,
-      slug: editForm.value.slug?.trim() || null,
-      status: editForm.value.status,
-      expiresAt: editForm.value.expiresAt ? editForm.value.expiresAt + 'T23:59:59.000Z' : null,
-      userLimit: editForm.value.userLimit === '' ? null : Number(editForm.value.userLimit),
-      fileSizeLimitMb: editForm.value.fileSizeLimitMb === '' ? null : Number(editForm.value.fileSizeLimitMb),
-      storageQuotaMb: editForm.value.storageQuotaMb === '' ? null : Number(editForm.value.storageQuotaMb),
-    }
-    await updateTenant(tenant.id, payload)
-    closeEditDialog()
-    await loadTenants()
-  } catch (err: unknown) {
-    const res =
-      err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
-        : null
-    editErrorMessage.value = res?.message ?? '更新失敗'
-  } finally {
-    editSubmitting.value = false
-  }
+function goToTenantManage(tenant: TenantItem) {
+  void router.push(buildTenantManagePath(tenant.id))
 }
 
 function openAddUserDialog(tenant: TenantItem) {
@@ -405,11 +331,20 @@ const columns = computed<ColumnDef<TenantItem, unknown>[]>(() => [
     cell: ({ row }) => h('div', { class: 'text-muted-foreground' }, row.original.slug || '—'),
   },
   {
-    id: 'account',
-    header: '帳號',
+    id: 'primaryAdminEmail',
+    header: '租戶管理員 Email',
     cell: ({ row }) => {
-      const n = row.original._count?.users ?? 0
-      return h(Badge, { variant: n > 0 ? 'default' : 'secondary', class: 'font-normal' }, () => n > 0 ? '已設定' : '未設定')
+      const email = row.original.primaryAdminEmail
+      return h(
+        'div',
+        {
+          class: email
+            ? 'max-w-[220px] truncate text-sm text-foreground'
+            : 'text-sm text-muted-foreground',
+          title: email ?? undefined,
+        },
+        email ?? '—'
+      )
     },
   },
   {
@@ -450,7 +385,7 @@ const columns = computed<ColumnDef<TenantItem, unknown>[]>(() => [
       h('div', { class: 'flex' }, [
         h(PlatformTenantsRowActions, {
           row: row.original,
-          onEdit: openEditDialog,
+          onEdit: goToTenantManage,
           onAddUser: openAddUserDialog,
           onResetPassword: openResetPasswordDialog,
           onToggleStatus: toggleStatus,
@@ -525,7 +460,7 @@ async function confirmBatchDelete() {
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight text-foreground">租戶管理</h1>
       <p class="text-sm text-muted-foreground">
-        建立、編輯、停用租戶，設定到期日與使用限制（人員數、上傳與儲存容量）。
+        建立租戶；點租戶名稱或「編輯」進入租戶詳情頁設定基本資料、模組開通與成員。列表可快速停用／啟用、建立帳號或重設密碼。
       </p>
     </div>
 
@@ -669,89 +604,6 @@ async function confirmBatchDelete() {
         <DataTablePagination :table="table" />
       </template>
     </div>
-
-    <!-- Edit dialog -->
-    <Dialog :open="editDialogOpen" @update:open="(v: boolean) => { if (!v) closeEditDialog() }">
-      <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>編輯租戶</DialogTitle>
-          <DialogDescription>
-            修改租戶名稱、狀態、到期日與使用限制。
-          </DialogDescription>
-        </DialogHeader>
-        <form v-if="editingTenant" class="grid gap-4 py-4" @submit.prevent="submitEdit">
-          <div class="grid gap-2">
-            <label for="edit-name" class="text-sm font-medium text-foreground">租戶名稱</label>
-            <Input id="edit-name" v-model="editForm.name" class="bg-background" />
-          </div>
-          <div class="grid gap-2">
-            <label for="edit-slug" class="text-sm font-medium text-foreground">Slug</label>
-            <Input id="edit-slug" v-model="editForm.slug" class="bg-background" />
-          </div>
-          <div class="grid gap-2">
-            <label class="text-sm font-medium text-foreground">狀態</label>
-            <Select v-model="editForm.status">
-              <SelectTrigger class="bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">使用中</SelectItem>
-                <SelectItem value="suspended">已停用</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="grid gap-2">
-            <label for="edit-expires" class="text-sm font-medium text-foreground">到期日</label>
-            <Input id="edit-expires" v-model="editForm.expiresAt" type="date" class="bg-background" />
-          </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="grid gap-2">
-              <label for="edit-userLimit" class="text-sm font-medium text-foreground">人員上限</label>
-              <Input id="edit-userLimit" v-model="editForm.userLimit" type="number" min="0" placeholder="不限制" class="bg-background" />
-            </div>
-            <div class="grid gap-2">
-              <label for="edit-fileSize" class="text-sm font-medium text-foreground">單筆上傳 (MB)</label>
-              <Input id="edit-fileSize" v-model="editForm.fileSizeLimitMb" type="number" min="0" placeholder="不限制" class="bg-background" />
-            </div>
-          </div>
-          <div class="grid gap-2">
-            <label for="edit-storage" class="text-sm font-medium text-foreground">總儲存容量 (MB)</label>
-            <Input id="edit-storage" v-model="editForm.storageQuotaMb" type="number" min="0" placeholder="不限制" class="bg-background" />
-          </div>
-          <!-- 租戶管理員 -->
-          <div class="space-y-2 border-t border-border pt-4">
-            <p class="text-sm font-medium text-foreground">租戶管理員</p>
-            <p class="text-xs text-muted-foreground">此租戶下的租戶管理員帳號</p>
-            <div v-if="editTenantUsersLoading" class="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-              <Loader2 class="size-4 animate-spin" />
-              載入中…
-            </div>
-            <ul v-else-if="editTenantUsers.length === 0" class="rounded-md border border-border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
-              尚無租戶管理員
-            </ul>
-            <ul v-else class="space-y-1.5 rounded-md border border-border bg-muted/20 px-3 py-2">
-              <li
-                v-for="u in editTenantUsers"
-                :key="u.id"
-                class="flex flex-wrap items-center justify-between gap-2 text-sm"
-              >
-                <span class="font-medium text-foreground">{{ u.name || u.email }}</span>
-                <span class="text-muted-foreground">{{ u.email }}</span>
-                <Badge variant="secondary" class="shrink-0 text-xs">租戶管理員</Badge>
-              </li>
-            </ul>
-          </div>
-          <p v-if="editErrorMessage" class="text-sm text-destructive">{{ editErrorMessage }}</p>
-          <DialogFooter>
-            <Button type="button" variant="outline" @click="closeEditDialog">取消</Button>
-            <Button type="submit" :disabled="editSubmitting">
-              <Loader2 v-if="editSubmitting" class="size-4 animate-spin" />
-              {{ editSubmitting ? '儲存中…' : '儲存' }}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
 
     <!-- Add user dialog -->
     <Dialog :open="addUserDialogOpen" @update:open="(v: boolean) => { if (!v) closeAddUserDialog() }">

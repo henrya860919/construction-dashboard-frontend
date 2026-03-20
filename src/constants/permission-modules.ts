@@ -24,6 +24,28 @@ export const PERMISSION_MODULES = [
 
 export type PermissionModuleId = (typeof PERMISSION_MODULES)[number]
 
+/** 平台尚未儲存開通時視為全部關閉；已開通時僅關閉列於 disabledModuleIds 者 */
+export function effectivePlatformDisabledModuleIds(
+  moduleEntitlementsGranted: boolean,
+  disabledModuleIds: string[]
+): PermissionModuleId[] {
+  if (!moduleEntitlementsGranted) {
+    return [...PERMISSION_MODULES]
+  }
+  return disabledModuleIds.filter((id): id is PermissionModuleId =>
+    (PERMISSION_MODULES as readonly string[]).includes(id)
+  )
+}
+
+/** 是否可新增專案／編輯成員權限（與後端 assert 一致） */
+export function tenantModuleGateAllowsOperations(
+  moduleEntitlementsGranted: boolean,
+  disabledModuleIds: string[]
+): boolean {
+  if (!moduleEntitlementsGranted) return false
+  return disabledModuleIds.length < PERMISSION_MODULES.length
+}
+
 /** 權限矩陣勾選器中不可變更的欄位（仍顯示目前值）；專案成員僅以「讀取」控制側欄／可見性，成員 CRUD 另依後端規則 */
 export type PermissionMatrixFlagKey = 'canCreate' | 'canRead' | 'canUpdate' | 'canDelete'
 

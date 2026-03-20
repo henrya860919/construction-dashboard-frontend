@@ -9,7 +9,7 @@ import {
 } from '@tanstack/vue-table'
 import { FlexRender } from '@tanstack/vue-table'
 import type { SortingState } from '@tanstack/vue-table'
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
 import { valueUpdater } from '@/lib/utils'
 import { apiClient } from '@/api/client'
 import { API_PATH } from '@/constants'
@@ -58,7 +58,12 @@ import {
   type ModulesMap,
   type PresetKey,
 } from '@/api/project-permissions'
-import { PERMISSION_PRESET_OPTIONS } from '@/constants/permission-modules'
+import {
+  PERMISSION_PRESET_OPTIONS,
+  effectivePlatformDisabledModuleIds,
+  type PermissionModuleId,
+} from '@/constants/permission-modules'
+import { getAdminTenantModuleEntitlements } from '@/api/admin'
 
 type SystemRoleOption = 'project_user' | 'tenant_admin' | 'platform_admin'
 type MemberTypeOption = 'internal' | 'external'
@@ -180,6 +185,26 @@ function formatDate(iso: string | undefined): string {
   })
 }
 
+/** 平台關閉之模組（權限矩陣列鎖定，與租戶資訊頁一致） */
+const platformDisabledModuleIds = ref<PermissionModuleId[]>([])
+
+async function loadPlatformModuleEntitlements() {
+  const tid = tenantIdForPermissionTemplate.value
+  if (authStore.isPlatformAdmin && !tid) {
+    platformDisabledModuleIds.value = []
+    return
+  }
+  try {
+    const mod = await getAdminTenantModuleEntitlements(tid)
+    platformDisabledModuleIds.value = effectivePlatformDisabledModuleIds(
+      mod.moduleEntitlementsGranted,
+      mod.disabledModuleIds
+    )
+  } catch {
+    platformDisabledModuleIds.value = []
+  }
+}
+
 async function loadMembers() {
   loading.value = true
   try {
@@ -201,7 +226,18 @@ async function loadMembers() {
   }
 }
 
-onMounted(loadMembers)
+onMounted(() => {
+  void loadPlatformModuleEntitlements()
+  void loadMembers()
+})
+
+watch(
+  () => adminStore.selectedTenantId,
+  () => {
+    void loadPlatformModuleEntitlements()
+    void loadMembers()
+  }
+)
 
 function resetForm() {
   form.value = {
@@ -776,6 +812,7 @@ async function confirmBatchDelete() {
           <DialogTitle>權限範本 — {{ permMember?.name || permMember?.email || '成員' }}</DialogTitle>
           <DialogDescription>
             此矩陣為「加入專案時」複製到該成員的預設模組權限；不影響已存在專案內已覆寫的權限。表頭勾選可全選／取消該欄（略過不可編輯的儲存格）。
+            標示「平台未開通」之列由平台設定關閉，與租戶資訊頁模組開通狀態一致，無法在此勾選。
           </DialogDescription>
         </DialogHeader>
         <div v-if="permLoading" class="flex shrink-0 justify-center py-12">
@@ -811,7 +848,11 @@ async function confirmBatchDelete() {
               </Button>
             </div>
             <div class="min-h-0 flex-1 overflow-hidden">
-              <PermissionMatrixForm v-model="permModules" class="min-h-[200px]" />
+              <PermissionMatrixForm
+                v-model="permModules"
+                :platform-disabled-module-ids="platformDisabledModuleIds"
+                class="min-h-[200px]"
+              />
             </div>
             <p v-if="permError" class="shrink-0 text-sm text-destructive">{{ permError }}</p>
             <DialogFooter class="shrink-0 border-t border-border pt-4">

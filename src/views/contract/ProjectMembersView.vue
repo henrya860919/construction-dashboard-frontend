@@ -39,12 +39,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  getProject,
   getProjectMembers,
   getProjectMembersAvailable,
   addProjectMember,
   setProjectMemberStatus,
   removeProjectMember,
 } from '@/api/project'
+import { getAdminTenantModuleEntitlements } from '@/api/admin'
+import { effectivePlatformDisabledModuleIds, type PermissionModuleId } from '@/constants/permission-modules'
 import type { ProjectMemberItem, ProjectMemberAvailableItem } from '@/types'
 import { Plus, Loader2 } from 'lucide-vue-next'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
@@ -488,6 +491,42 @@ function closeBatchRemove() {
   batchRemoveOpen.value = false
 }
 
+/** 平台關閉之模組（與租戶資訊／後台權限範本一致） */
+const platformDisabledModuleIds = ref<PermissionModuleId[]>([])
+
+async function loadPlatformModuleEntitlements() {
+  const pid = getProjectId()
+  if (!pid) {
+    platformDisabledModuleIds.value = []
+    return
+  }
+  let tenantId: string | undefined = authStore.user?.tenantId ?? undefined
+  if (authStore.isPlatformAdmin) {
+    try {
+      const p = await getProject(pid)
+      tenantId = p?.tenantId ?? undefined
+    } catch {
+      platformDisabledModuleIds.value = []
+      return
+    }
+  }
+  if (!tenantId) {
+    platformDisabledModuleIds.value = []
+    return
+  }
+  try {
+    const mod = await getAdminTenantModuleEntitlements(
+      authStore.isPlatformAdmin ? tenantId : undefined
+    )
+    platformDisabledModuleIds.value = effectivePlatformDisabledModuleIds(
+      mod.moduleEntitlementsGranted,
+      mod.disabledModuleIds
+    )
+  } catch {
+    platformDisabledModuleIds.value = []
+  }
+}
+
 async function confirmBatchRemove() {
   const ids = selectedRows.value.map((r) => r.original)
   if (!ids.length) return
@@ -508,7 +547,10 @@ async function confirmBatchRemove() {
 }
 
 watch(projectId, (id) => {
-  if (id) loadMembers()
+  if (id) {
+    void loadMembers()
+    void loadPlatformModuleEntitlements()
+  }
 }, { immediate: true })
 </script>
 
@@ -742,6 +784,7 @@ watch(projectId, (id) => {
           </DialogTitle>
           <DialogDescription>
             僅影響此成員在本專案的模組權限。「重設為租戶範本」會依該成員目前的租戶權限範本重新寫入本專案，不影響其他專案。表頭勾選可全選／取消該欄；「專案成員」列之新增／更新／刪除不可調整，僅「讀取」有效。
+            標示「平台未開通」之列與租戶後台「租戶資訊」之模組開通一致，無法勾選。
             <span
               v-if="projectPermHighlightModuleIds.length > 0 && !projectPermLoading"
               class="mt-2 block text-foreground"
@@ -760,6 +803,7 @@ watch(projectId, (id) => {
                 v-model="projectPermModules"
                 class="min-h-[200px]"
                 :highlight-module-ids="projectPermHighlightModuleIds"
+                :platform-disabled-module-ids="platformDisabledModuleIds"
               />
             </div>
             <p v-if="projectPermError" class="shrink-0 text-sm text-destructive">{{ projectPermError }}</p>

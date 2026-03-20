@@ -9,7 +9,7 @@ import {
 } from '@tanstack/vue-table'
 import { FlexRender } from '@tanstack/vue-table'
 import type { SortingState } from '@tanstack/vue-table'
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
 import { valueUpdater } from '@/lib/utils'
 import { useRouter } from 'vue-router'
 import { apiClient } from '@/api/client'
@@ -17,6 +17,8 @@ import { API_PATH } from '@/constants'
 import { buildProjectPath } from '@/constants/routes'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStore } from '@/stores/admin'
+import { getAdminTenantModuleEntitlements } from '@/api/admin'
+import { tenantModuleGateAllowsOperations } from '@/constants/permission-modules'
 import type { ApiResponse } from '@/types'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -62,6 +64,10 @@ const form = ref({ name: '', description: '', code: '' })
 const submitting = ref(false)
 const errorMessage = ref('')
 
+const projectCreateGateLoading = ref(true)
+const projectCreateAllowed = ref(false)
+const projectCreateGateHint = ref('')
+
 const ALL_STATUS_VALUE = '__all__'
 const statusFilter = ref<string>(ALL_STATUS_VALUE)
 
@@ -92,6 +98,33 @@ function statusLabel(status: string): string {
   return status === 'archived' ? '已封存' : '使用中'
 }
 
+async function loadProjectCreateGate() {
+  projectCreateGateLoading.value = true
+  projectCreateGateHint.value = ''
+  try {
+    if (authStore.isPlatformAdmin && !adminStore.selectedTenantId) {
+      projectCreateAllowed.value = false
+      projectCreateGateHint.value = '請先於後台頂部選擇租戶，始可新增專案。'
+      return
+    }
+    const tid = authStore.isPlatformAdmin ? adminStore.selectedTenantId ?? undefined : undefined
+    const mod = await getAdminTenantModuleEntitlements(tid)
+    projectCreateAllowed.value = tenantModuleGateAllowsOperations(
+      mod.moduleEntitlementsGranted,
+      mod.disabledModuleIds
+    )
+    if (!projectCreateAllowed.value) {
+      projectCreateGateHint.value =
+        '平台尚未為此租戶完成「模組開通」設定，或所有模組均已關閉，無法新增專案。請至平台後台 → 租戶管理 → 模組開通儲存至少一項開通模組。'
+    }
+  } catch {
+    projectCreateAllowed.value = false
+    projectCreateGateHint.value = '無法確認模組開通狀態，暫時無法新增專案。'
+  } finally {
+    projectCreateGateLoading.value = false
+  }
+}
+
 async function loadProjects() {
   loading.value = true
   try {
@@ -108,7 +141,20 @@ async function loadProjects() {
   }
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  await loadProjectCreateGate()
+  await loadProjects()
+})
+
+watch(
+  () => adminStore.selectedTenantId,
+  () => {
+    if (authStore.isPlatformAdmin) {
+      void loadProjectCreateGate()
+      void loadProjects()
+    }
+  }
+)
 
 function resetForm() {
   form.value = { name: '', description: '', code: '' }
@@ -337,7 +383,11 @@ async function confirmBatchDelete() {
         </template>
         <Dialog :open="dialogOpen" @update:open="onOpenChange">
           <DialogTrigger as-child>
-            <Button class="gap-2">
+            <Button
+              class="gap-2"
+              :disabled="projectCreateGateLoading || !projectCreateAllowed"
+              :title="projectCreateGateHint || undefined"
+            >
               <Plus class="size-4" />
               新增專案
             </Button>
@@ -394,6 +444,10 @@ async function confirmBatchDelete() {
           </Dialog>
       </div>
     </div>
+
+    <p v-if="projectCreateGateHint" class="text-sm text-muted-foreground">
+      {{ projectCreateGateHint }}
+    </p>
 
     <div class="rounded-lg border border-border bg-card p-4">
       <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">

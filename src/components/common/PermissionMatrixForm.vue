@@ -18,12 +18,15 @@ const props = withDefaults(
     modelValue: Partial<Record<PermissionModuleId, ModulePermissionFlags>>
     /** 與租戶範本／角色預設不同的模組（專案客製） */
     highlightModuleIds?: PermissionModuleId[]
+    /** 平台關閉之模組：整列鎖定並標示 */
+    platformDisabledModuleIds?: PermissionModuleId[]
     class?: HTMLAttributes['class']
   }>(),
-  { highlightModuleIds: () => [] }
+  { highlightModuleIds: () => [], platformDisabledModuleIds: () => [] }
 )
 
 const highlightSet = computed(() => new Set(props.highlightModuleIds ?? []))
+const platformDisabledSet = computed(() => new Set(props.platformDisabledModuleIds ?? []))
 
 const emit = defineEmits<{
   'update:modelValue': [v: Partial<Record<PermissionModuleId, ModulePermissionFlags>>]
@@ -45,6 +48,7 @@ const rows = computed(() =>
 )
 
 function cellDisabled(module: PermissionModuleId, key: PermissionMatrixFlagKey): boolean {
+  if (platformDisabledSet.value.has(module)) return true
   return !!PERMISSION_MATRIX_UI_DISABLED[module]?.[key]
 }
 
@@ -169,7 +173,14 @@ function onHeaderColumnUpdate(flag: PermissionMatrixFlagKey, v: boolean | 'indet
               <div class="flex flex-wrap items-center gap-2">
                 <span class="font-medium text-foreground">{{ r.label }}</span>
                 <Badge
-                  v-if="highlightSet.has(r.id)"
+                  v-if="platformDisabledSet.has(r.id)"
+                  variant="outline"
+                  class="border-border text-xs font-normal text-muted-foreground"
+                >
+                  平台未開通
+                </Badge>
+                <Badge
+                  v-else-if="highlightSet.has(r.id)"
                   variant="secondary"
                   class="border border-border text-xs font-normal"
                 >

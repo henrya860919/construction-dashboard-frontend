@@ -30,8 +30,24 @@ export interface AdminTenantInfo {
   storageUsageBytes: number
 }
 
-export async function getAdminTenantInfo(): Promise<AdminTenantInfo> {
-  const { data } = await apiClient.get<ApiResponse<AdminTenantInfo>>(API_PATH.ADMIN_TENANT_INFO)
+export async function getAdminTenantInfo(tenantId?: string): Promise<AdminTenantInfo> {
+  const { data } = await apiClient.get<ApiResponse<AdminTenantInfo>>(API_PATH.ADMIN_TENANT_INFO, {
+    params: tenantId ? { tenantId } : undefined,
+  })
+  return data.data
+}
+
+/** 與 GET .../admin/tenant/module-entitlements 一致 */
+export interface AdminTenantModuleEntitlementsDto {
+  disabledModuleIds: string[]
+  moduleEntitlementsGranted: boolean
+}
+
+export async function getAdminTenantModuleEntitlements(tenantId?: string): Promise<AdminTenantModuleEntitlementsDto> {
+  const { data } = await apiClient.get<ApiResponse<AdminTenantModuleEntitlementsDto>>(
+    API_PATH.ADMIN_TENANT_MODULE_ENTITLEMENTS,
+    { params: tenantId ? { tenantId } : undefined }
+  )
   return data.data
 }
 

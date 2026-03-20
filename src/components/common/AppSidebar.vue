@@ -162,7 +162,7 @@ watch(
     [projectId.value, authStore.isAuthenticated, authStore.user?.systemRole] as const,
   ([id, authed, role]) => {
     if (!id || !authed) return
-    if (role === 'platform_admin' || role === 'tenant_admin') return
+    if (role === 'platform_admin') return
     void permStore.ensureLoaded(id)
   },
   { immediate: true }
@@ -170,7 +170,7 @@ watch(
 
 function isProjectNavPathVisible(pathSuffix: string): boolean {
   if (!projectId.value || !authStore.isAuthenticated) return true
-  if (authStore.isPlatformAdmin || authStore.isTenantAdmin) return true
+  if (authStore.isPlatformAdmin) return true
   return canReadPath(pathSuffix)
 }
 

@@ -15,6 +15,8 @@ export interface TenantItem {
   storageQuotaMb: number | null
   createdAt: string
   updatedAt: string
+  /** 該租戶最早建立之租戶管理員 Email（平台 API 附加；無則 null） */
+  primaryAdminEmail?: string | null
   _count?: { users: number; projects: number }
 }
 

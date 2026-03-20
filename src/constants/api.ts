@@ -20,6 +20,8 @@ export const API_PATH = {
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,
   ADMIN_USERS: `${API_V1}/admin/users`,
   ADMIN_TENANT_INFO: `${API_V1}/admin/tenant-info`,
+  /** 本租戶模組開通狀態（唯讀）；platform_admin 須帶 query tenantId */
+  ADMIN_TENANT_MODULE_ENTITLEMENTS: `${API_V1}/admin/tenant/module-entitlements`,
   /** 公司設定：PATCH 名稱、POST logo、GET logo 用 /admin/tenant-logo */
   ADMIN_COMPANY_SETTINGS: `${API_V1}/admin/company-settings`,
   ADMIN_TENANT_LOGO: `${API_V1}/admin/tenant-logo`,

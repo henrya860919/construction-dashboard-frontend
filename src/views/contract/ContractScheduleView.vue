@@ -33,7 +33,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -55,12 +54,17 @@ import {
   updateScheduleAdjustment,
   deleteScheduleAdjustment,
 } from '@/api/project'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 
 function getProjectId(): string {
   return (route.params.projectId as string) ?? ''
 }
+
+const projectIdRef = computed(() => getProjectId())
+const durationPerm = useProjectModuleActions(projectIdRef, 'project.duration')
 
 /** 類型選項 */
 const TYPE_OPTIONS = [
@@ -116,6 +120,8 @@ const form = ref({
 
 /** 編輯 Modal */
 const editDialogOpen = ref(false)
+/** 僅檢視（來自「查看」）；為 false 時可儲存 */
+const editDialogReadOnly = ref(false)
 const editingId = ref('')
 const editForm = ref({
   applyDate: '',
@@ -178,6 +184,11 @@ function closeDialog() {
   dialogOpen.value = false
 }
 
+function tryOpenAddDialog() {
+  if (!ensureProjectPermission(durationPerm.canCreate.value, 'create')) return
+  dialogOpen.value = true
+}
+
 async function submitAdd() {
   if (!form.value.applyDate.trim()) return
   const projectId = getProjectId()
@@ -208,7 +219,7 @@ async function submitAdd() {
   }
 }
 
-function openEdit(row: ScheduleAdjustmentRow) {
+function fillEditForm(row: ScheduleAdjustmentRow) {
   editingId.value = row.id
   editForm.value = {
     applyDate: formatApplyDate(row.applyDate),
@@ -217,15 +228,29 @@ function openEdit(row: ScheduleAdjustmentRow) {
     approvedDays: row.approvedDays,
     status: row.status,
   }
+}
+
+function openForEdit(row: ScheduleAdjustmentRow) {
+  editDialogReadOnly.value = false
+  fillEditForm(row)
+  editDialogOpen.value = true
+}
+
+function openForView(row: ScheduleAdjustmentRow) {
+  if (!ensureProjectPermission(durationPerm.canRead.value, 'read')) return
+  editDialogReadOnly.value = true
+  fillEditForm(row)
   editDialogOpen.value = true
 }
 
 function closeEditDialog() {
   editDialogOpen.value = false
   editingId.value = ''
+  editDialogReadOnly.value = false
 }
 
 async function submitEdit() {
+  if (editDialogReadOnly.value || !durationPerm.canUpdate.value) return
   const projectId = getProjectId()
   if (!projectId || !editingId.value) return
   saving.value = true
@@ -248,6 +273,7 @@ async function submitEdit() {
 }
 
 function openDelete(row: ScheduleAdjustmentRow) {
+  if (!durationPerm.canDelete.value) return
   deletingRow.value = row
   deleteDialogOpen.value = true
 }
@@ -258,6 +284,7 @@ function closeDeleteDialog() {
 }
 
 async function confirmDelete() {
+  if (!durationPerm.canDelete.value) return
   const projectId = getProjectId()
   const row = deletingRow.value
   if (!projectId || !row) return
@@ -278,9 +305,9 @@ async function confirmDelete() {
 const sorting = ref<SortingState>([])
 const rowSelection = ref<Record<string, boolean>>({})
 
-/** DataTable 欄位定義（第一欄為勾選） */
-const columns = computed<ColumnDef<ScheduleAdjustmentRow, unknown>[]>(() => [
-  {
+/** DataTable 欄位定義（第一欄為勾選，有刪除權時顯示） */
+const columns = computed<ColumnDef<ScheduleAdjustmentRow, unknown>[]>(() => {
+  const selectColumn: ColumnDef<ScheduleAdjustmentRow, unknown> = {
     id: 'select',
     header: ({ table }) =>
       h(Checkbox, {
@@ -299,7 +326,14 @@ const columns = computed<ColumnDef<ScheduleAdjustmentRow, unknown>[]>(() => [
         'aria-label': '選取此列',
       }),
     enableSorting: false,
-  },
+  }
+
+  const cols: ColumnDef<ScheduleAdjustmentRow, unknown>[] = []
+  if (durationPerm.canDelete.value) {
+    cols.push(selectColumn)
+  }
+
+  cols.push(
   {
     accessorKey: 'applyDate',
     header: ({ column }) =>
@@ -372,14 +406,19 @@ const columns = computed<ColumnDef<ScheduleAdjustmentRow, unknown>[]>(() => [
       h('div', { class: 'flex' }, [
         h(ScheduleRowActions, {
           row: row.original,
-          onEdit: (r) => openEdit(r),
-          onView: (r) => openEdit(r),
+          canEdit: durationPerm.canUpdate.value,
+          canDelete: durationPerm.canDelete.value,
+          onEdit: (r) => openForEdit(r),
+          onView: (r) => openForView(r),
           onDelete: (r) => openDelete(r),
         }),
       ]),
     enableSorting: false,
   },
-])
+  )
+
+  return cols
+})
 
 const table = useVueTable({
   get data() {
@@ -428,6 +467,7 @@ function closeBatchDelete() {
 }
 
 async function confirmBatchDelete() {
+  if (!durationPerm.canDelete.value) return
   const projectId = getProjectId()
   if (!projectId) return
   const ids = selectedRows.value.map((r) => r.original.id)
@@ -500,7 +540,7 @@ async function confirmBatchDelete() {
 
     <!-- 工具列：已選 + ButtonGroup + 新增在右 -->
     <div class="flex flex-wrap items-center justify-end gap-3">
-      <template v-if="hasSelection">
+      <template v-if="hasSelection && durationPerm.canDelete">
         <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
         <ButtonGroup>
           <Button variant="outline" @click="clearSelection"> 取消選取 </Button>
@@ -513,13 +553,11 @@ async function confirmBatchDelete() {
           </Button>
         </ButtonGroup>
       </template>
+      <Button class="gap-2" @click="tryOpenAddDialog">
+        <Plus class="size-4" />
+        新增
+      </Button>
       <Dialog v-model:open="dialogOpen">
-        <DialogTrigger as-child>
-          <Button class="gap-2">
-            <Plus class="size-4" />
-            新增
-          </Button>
-        </DialogTrigger>
         <DialogContent class="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>新增工期調整</DialogTitle>
@@ -583,18 +621,20 @@ async function confirmBatchDelete() {
       <Dialog v-model:open="editDialogOpen">
         <DialogContent class="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>編輯工期調整</DialogTitle>
-            <DialogDescription> 修改申請日期、類型、天數與狀態。 </DialogDescription>
+            <DialogTitle>{{ editDialogReadOnly ? '查看工期調整' : '編輯工期調整' }}</DialogTitle>
+            <DialogDescription>
+              {{ editDialogReadOnly ? '檢視申請內容。' : '修改申請日期、類型、天數與狀態。' }}
+            </DialogDescription>
           </DialogHeader>
           <div class="grid gap-4 py-4">
             <div class="grid gap-2">
               <label class="text-sm font-medium text-foreground">申請日期</label>
-              <Input v-model="editForm.applyDate" type="date" />
+              <Input v-model="editForm.applyDate" type="date" :disabled="editDialogReadOnly" />
             </div>
             <div class="grid gap-2">
               <label class="text-sm font-medium text-foreground">類型</label>
-              <Select v-model="editForm.type">
-                <SelectTrigger>
+              <Select v-model="editForm.type" :disabled="editDialogReadOnly">
+                <SelectTrigger :disabled="editDialogReadOnly">
                   <SelectValue placeholder="請選擇類型" />
                 </SelectTrigger>
                 <SelectContent>
@@ -607,17 +647,27 @@ async function confirmBatchDelete() {
             <div class="grid grid-cols-2 gap-4">
               <div class="grid gap-2">
                 <label class="text-sm font-medium text-foreground">申請天數</label>
-                <Input v-model.number="editForm.applyDays" type="number" min="0" />
+                <Input
+                  v-model.number="editForm.applyDays"
+                  type="number"
+                  min="0"
+                  :disabled="editDialogReadOnly"
+                />
               </div>
               <div class="grid gap-2">
                 <label class="text-sm font-medium text-foreground">核定天數</label>
-                <Input v-model.number="editForm.approvedDays" type="number" min="0" />
+                <Input
+                  v-model.number="editForm.approvedDays"
+                  type="number"
+                  min="0"
+                  :disabled="editDialogReadOnly"
+                />
               </div>
             </div>
             <div class="grid gap-2">
               <label class="text-sm font-medium text-foreground">申請狀態</label>
-              <Select v-model="editForm.status">
-                <SelectTrigger>
+              <Select v-model="editForm.status" :disabled="editDialogReadOnly">
+                <SelectTrigger :disabled="editDialogReadOnly">
                   <SelectValue placeholder="請選擇狀態" />
                 </SelectTrigger>
                 <SelectContent>
@@ -630,7 +680,7 @@ async function confirmBatchDelete() {
           </div>
           <DialogFooter>
             <Button variant="outline" @click="closeEditDialog"> 取消 </Button>
-            <Button :disabled="saving" @click="submitEdit">
+            <Button v-if="!editDialogReadOnly" :disabled="saving" @click="submitEdit">
               <Loader2 v-if="saving" class="mr-2 size-4 animate-spin" />
               儲存
             </Button>

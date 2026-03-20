@@ -46,6 +46,13 @@ export const LAYER2_ITEMS: NavLayer2Item[] = [
     pathSuffix: '/contract/management',
     icon: 'FileSignature',
   },
+  {
+    type: 'link',
+    id: 'project-members',
+    label: '專案成員',
+    pathSuffix: '/contract/members',
+    icon: 'Users',
+  },
   { type: 'link', id: 'files', label: '檔案管理', pathSuffix: '/files', icon: 'FolderOpen' },
   {
     type: 'link',
@@ -204,7 +211,7 @@ export const PROJECT_SIDEBAR_GROUPS: NavGroupProject[] = [
     children: [
       {
         id: 'contract-project-info',
-        label: '專案資訊',
+        label: '專案資料',
         pathSuffix: '/contract/project-info',
         icon: 'ClipboardList',
       },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,8 @@ import type { FilledPayload } from '@/api/project-self-inspections'
 import { ROUTE_NAME } from '@/constants/routes'
 import { useSelfCheckBreadcrumbStore } from '@/stores/selfCheckBreadcrumb'
 import { useProjectStore } from '@/stores/project'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission, toastPermissionDenied } from '@/lib/permission-toast'
 
 const inputClass =
   'border-input flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
@@ -27,6 +29,7 @@ const projectStore = useProjectStore()
 
 const projectId = computed(() => (route.params.projectId as string) ?? '')
 const templateId = computed(() => (route.params.templateId as string) ?? '')
+const inspectionPerm = useProjectModuleActions(projectId, 'construction.inspection')
 
 const loading = ref(true)
 const loadError = ref('')
@@ -117,6 +120,7 @@ function goBack() {
 }
 
 async function submit() {
+  if (!ensureProjectPermission(inspectionPerm.canCreate.value, 'create')) return
   const pid = projectId.value
   const tid = templateId.value
   const h = hub.value
@@ -163,6 +167,15 @@ async function submit() {
 onUnmounted(() => {
   selfCheckBreadcrumbStore.setTemplateTitle(null)
 })
+
+const createDeniedToastShown = ref(false)
+watchEffect(() => {
+  if (loading.value || loadError.value || !hub.value) return
+  if (!inspectionPerm.canCreate.value && !createDeniedToastShown.value) {
+    createDeniedToastShown.value = true
+    toastPermissionDenied('create')
+  }
+})
 </script>
 
 <template>
@@ -200,27 +213,58 @@ onUnmounted(() => {
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-2 sm:col-span-2">
             <Label :for="'sin-insp'">{{ inspectionNameFieldLabel }}</Label>
-            <Input id="sin-insp" v-model="headerInspectionName" :class="inputClass" />
+            <Input
+              id="sin-insp"
+              v-model="headerInspectionName"
+              :disabled="isArchived"
+              :class="inputClass"
+            />
           </div>
           <div class="space-y-2">
             <Label :for="'sin-pn'">{{ hc.projectNameLabel }}</Label>
-            <Input id="sin-pn" v-model="headerProjectName" :class="inputClass" />
+            <Input
+              id="sin-pn"
+              v-model="headerProjectName"
+              :disabled="isArchived"
+              :class="inputClass"
+            />
           </div>
           <div class="space-y-2">
             <Label :for="'sin-sp'">{{ hc.subProjectLabel }}</Label>
-            <Input id="sin-sp" v-model="headerSubProject" :class="inputClass" />
+            <Input
+              id="sin-sp"
+              v-model="headerSubProject"
+              :disabled="isArchived"
+              :class="inputClass"
+            />
           </div>
           <div class="space-y-2">
             <Label :for="'sin-sc'">{{ hc.subcontractorLabel }}</Label>
-            <Input id="sin-sc" v-model="headerSubcontractor" :class="inputClass" />
+            <Input
+              id="sin-sc"
+              v-model="headerSubcontractor"
+              :disabled="isArchived"
+              :class="inputClass"
+            />
           </div>
           <div class="space-y-2">
             <Label :for="'sin-loc'">{{ hc.inspectionLocationLabel }}</Label>
-            <Input id="sin-loc" v-model="headerLocation" :class="inputClass" />
+            <Input
+              id="sin-loc"
+              v-model="headerLocation"
+              :disabled="isArchived"
+              :class="inputClass"
+            />
           </div>
           <div class="space-y-2">
             <Label :for="'sin-dt'">{{ hc.inspectionDateLabel }}</Label>
-            <Input id="sin-dt" v-model="headerDate" type="date" :class="inputClass" />
+            <Input
+              id="sin-dt"
+              v-model="headerDate"
+              type="date"
+              :disabled="isArchived"
+              :class="inputClass"
+            />
           </div>
         </div>
 
@@ -237,6 +281,7 @@ onUnmounted(() => {
                 type="radio"
                 name="timing-opt"
                 :value="opt.id"
+                :disabled="isArchived"
                 class="size-4 accent-primary"
               />
               {{ opt.label }}
@@ -291,6 +336,7 @@ onUnmounted(() => {
                 <td class="px-3 py-2">
                   <textarea
                     v-model="itemState[it.id].actualText"
+                    :disabled="isArchived"
                     :class="textareaClass"
                     rows="2"
                   />
@@ -307,6 +353,7 @@ onUnmounted(() => {
                         type="radio"
                         :name="`res-${it.id}`"
                         :value="opt.id"
+                        :disabled="isArchived"
                         class="size-4 accent-primary"
                       />
                       <span class="text-xs sm:text-sm">{{ opt.label }}</span>
@@ -325,7 +372,11 @@ onUnmounted(() => {
         <Button type="button" variant="outline" :disabled="submitting" @click="goBack">
           取消
         </Button>
-        <Button type="button" :disabled="submitting || isArchived" @click="submit">
+        <Button
+          type="button"
+          :disabled="submitting || isArchived"
+          @click="submit"
+        >
           <Loader2 v-if="submitting" class="mr-2 size-4 animate-spin" />
           送出紀錄
         </Button>

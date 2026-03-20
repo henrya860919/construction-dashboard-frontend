@@ -34,7 +34,7 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/monitoring/devices': '設備',
   '/monitoring/reports': '報表',
   '/monitoring/upload': '數據上傳',
-  '/contract/project-info': '專案資訊',
+  '/contract/project-info': '專案資料',
   '/contract/schedule': '工期調整',
   '/contract/management': '契約管理',
   '/contract/members': '專案成員',

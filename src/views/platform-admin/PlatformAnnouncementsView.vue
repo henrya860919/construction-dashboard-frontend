@@ -410,7 +410,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="flex items-center space-x-2">
-            <Switch id="targetSpecificTenants" v-model:checked="form.targetSpecificTenants" />
+            <Switch id="targetSpecificTenants" v-model="form.targetSpecificTenants" />
             <label for="targetSpecificTenants" class="text-sm font-medium leading-none">指定租戶（開啟後可多選，未開啟則為全平台）</label>
           </div>
           <div v-if="form.targetSpecificTenants" class="grid gap-2">

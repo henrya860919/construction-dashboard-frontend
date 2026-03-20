@@ -5,6 +5,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Download, Trash2 } from 'lucide-vue-next'
 import type { FormTemplateItem } from '@/api/form-templates'
@@ -18,14 +19,6 @@ const emit = defineEmits<{
   download: [row: FormTemplateItem]
   delete: [row: FormTemplateItem]
 }>()
-
-function onDownload(row: FormTemplateItem) {
-  emit('download', row)
-}
-
-function onDelete(row: FormTemplateItem) {
-  emit('delete', row)
-}
 </script>
 
 <template>
@@ -36,18 +29,20 @@ function onDelete(row: FormTemplateItem) {
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-[10rem]">
-      <DropdownMenuItem class="gap-2 cursor-pointer" @click="onDownload(row)">
+      <DropdownMenuItem class="gap-2 cursor-pointer" @click="emit('download', row)">
         <Download class="size-4" />
         下載
       </DropdownMenuItem>
-      <DropdownMenuItem
-        v-if="canDelete(row)"
-        class="gap-2 cursor-pointer text-destructive focus:text-destructive"
-        @click="onDelete(row)"
-      >
-        <Trash2 class="size-4" />
-        刪除
-      </DropdownMenuItem>
+      <template v-if="canDelete(row)">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          class="gap-2 cursor-pointer text-destructive focus:text-destructive"
+          @click="emit('delete', row)"
+        >
+          <Trash2 class="size-4" />
+          刪除
+        </DropdownMenuItem>
+      </template>
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

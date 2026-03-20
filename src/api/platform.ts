@@ -110,6 +110,31 @@ export async function getTenant(id: string) {
   return data.data
 }
 
+/** 租戶模組開通：未儲存前 moduleEntitlementsGranted=false，租戶端視為未開通 */
+export interface TenantModuleEntitlementsDto {
+  disabledModuleIds: string[]
+  moduleEntitlementsGranted: boolean
+}
+
+export async function getTenantModuleEntitlements(tenantId: string): Promise<TenantModuleEntitlementsDto> {
+  const { data } = await apiClient.get<ApiResponse<TenantModuleEntitlementsDto>>(
+    `${API_PATH.PLATFORM_TENANTS}/${tenantId}/module-entitlements`,
+    { params: { _t: Date.now() } }
+  )
+  return data.data
+}
+
+export async function replaceTenantModuleEntitlements(
+  tenantId: string,
+  disabledModuleIds: string[]
+): Promise<TenantModuleEntitlementsDto> {
+  const { data } = await apiClient.put<ApiResponse<TenantModuleEntitlementsDto>>(
+    `${API_PATH.PLATFORM_TENANTS}/${tenantId}/module-entitlements`,
+    { disabledModuleIds }
+  )
+  return data.data
+}
+
 export async function createTenant(payload: CreateTenantPayload) {
   const { data } = await apiClient.post<ApiResponse<TenantItem>>(
     API_PATH.PLATFORM_TENANTS,

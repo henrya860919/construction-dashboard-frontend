@@ -13,11 +13,15 @@ import { Download, Upload, FileSpreadsheet, ArrowRight, AlertCircle, X } from 'l
 import { buildProjectPath } from '@/constants/routes'
 import { API_PATH } from '@/constants/api'
 import { useUploadQueue } from '@/composables/useUploadQueue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const uploadPerm = useProjectModuleActions(projectId, 'construction.upload')
 const { enqueueAndRun } = useUploadQueue()
+
+/** 步驟二上傳區：僅 canCreate 顯示，不採常駐＋toast（見 docs/project-module-frontend-ui-gating.md） */
 
 /** 選定的檔案（待上傳，可多選） */
 const selectedFiles = ref<File[]>([])
@@ -141,7 +145,9 @@ function goToMetrics() {
     <div>
       <h1 class="text-xl font-semibold text-foreground">監測數據上傳</h1>
       <p class="mt-1 text-sm text-muted-foreground">
-        以「日」為單位填寫各監測項目，下載 Excel 樣板後填寫再上傳，系統將更新歷史數據。
+        以「日」為單位填寫各監測項目，
+        <template v-if="uploadPerm.canCreate">下載 Excel 樣板後填寫再上傳，系統將更新歷史數據。</template>
+        <template v-else>可下載 Excel 樣板備用；上傳與更新歷史數據需具建立權限。</template>
       </p>
     </div>
 
@@ -181,8 +187,15 @@ function goToMetrics() {
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
+        <p
+          v-if="!uploadPerm.canCreate"
+          class="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+        >
+          您沒有上傳監測資料的權限；如需使用請洽專案管理員。
+        </p>
         <!-- 拖曳 / 選擇檔案區（可多選） -->
         <div
+          v-else
           class="relative flex min-h-[160px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-6 transition-colors hover:bg-muted/50"
           :class="{ 'border-primary bg-primary/5': hasFiles }"
           @dragover="onDragOver"
@@ -239,7 +252,10 @@ function goToMetrics() {
         </ul>
 
         <!-- 上傳按鈕與結果訊息 -->
-        <div class="flex flex-wrap items-center gap-3">
+        <div
+          v-if="uploadPerm.canCreate"
+          class="flex flex-wrap items-center gap-3"
+        >
           <Button
             type="button"
             variant="default"
@@ -304,7 +320,8 @@ function goToMetrics() {
       <CardContent>
         <ul class="list-inside list-disc space-y-1 text-sm text-muted-foreground">
           <li>溫度（°C）、濕度（%）、PM2.5（µg/m³）、風速（m/s）、雨量（mm）、水位（m）等分頁請依實際需求填寫。</li>
-          <li>上傳後系統會更新歷史數據，您可在「歷史數據」頁面檢視圖表與列表。</li>
+          <li v-if="uploadPerm.canCreate">上傳後系統會更新歷史數據，您可在「歷史數據」頁面檢視圖表與列表。</li>
+          <li v-else>具建立權限者上傳後會更新歷史數據；您仍可在「歷史數據」頁面檢視圖表與列表。</li>
         </ul>
       </CardContent>
     </Card>

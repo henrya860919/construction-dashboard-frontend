@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
 import { ROUTE_NAME } from '@/constants/routes'
+import { Sonner } from '@/components/ui/sonner'
 
 const router = useRouter()
 
@@ -153,4 +154,5 @@ onUnmounted(() => {
 
 <template>
   <RouterView />
+  <Sonner />
 </template>

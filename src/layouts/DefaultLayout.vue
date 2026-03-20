@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useProjectRoutePermissionGuard } from '@/composables/useProjectRoutePermissionGuard'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
@@ -12,6 +13,8 @@ import { useIsMobile } from '@/composables'
 const route = useRoute()
 const sidebarStore = useSidebarStore()
 const isMobile = useIsMobile()
+
+useProjectRoutePermissionGuard()
 
 watch(
   () => route.path,

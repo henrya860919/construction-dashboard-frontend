@@ -4,14 +4,19 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Flag } from 'lucide-vue-next'
 
-defineProps<{
-  showActualPlan: boolean
-  showCriticalPath: boolean
-  showTodayLine: boolean
-  showMilestoneLines: boolean
-  showAssignee: boolean
-  showProgress: boolean
-}>()
+withDefaults(
+  defineProps<{
+    showActualPlan: boolean
+    showCriticalPath: boolean
+    showTodayLine: boolean
+    showMilestoneLines: boolean
+    showAssignee: boolean
+    showProgress: boolean
+    /** 為 false 時隱藏「新增里程碑線」（僅檢視甘特） */
+    allowMilestoneMutations?: boolean
+  }>(),
+  { allowMilestoneMutations: true }
+)
 
 const emit = defineEmits<{
   'update:showActualPlan': [value: boolean]
@@ -84,7 +89,7 @@ const emit = defineEmits<{
         </Label>
       </div>
     </div>
-    <div class="ml-auto flex items-center gap-2">
+    <div v-if="allowMilestoneMutations" class="ml-auto flex items-center gap-2">
       <Button
         variant="outline"
         size="sm"

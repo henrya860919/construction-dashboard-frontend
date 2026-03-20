@@ -10,9 +10,14 @@ import {
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-vue-next'
 import type { ProjectResourceItem } from '@/types/resource'
 
-defineProps<{
-  row: ProjectResourceItem
-}>()
+withDefaults(
+  defineProps<{
+    row: ProjectResourceItem
+    canEdit?: boolean
+    canRemove?: boolean
+  }>(),
+  { canEdit: true, canRemove: true }
+)
 
 const emit = defineEmits<{
   edit: [row: ProjectResourceItem]
@@ -21,19 +26,20 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <DropdownMenu>
+  <DropdownMenu v-if="canEdit || canRemove">
     <DropdownMenuTrigger as-child>
       <Button variant="ghost" size="icon" class="size-8 shrink-0" aria-label="更多">
         <MoreHorizontal class="size-4" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-[10rem]">
-      <DropdownMenuItem class="gap-2 cursor-pointer" @click="emit('edit', row)">
+      <DropdownMenuItem v-if="canEdit" class="gap-2 cursor-pointer" @click="emit('edit', row)">
         <Pencil class="size-4" />
         編輯
       </DropdownMenuItem>
-      <DropdownMenuSeparator />
+      <DropdownMenuSeparator v-if="canRemove && canEdit" />
       <DropdownMenuItem
+        v-if="canRemove"
         class="gap-2 cursor-pointer text-destructive focus:text-destructive"
         @click="emit('remove', row)"
       >
@@ -42,4 +48,5 @@ const emit = defineEmits<{
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
+  <span v-else class="text-xs text-muted-foreground">—</span>
 </template>

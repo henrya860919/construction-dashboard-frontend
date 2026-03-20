@@ -57,14 +57,30 @@ import {
   toFullModulesPayload,
   type ModulesMap,
 } from '@/api/project-permissions'
+import { permissionModulesDifferingFromBaseline } from '@/lib/permission-module-diff'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectPermissionsStore } from '@/stores/projectPermissions'
+import { useProjectPermission } from '@/composables/useProjectPermission'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const projectPermissionsStore = useProjectPermissionsStore()
 
-const canManageMembers = computed(() => authStore.canAccessAdmin)
+const projectId = computed(() => (route.params.projectId as string) ?? '')
+const { can } = useProjectPermission(projectId)
+
+/** 與後端 project.members 模組對齊：read 看列表、create 新增／可加入名單、update 狀態與覆寫矩陣、delete 移出 */
+const canReadMembers = computed(() => can('project.members', 'read'))
+const canCreateMembers = computed(() => can('project.members', 'create'))
+const canUpdateMembers = computed(() => can('project.members', 'update'))
+const canDeleteMembers = computed(() => can('project.members', 'delete'))
+
+const canShowMemberToolbar = computed(
+  () => canCreateMembers.value || canUpdateMembers.value || canDeleteMembers.value
+)
+
+/** 專案內「成員模組權限覆寫」僅租戶／平台管理員（與後端 assertProjectMemberPermissionOverridesManage 一致） */
+const canManageMemberPermissionMatrix = computed(() => authStore.canAccessAdmin)
 
 function getProjectId(): string {
   return (route.params.projectId as string) ?? ''
@@ -85,8 +101,6 @@ const removingMember = ref<ProjectMemberItem | null>(null)
 const removing = ref(false)
 
 const togglingStatusId = ref<string | null>(null)
-
-const projectId = computed(() => getProjectId())
 
 const sorting = ref<SortingState>([])
 const rowSelection = ref<Record<string, boolean>>({})
@@ -209,10 +223,16 @@ async function confirmRemove() {
 const projectPermDialogOpen = ref(false)
 const projectPermMember = ref<ProjectMemberItem | null>(null)
 const projectPermModules = ref<ModulesMap>({})
+/** 與「重設為租戶範本」一致的基準矩陣，用於標示專案客製列 */
+const projectPermBaseline = ref<ModulesMap>({})
 const projectPermLoading = ref(false)
 const projectPermSaving = ref(false)
 const projectPermResetting = ref(false)
 const projectPermError = ref('')
+
+const projectPermHighlightModuleIds = computed(() =>
+  permissionModulesDifferingFromBaseline(projectPermModules.value, projectPermBaseline.value)
+)
 
 async function openProjectPermDialog(member: ProjectMemberItem) {
   const pid = getProjectId()
@@ -222,10 +242,13 @@ async function openProjectPermDialog(member: ProjectMemberItem) {
   projectPermDialogOpen.value = true
   projectPermLoading.value = true
   try {
-    projectPermModules.value = await fetchProjectMemberPermissionOverrides(pid, member.userId)
+    const res = await fetchProjectMemberPermissionOverrides(pid, member.userId)
+    projectPermModules.value = res.modules
+    projectPermBaseline.value = res.baselineModules
   } catch {
     projectPermError.value = '無法載入專案權限'
     projectPermModules.value = {}
+    projectPermBaseline.value = {}
   } finally {
     projectPermLoading.value = false
   }
@@ -236,6 +259,7 @@ function closeProjectPermDialog() {
   projectPermMember.value = null
   projectPermError.value = ''
   projectPermModules.value = {}
+  projectPermBaseline.value = {}
 }
 
 async function saveProjectPermOverrides() {
@@ -246,7 +270,9 @@ async function saveProjectPermOverrides() {
   projectPermError.value = ''
   try {
     const payload = toFullModulesPayload(projectPermModules.value)
-    projectPermModules.value = await replaceProjectMemberPermissionOverrides(pid, member.userId, payload)
+    const res = await replaceProjectMemberPermissionOverrides(pid, member.userId, payload)
+    projectPermModules.value = res.modules
+    projectPermBaseline.value = res.baselineModules
     if (authStore.user?.id === member.userId) {
       projectPermissionsStore.invalidateProject(pid)
     }
@@ -269,7 +295,9 @@ async function resetProjectPermOverrides() {
   projectPermResetting.value = true
   projectPermError.value = ''
   try {
-    projectPermModules.value = await resetProjectMemberPermissionOverrides(pid, member.userId)
+    const res = await resetProjectMemberPermissionOverrides(pid, member.userId)
+    projectPermModules.value = res.modules
+    projectPermBaseline.value = res.baselineModules
     if (authStore.user?.id === member.userId) {
       projectPermissionsStore.invalidateProject(pid)
     }
@@ -353,15 +381,20 @@ const columns = computed<ColumnDef<ProjectMemberItem, unknown>[]>(() => {
       id: 'actions',
       header: () => h('div', { class: 'w-[4rem]' }),
       cell: ({ row }) => {
-        if (!canManageMembers.value) {
+        const showPermMatrix =
+          canManageMemberPermissionMatrix.value &&
+          row.original.user.systemRole !== 'platform_admin'
+        const anyRowAction =
+          canUpdateMembers.value || canDeleteMembers.value || showPermMatrix
+        if (!anyRowAction) {
           return h('span', { class: 'text-xs text-muted-foreground' }, '—')
         }
-        const showPerm = row.original.user.systemRole !== 'platform_admin'
         return h(ProjectMembersRowActions, {
           row: row.original,
           togglingStatusId: togglingStatusId.value,
-          canManageMembership: true,
-          canEditPermissions: showPerm,
+          canUpdateMembership: canUpdateMembers.value,
+          canRemoveMember: canDeleteMembers.value,
+          canEditPermissions: showPermMatrix,
           onToggleStatus: (r: ProjectMemberItem) => toggleMemberStatus(r),
           onRemove: (r: ProjectMemberItem) => openRemoveDialog(r),
           onEditPermissions: (r: ProjectMemberItem) => openProjectPermDialog(r),
@@ -370,7 +403,9 @@ const columns = computed<ColumnDef<ProjectMemberItem, unknown>[]>(() => {
       enableSorting: false,
     },
   ]
-  return canManageMembers.value ? [selectColumn, ...dataCols] : dataCols
+  const withSelect =
+    canUpdateMembers.value || canDeleteMembers.value ? [selectColumn, ...dataCols] : dataCols
+  return withSelect
 })
 
 const columnCount = computed(() => columns.value.length)
@@ -481,17 +516,24 @@ watch(projectId, (id) => {
   <div class="space-y-4">
     <p class="text-sm text-muted-foreground">
       專案成員來自租戶成員，可將同租戶的成員加入此專案；一成員可參與多個專案。
-      <template v-if="canManageMembers">僅租戶管理員或平台管理員可新增／移除成員與編輯專案權限覆寫。</template>
-      <template v-else>您可檢視名單；變更成員與權限請洽租戶管理員。</template>
+      <template v-if="canShowMemberToolbar">
+        成員名單與新增／停用／移除依「專案成員」模組權限；租戶／平台管理員不受細粒度限制。
+        「專案權限」矩陣覆寫僅租戶管理員或平台管理員可編輯。
+      </template>
+      <template v-else-if="canReadMembers">您目前僅能檢視名單。</template>
     </p>
 
     <!-- 工具列：已選 + ButtonGroup + 新增成員在右 -->
-    <div v-if="canManageMembers" class="flex flex-wrap items-center justify-end gap-3">
-      <template v-if="hasSelection">
+    <div
+      v-if="canShowMemberToolbar"
+      class="flex flex-wrap items-center justify-end gap-3"
+    >
+      <template v-if="hasSelection && (canUpdateMembers || canDeleteMembers)">
         <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
         <ButtonGroup>
           <Button variant="outline" @click="clearSelection">取消選取</Button>
           <Button
+            v-if="canUpdateMembers"
             variant="outline"
             :disabled="!selectedRows.some((r) => r.original.status === 'active')"
             @click="openBatchSuspend"
@@ -499,6 +541,7 @@ watch(projectId, (id) => {
             批次停用
           </Button>
           <Button
+            v-if="canDeleteMembers"
             variant="outline"
             class="text-destructive hover:text-destructive"
             @click="openBatchRemove"
@@ -507,7 +550,7 @@ watch(projectId, (id) => {
           </Button>
         </ButtonGroup>
       </template>
-      <Button variant="default" @click="openAddDialog">
+      <Button v-if="canCreateMembers" variant="default" @click="openAddDialog">
         <Plus class="mr-2 size-4" />
         新增成員
       </Button>
@@ -561,7 +604,7 @@ watch(projectId, (id) => {
           class="flex flex-col items-center justify-center py-16 text-muted-foreground"
         >
           <p class="text-sm">尚無專案成員</p>
-          <p v-if="canManageMembers" class="mt-1 text-xs">請從「新增成員」加入同租戶的成員</p>
+          <p v-if="canCreateMembers" class="mt-1 text-xs">請從「新增成員」加入同租戶的成員</p>
         </div>
       </template>
     </div>
@@ -690,13 +733,21 @@ watch(projectId, (id) => {
 
     <!-- 專案成員模組權限覆寫 -->
     <Dialog :open="projectPermDialogOpen" @update:open="(v: boolean) => !v && closeProjectPermDialog()">
-      <DialogContent class="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent
+        class="max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] overflow-y-auto sm:max-w-7xl sm:w-full"
+      >
         <DialogHeader>
           <DialogTitle>
             專案權限 — {{ projectPermMember?.user.name || projectPermMember?.user.email || '成員' }}
           </DialogTitle>
           <DialogDescription>
             僅影響此成員在本專案的模組權限。「重設為租戶範本」會依該成員目前的租戶權限範本重新寫入本專案，不影響其他專案。
+            <span
+              v-if="projectPermHighlightModuleIds.length > 0 && !projectPermLoading"
+              class="mt-2 block text-foreground"
+            >
+              目前有 {{ projectPermHighlightModuleIds.length }} 個模組與租戶範本／角色預設不同，列上以「專案客製」標籤與底色標示；編輯勾選後會即時更新標示。
+            </span>
           </DialogDescription>
         </DialogHeader>
         <div v-if="projectPermLoading" class="flex justify-center py-12">
@@ -704,7 +755,10 @@ watch(projectId, (id) => {
         </div>
         <template v-else>
           <div class="py-4">
-            <PermissionMatrixForm v-model="projectPermModules" />
+            <PermissionMatrixForm
+              v-model="projectPermModules"
+              :highlight-module-ids="projectPermHighlightModuleIds"
+            />
           </div>
           <p v-if="projectPermError" class="text-sm text-destructive">{{ projectPermError }}</p>
           <DialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">

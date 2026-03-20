@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import FileFormsRowActions from '@/views/files/FileFormsRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 import {
   listProjectFormTemplates,
   createProjectFormTemplate,
@@ -46,6 +47,7 @@ import { Upload, Loader2, Trash2, Download, FileText } from 'lucide-vue-next'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const uploadPerm = useProjectModuleActions(projectId, 'construction.upload')
 
 const list = ref<FormTemplateItem[]>([])
 const loading = ref(true)
@@ -92,10 +94,16 @@ function formatDate(iso: string) {
 }
 
 /** 僅專案自訂樣板可刪除（預設樣板不可刪） */
-const canDelete = (row: FormTemplateItem) => row.isDefault === false
+function rowIsProjectDeletable(row: FormTemplateItem) {
+  return row.isDefault === false
+}
+
+function canDeleteForRow(row: FormTemplateItem) {
+  return rowIsProjectDeletable(row) && uploadPerm.canDelete.value
+}
 
 function openDelete(row: FormTemplateItem) {
-  if (!canDelete(row)) return
+  if (!canDeleteForRow(row)) return
   deleteTarget.value = row
   deleteDialogOpen.value = true
 }
@@ -120,27 +128,34 @@ const deletableIds = computed(
 )
 
 const sorting = ref<SortingState>([])
-const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => [
-  {
-    id: 'select',
-    header: ({ table }) =>
-      h(Checkbox, {
-        checked: table.getIsAllPageRowsSelected()
-          ? true
-          : table.getIsSomePageRowsSelected()
-            ? 'indeterminate'
-            : false,
-        'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
-        'aria-label': '全選',
-      }),
-    cell: ({ row }) =>
-      h(Checkbox, {
-        checked: row.getIsSelected(),
-        'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
-        'aria-label': '選取此列',
-      }),
-    enableSorting: false,
-  },
+
+const selectColumnForms: ColumnDef<FormTemplateItem, unknown> = {
+  id: 'select',
+  header: ({ table }) =>
+    h(Checkbox, {
+      checked: table.getIsAllPageRowsSelected()
+        ? true
+        : table.getIsSomePageRowsSelected()
+          ? 'indeterminate'
+          : false,
+      'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
+      'aria-label': '全選',
+    }),
+  cell: ({ row }) =>
+    h(Checkbox, {
+      checked: row.getIsSelected(),
+      'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
+      'aria-label': '選取此列',
+    }),
+  enableSorting: false,
+}
+
+const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => {
+  const cols: ColumnDef<FormTemplateItem, unknown>[] = []
+  if (uploadPerm.canRead.value || uploadPerm.canDelete.value) {
+    cols.push(selectColumnForms)
+  }
+  cols.push(
   {
     accessorKey: 'name',
     header: '名稱',
@@ -195,14 +210,19 @@ const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => [
       h('div', { class: 'flex justify-end' }, [
         h(FileFormsRowActions, {
           row: row.original,
-          canDelete,
+          canDelete: canDeleteForRow,
+          canDownload: uploadPerm.canRead.value,
           onDownload: handleDownload,
           onDelete: openDelete,
         }),
       ]),
     enableSorting: false,
-  },
-])
+  }
+  )
+  return cols
+})
+
+const columnCount = computed(() => columns.value.length)
 
 const table = useVueTable({
   get data() {
@@ -236,6 +256,7 @@ const hasSelection = computed(() => selectedRows.value.length > 0)
 const selectedCount = computed(() => selectedRows.value.length)
 /** 選取項全部為可刪除時才可點批次刪除 */
 const canBatchDelete = computed(() => {
+  if (!uploadPerm.canDelete.value) return false
   if (selectedRows.value.length === 0) return false
   return selectedRows.value.every((r) => deletableIds.value.has(r.original.id))
 })
@@ -354,12 +375,19 @@ async function batchDownload() {
     </div>
 
     <!-- 工具列：已選 + ButtonGroup + 新增 全部靠右 -->
-    <div class="flex flex-wrap items-center justify-end gap-3">
-      <template v-if="hasSelection">
+    <div
+      v-if="
+        uploadPerm.canCreate ||
+        (hasSelection && (uploadPerm.canRead || uploadPerm.canDelete))
+      "
+      class="flex flex-wrap items-center justify-end gap-3"
+    >
+      <template v-if="hasSelection && (uploadPerm.canRead || uploadPerm.canDelete)">
         <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
         <ButtonGroup>
           <Button variant="outline" @click="clearSelection"> 取消選取 </Button>
           <Button
+            v-if="uploadPerm.canRead"
             variant="outline"
             size="sm"
             :disabled="batchDownloadLoading"
@@ -370,6 +398,7 @@ async function batchDownload() {
             批次下載
           </Button>
           <Button
+            v-if="uploadPerm.canDelete"
             variant="outline"
             size="sm"
             class="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -381,7 +410,7 @@ async function batchDownload() {
           </Button>
         </ButtonGroup>
       </template>
-      <Button :disabled="!projectId" @click="addDialogOpen = true">
+      <Button v-if="uploadPerm.canCreate" :disabled="!projectId" @click="addDialogOpen = true">
         <Upload class="mr-2 size-4" />
         新增專案樣板
       </Button>
@@ -418,8 +447,11 @@ async function batchDownload() {
             </template>
             <template v-else>
               <TableRow>
-                <TableCell :colspan="7" class="h-24 text-center text-muted-foreground">
-                  尚無表單樣板。請由後台「表單樣板」新增預設樣板，或在此新增專案樣板。
+                <TableCell :colspan="columnCount" class="h-24 text-center text-muted-foreground">
+                  <template v-if="uploadPerm.canCreate">
+                    尚無表單樣板。請由後台「表單樣板」新增預設樣板，或在此新增專案樣板。
+                  </template>
+                  <template v-else>尚無表單樣板。</template>
                 </TableCell>
               </TableRow>
             </template>

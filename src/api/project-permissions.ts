@@ -95,17 +95,28 @@ export async function applyTenantPermissionPreset(
   return mergeAllModules(data.data?.modules)
 }
 
+export type ProjectMemberPermissionsWithBaseline = {
+  modules: ModulesMap
+  baselineModules: ModulesMap
+}
+
 /** GET .../projects/:projectId/members/:userId/permissions */
 export async function fetchProjectMemberPermissionOverrides(
   projectId: string,
   userId: string
-): Promise<ModulesMap> {
+): Promise<ProjectMemberPermissionsWithBaseline> {
   const { data } = await apiClient.get<
-    ApiResponse<{ modules: Record<string, ModulePermissionFlags> }>
+    ApiResponse<{
+      modules: Record<string, ModulePermissionFlags>
+      baselineModules: Record<string, ModulePermissionFlags>
+    }>
   >(
     `${API_PATH.PROJECTS}/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}/permissions`
   )
-  return mergeAllModules(data.data?.modules)
+  return {
+    modules: mergeAllModules(data.data?.modules),
+    baselineModules: mergeAllModules(data.data?.baselineModules),
+  }
 }
 
 /** PUT .../permissions */
@@ -113,25 +124,37 @@ export async function replaceProjectMemberPermissionOverrides(
   projectId: string,
   userId: string,
   modules: Record<string, ModulePermissionFlags>
-): Promise<ModulesMap> {
+): Promise<ProjectMemberPermissionsWithBaseline> {
   const { data } = await apiClient.put<
-    ApiResponse<{ modules: Record<string, ModulePermissionFlags> }>
+    ApiResponse<{
+      modules: Record<string, ModulePermissionFlags>
+      baselineModules: Record<string, ModulePermissionFlags>
+    }>
   >(
     `${API_PATH.PROJECTS}/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}/permissions`,
     { modules }
   )
-  return mergeAllModules(data.data?.modules)
+  return {
+    modules: mergeAllModules(data.data?.modules),
+    baselineModules: mergeAllModules(data.data?.baselineModules),
+  }
 }
 
 /** POST .../permissions/reset */
 export async function resetProjectMemberPermissionOverrides(
   projectId: string,
   userId: string
-): Promise<ModulesMap> {
+): Promise<ProjectMemberPermissionsWithBaseline> {
   const { data } = await apiClient.post<
-    ApiResponse<{ modules: Record<string, ModulePermissionFlags> }>
+    ApiResponse<{
+      modules: Record<string, ModulePermissionFlags>
+      baselineModules: Record<string, ModulePermissionFlags>
+    }>
   >(
     `${API_PATH.PROJECTS}/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}/permissions/reset`
   )
-  return mergeAllModules(data.data?.modules)
+  return {
+    modules: mergeAllModules(data.data?.modules),
+    baselineModules: mergeAllModules(data.data?.baselineModules),
+  }
 }

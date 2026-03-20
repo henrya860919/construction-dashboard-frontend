@@ -46,6 +46,13 @@ export const LAYER2_ITEMS: NavLayer2Item[] = [
     pathSuffix: '/contract/management',
     icon: 'FileSignature',
   },
+  {
+    type: 'link',
+    id: 'project-members',
+    label: '專案成員',
+    pathSuffix: '/contract/members',
+    icon: 'Users',
+  },
   { type: 'link', id: 'files', label: '檔案管理', pathSuffix: '/files', icon: 'FolderOpen' },
   {
     type: 'link',

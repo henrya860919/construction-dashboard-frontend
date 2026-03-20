@@ -9,9 +9,14 @@ import {
 import { MoreHorizontal, Download, Trash2 } from 'lucide-vue-next'
 import type { AttachmentItem } from '@/api/files'
 
-defineProps<{
-  row: AttachmentItem
-}>()
+withDefaults(
+  defineProps<{
+    row: AttachmentItem
+    canDownload?: boolean
+    canDelete?: boolean
+  }>(),
+  { canDownload: true, canDelete: true }
+)
 
 const emit = defineEmits<{
   download: [row: AttachmentItem]
@@ -28,18 +33,24 @@ function onDelete(row: AttachmentItem) {
 </script>
 
 <template>
-  <DropdownMenu>
+  <span v-if="!canDownload && !canDelete" class="text-xs text-muted-foreground">—</span>
+  <DropdownMenu v-else>
     <DropdownMenuTrigger as-child>
       <Button variant="ghost" size="icon" class="size-8" aria-label="更多">
         <MoreHorizontal class="size-4" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-[10rem]">
-      <DropdownMenuItem class="gap-2 cursor-pointer" @click="onDownload(row)">
+      <DropdownMenuItem
+        v-if="canDownload"
+        class="gap-2 cursor-pointer"
+        @click="onDownload(row)"
+      >
         <Download class="size-4" />
         下載
       </DropdownMenuItem>
       <DropdownMenuItem
+        v-if="canDelete"
         class="gap-2 cursor-pointer text-destructive focus:text-destructive"
         @click="onDelete(row)"
       >

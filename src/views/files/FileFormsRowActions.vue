@@ -9,10 +9,14 @@ import {
 import { MoreHorizontal, Download, Trash2 } from 'lucide-vue-next'
 import type { FormTemplateItem } from '@/api/form-templates'
 
-defineProps<{
-  row: FormTemplateItem
-  canDelete: (row: FormTemplateItem) => boolean
-}>()
+withDefaults(
+  defineProps<{
+    row: FormTemplateItem
+    canDelete: (row: FormTemplateItem) => boolean
+    canDownload?: boolean
+  }>(),
+  { canDownload: true }
+)
 
 const emit = defineEmits<{
   download: [row: FormTemplateItem]
@@ -29,14 +33,22 @@ function onDelete(row: FormTemplateItem) {
 </script>
 
 <template>
-  <DropdownMenu>
+  <span
+    v-if="!canDownload && !canDelete(row)"
+    class="text-xs text-muted-foreground"
+  >—</span>
+  <DropdownMenu v-else>
     <DropdownMenuTrigger as-child>
       <Button variant="ghost" size="icon" class="size-8" aria-label="更多">
         <MoreHorizontal class="size-4" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-[10rem]">
-      <DropdownMenuItem class="gap-2 cursor-pointer" @click="onDownload(row)">
+      <DropdownMenuItem
+        v-if="canDownload"
+        class="gap-2 cursor-pointer"
+        @click="onDownload(row)"
+      >
         <Download class="size-4" />
         下載
       </DropdownMenuItem>

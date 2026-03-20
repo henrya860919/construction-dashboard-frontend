@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 import {
   PERMISSION_MODULES,
   PERMISSION_MODULE_LABELS,
@@ -8,9 +9,16 @@ import {
 } from '@/constants/permission-modules'
 import type { ModulePermissionFlags } from '@/types/permissions'
 
-const props = defineProps<{
-  modelValue: Partial<Record<PermissionModuleId, ModulePermissionFlags>>
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: Partial<Record<PermissionModuleId, ModulePermissionFlags>>
+    /** 與租戶範本／角色預設不同的模組（專案客製） */
+    highlightModuleIds?: PermissionModuleId[]
+  }>(),
+  { highlightModuleIds: () => [] }
+)
+
+const highlightSet = computed(() => new Set(props.highlightModuleIds ?? []))
 
 const emit = defineEmits<{
   'update:modelValue': [v: Partial<Record<PermissionModuleId, ModulePermissionFlags>>]
@@ -66,10 +74,22 @@ function patch(
         <tr
           v-for="r in rows"
           :key="r.id"
-          class="border-b border-border last:border-0 hover:bg-muted/20"
+          :class="[
+            'border-b border-border last:border-0 hover:bg-muted/20',
+            highlightSet.has(r.id) && 'bg-accent/25',
+          ]"
         >
           <td class="px-3 py-2 align-middle">
-            <div class="font-medium text-foreground">{{ r.label }}</div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-medium text-foreground">{{ r.label }}</span>
+              <Badge
+                v-if="highlightSet.has(r.id)"
+                variant="secondary"
+                class="border border-border text-xs font-normal"
+              >
+                專案客製
+              </Badge>
+            </div>
             <div class="text-xs text-muted-foreground">{{ r.id }}</div>
           </td>
           <td class="px-1 py-2 text-center align-middle">

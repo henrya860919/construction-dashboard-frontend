@@ -14,12 +14,14 @@ withDefaults(
   defineProps<{
     row: ProjectMemberItem
     togglingStatusId: string | null
-    /** 可停用／啟用、移除專案成員 */
-    canManageMembership?: boolean
-    /** 租戶／平台管理員可編輯該成員在本專案的模組覆寫（平台管理員帳號不顯示） */
+    /** project.members：update — 停用／啟用 */
+    canUpdateMembership?: boolean
+    /** project.members：delete — 移出專案 */
+    canRemoveMember?: boolean
+    /** project.members：update — 編輯該成員在本專案的模組覆寫（平台管理員帳號不顯示） */
     canEditPermissions?: boolean
   }>(),
-  { canManageMembership: false, canEditPermissions: false }
+  { canUpdateMembership: false, canRemoveMember: false, canEditPermissions: false }
 )
 
 const emit = defineEmits<{
@@ -45,9 +47,9 @@ const emit = defineEmits<{
         <Shield class="size-4" />
         專案權限
       </DropdownMenuItem>
-      <DropdownMenuSeparator v-if="canEditPermissions && canManageMembership" />
+      <DropdownMenuSeparator v-if="canEditPermissions && (canUpdateMembership || canRemoveMember)" />
       <DropdownMenuItem
-        v-if="canManageMembership && row.status === 'active'"
+        v-if="canUpdateMembership && row.status === 'active'"
         class="gap-2 cursor-pointer"
         :disabled="togglingStatusId === row.id"
         @click="emit('toggleStatus', row)"
@@ -57,7 +59,7 @@ const emit = defineEmits<{
         停用
       </DropdownMenuItem>
       <DropdownMenuItem
-        v-else-if="canManageMembership"
+        v-else-if="canUpdateMembership"
         class="gap-2 cursor-pointer"
         :disabled="togglingStatusId === row.id"
         @click="emit('toggleStatus', row)"
@@ -66,9 +68,9 @@ const emit = defineEmits<{
         <PlayCircle v-else class="size-4" />
         啟用
       </DropdownMenuItem>
-      <DropdownMenuSeparator v-if="canManageMembership" />
+      <DropdownMenuSeparator v-if="canRemoveMember" />
       <DropdownMenuItem
-        v-if="canManageMembership"
+        v-if="canRemoveMember"
         class="gap-2 cursor-pointer text-destructive focus:text-destructive"
         @click="emit('remove', row)"
       >

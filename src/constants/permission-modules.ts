@@ -3,6 +3,7 @@
  */
 export const PERMISSION_MODULES = [
   'project.overview',
+  'project.members',
   'project.wbs',
   'project.gantt',
   'project.resource',
@@ -30,7 +31,7 @@ export const NAV_PATH_PERMISSION_MODULE: Record<string, PermissionModuleId> = {
   '/dashboard': 'project.overview',
   '/contract/project-info': 'project.overview',
   '/contract/management': 'project.overview',
-  '/contract/members': 'project.overview',
+  '/contract/members': 'project.members',
   '/files': 'construction.upload',
   '/files/forms': 'construction.upload',
   '/files/photos': 'construction.photo',
@@ -84,7 +85,8 @@ export function resolvePermissionPathSuffix(fullPath: string): string {
 
 /** 矩陣／文件顯示用 */
 export const PERMISSION_MODULE_LABELS: Record<PermissionModuleId, string> = {
-  'project.overview': '專案總覽、契約、成員',
+  'project.overview': '專案總覽、契約',
+  'project.members': '專案成員',
   'project.wbs': 'WBS 清單',
   'project.gantt': '甘特圖',
   'project.resource': '資源庫',

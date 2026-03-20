@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -821,7 +822,7 @@ const colCount = 5
     </Dialog>
 
     <Dialog v-model:open="historyOpen">
-      <DialogContent class="max-h-[85vh] sm:max-w-lg flex flex-col">
+      <DialogContent class="max-h-[85vh] sm:max-w-2xl flex flex-col">
         <DialogHeader>
           <DialogTitle>檔案版本紀錄</DialogTitle>
           <DialogDescription v-if="historyNode" class="truncate">
@@ -837,15 +838,32 @@ const colCount = 5
           <Table v-else>
             <TableHeader>
               <TableRow>
+                <TableHead class="w-[5.5rem] whitespace-nowrap">版本</TableHead>
                 <TableHead>檔名</TableHead>
-                <TableHead class="text-right">大小</TableHead>
+                <TableHead class="min-w-[6rem]">上傳者</TableHead>
+                <TableHead class="text-right whitespace-nowrap">大小</TableHead>
                 <TableHead class="whitespace-nowrap">上傳時間</TableHead>
                 <TableHead class="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-for="row in historyRows" :key="row.id">
+              <TableRow v-for="(row, historyIndex) in historyRows" :key="row.id">
+                <TableCell class="align-middle">
+                  <Badge
+                    :variant="historyIndex === 0 ? 'default' : 'secondary'"
+                    class="tabular-nums font-medium"
+                  >
+                    v{{ historyRows.length - historyIndex }}
+                  </Badge>
+                </TableCell>
                 <TableCell class="max-w-[140px] truncate text-sm">{{ row.fileName }}</TableCell>
+                <TableCell class="max-w-[10rem] truncate text-sm text-muted-foreground">
+                  {{
+                    row.uploadedBy?.name?.trim() ||
+                    row.uploadedBy?.email ||
+                    '—'
+                  }}
+                </TableCell>
                 <TableCell class="text-right text-xs text-muted-foreground tabular-nums">
                   {{ formatBytes(row.fileSize) }}
                 </TableCell>
@@ -865,7 +883,7 @@ const colCount = 5
                 </TableCell>
               </TableRow>
               <TableRow v-if="!historyRows.length">
-                <TableCell colspan="4" class="text-center text-muted-foreground py-6">
+                <TableCell colspan="6" class="text-center text-muted-foreground py-6">
                   尚無上傳紀錄
                 </TableCell>
               </TableRow>

@@ -21,12 +21,16 @@ import {
 } from 'lucide-vue-next'
 import { getProject, updateProject } from '@/api/project'
 import type { ProjectDetail } from '@/types'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const route = useRoute()
 
 function getProjectId(): string {
   return (route.params.projectId as string) ?? ''
 }
+
+const projectId = computed(() => getProjectId())
+const overviewPerm = useProjectModuleActions(projectId, 'project.overview')
 
 const loading = ref(true)
 const saving = ref(false)
@@ -134,7 +138,15 @@ async function loadProject() {
 onMounted(loadProject)
 watch(() => route.params.projectId, () => loadProject())
 
+watch(
+  () => overviewPerm.canUpdate.value,
+  (can) => {
+    if (!can) isEditMode.value = false
+  }
+)
+
 async function save() {
+  if (!overviewPerm.canUpdate.value) return
   const id = getProjectId()
   if (!id) return
   if (!form.value.projectName.trim()) {
@@ -183,7 +195,10 @@ async function save() {
           契約專案之基本資料、工期與聯絡資訊
         </p>
       </div>
-      <div class="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card p-1">
+      <div
+        v-if="overviewPerm.canUpdate"
+        class="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card p-1"
+      >
         <Button
           variant="ghost"
           size="sm"
@@ -227,7 +242,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="grid gap-6 pt-6 sm:grid-cols-2">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !overviewPerm.canUpdate">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工程名稱</p>
             <p class="text-sm font-medium text-foreground">{{ displayValue(form.projectName) }}</p>
@@ -280,7 +295,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="space-y-6 pt-6">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !overviewPerm.canUpdate">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工程概要</p>
             <p class="text-sm leading-relaxed text-foreground whitespace-pre-line">{{ displayValue(form.summary) }}</p>
@@ -327,7 +342,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="grid gap-6 pt-6 sm:grid-cols-2">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !overviewPerm.canUpdate">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">開工日期</p>
             <p class="text-sm font-medium text-foreground">{{ displayValue(form.startDate) }}</p>
@@ -382,7 +397,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="grid gap-6 pt-6 sm:grid-cols-2">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !overviewPerm.canUpdate">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工地負責人</p>
             <p class="text-sm font-medium text-foreground">{{ displayValue(form.siteManager) }}</p>
@@ -420,7 +435,7 @@ async function save() {
 
     <!-- 編輯模式：底部操作列 -->
     <div
-      v-if="isEditMode"
+      v-if="isEditMode && overviewPerm.canUpdate"
       class="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-6"
     >
       <p v-if="errorMessage" class="w-full text-sm text-destructive">{{ errorMessage }}</p>

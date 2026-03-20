@@ -33,10 +33,12 @@ import {
   type CameraItem,
   type CreateCameraPayload,
 } from '@/api/cameras'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => route.params.projectId as string)
+const equipmentPerm = useProjectModuleActions(projectId, 'construction.equipment')
 
 const cameras = ref<CameraItem[]>([])
 const loading = ref(true)
@@ -90,6 +92,7 @@ function goToDevice(cameraId: string) {
 }
 
 function openAddDialog() {
+  if (!equipmentPerm.canCreate.value) return
   addForm.value = { name: '', sourceUrl: '' }
   addError.value = null
   createdCamera.value = null
@@ -327,7 +330,7 @@ async function handleClearOverride(cam: CameraItem) {
           <h2 class="text-base font-medium text-foreground">CCTV 監控</h2>
         </div>
         <div class="flex items-center gap-2">
-          <DropdownMenu>
+          <DropdownMenu v-if="equipmentPerm.canRead">
             <DropdownMenuTrigger as-child>
               <Button
                 variant="outline"
@@ -357,6 +360,7 @@ async function handleClearOverride(cam: CameraItem) {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
+            v-if="equipmentPerm.canCreate"
             size="sm"
             class="gap-2"
             @click="openAddDialog"
@@ -389,7 +393,8 @@ async function handleClearOverride(cam: CameraItem) {
         v-else-if="cameras.length === 0"
         class="rounded-lg border border-dashed border-border bg-muted/30 py-12 text-center text-sm text-muted-foreground"
       >
-        尚無攝影機，請點「新增攝影機」並依精靈完成現場安裝。
+        <template v-if="equipmentPerm.canCreate">尚無攝影機，請點「新增攝影機」並依精靈完成現場安裝。</template>
+        <template v-else>尚無攝影機。</template>
       </div>
       <div
         v-else
@@ -425,7 +430,7 @@ async function handleClearOverride(cam: CameraItem) {
                     />
                     {{ connectionStatusLabel(cam.connectionStatus) }}
                   </span>
-                  <DropdownMenu>
+                  <DropdownMenu v-if="equipmentPerm.canUpdate || equipmentPerm.canDelete">
                     <DropdownMenuTrigger
                       as-child
                       @click.stop
@@ -445,7 +450,7 @@ async function handleClearOverride(cam: CameraItem) {
                       @click.stop
                     >
                       <DropdownMenuItem
-                        v-if="cam.connectionStatusOverride === 'offline'"
+                        v-if="equipmentPerm.canUpdate && cam.connectionStatusOverride === 'offline'"
                         class="cursor-pointer"
                         :disabled="overrideLoadingId === cam.id"
                         @click.stop="handleClearOverride(cam)"
@@ -453,7 +458,7 @@ async function handleClearOverride(cam: CameraItem) {
                         清除離線標示
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        v-else
+                        v-else-if="equipmentPerm.canUpdate"
                         class="cursor-pointer"
                         :disabled="overrideLoadingId === cam.id"
                         @click.stop="handleSetOverrideOffline(cam)"
@@ -461,6 +466,7 @@ async function handleClearOverride(cam: CameraItem) {
                         標示為離線
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        v-if="equipmentPerm.canDelete"
                         class="cursor-pointer text-destructive focus:text-destructive"
                         @click.stop="openDeleteConfirm(cam)"
                       >

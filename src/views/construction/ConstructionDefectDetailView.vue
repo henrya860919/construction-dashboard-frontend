@@ -38,12 +38,15 @@ import {
 import { uploadFile, getFileBlob } from '@/api/files'
 import type { DefectItem, DefectExecutionRecordItem, DefectPriority, DefectStatus } from '@/types/defect-improvement'
 import { ROUTE_NAME, ROUTE_PATH, buildProjectPath } from '@/constants/routes'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 const router = useRouter()
 
 const projectId = computed(() => route.params.projectId as string)
 const defectId = computed(() => route.params.defectId as string)
+const defectPerm = useProjectModuleActions(projectId, 'construction.defect')
 
 const listPath = computed(() => buildProjectPath(projectId.value, ROUTE_PATH.PROJECT_CONSTRUCTION_DEFECTS))
 
@@ -134,6 +137,7 @@ function formatDateTime(iso: string) {
 }
 
 function openEdit() {
+  if (!defectPerm.canUpdate.value) return
   const d = defect.value
   if (!d) return
   formDescription.value = d.description
@@ -151,6 +155,7 @@ function closeEdit() {
 }
 
 async function submitEdit() {
+  if (!ensureProjectPermission(defectPerm.canUpdate.value, 'change')) return
   const desc = formDescription.value.trim()
   const by = formDiscoveredBy.value.trim()
   if (!desc) {
@@ -184,6 +189,7 @@ async function submitEdit() {
 }
 
 function openRecordDialog() {
+  if (!ensureProjectPermission(defectPerm.canCreate.value, 'create')) return
   recordContent.value = ''
   recordAttachmentIds.value = []
   recordError.value = ''
@@ -191,6 +197,7 @@ function openRecordDialog() {
 }
 
 async function onRecordPhotosChange(e: Event) {
+  if (!ensureProjectPermission(defectPerm.canCreate.value, 'create')) return
   const input = e.target as HTMLInputElement
   const files = input.files
   if (!files?.length || !projectId.value) return
@@ -217,6 +224,7 @@ async function onRecordPhotosChange(e: Event) {
 }
 
 async function submitRecord() {
+  if (!ensureProjectPermission(defectPerm.canCreate.value, 'create')) return
   const content = recordContent.value.trim()
   if (!content) {
     recordError.value = '請填寫紀錄內容'
@@ -241,12 +249,13 @@ async function submitRecord() {
 }
 
 function openRemove() {
+  if (!defectPerm.canDelete.value) return
   removeError.value = ''
   removeOpen.value = true
 }
 
 async function confirmRemove() {
-  if (!projectId.value || !defectId.value) return
+  if (!defectPerm.canDelete.value || !projectId.value || !defectId.value) return
   removing.value = true
   removeError.value = ''
   try {
@@ -264,6 +273,7 @@ async function confirmRemove() {
 }
 
 async function previewAttachment(id: string) {
+  if (!ensureProjectPermission(defectPerm.canRead.value, 'read')) return
   try {
     const { blob } = await getFileBlob(id)
     if (lightboxUrl.value) URL.revokeObjectURL(lightboxUrl.value)
@@ -307,12 +317,17 @@ function recorderLabel(rec: DefectExecutionRecordItem) {
     <template v-else-if="defect">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-xl font-semibold text-foreground">缺失詳情</h1>
-        <div class="flex flex-wrap items-center gap-2">
-          <Button variant="outline" @click="openEdit">
+        <div v-if="defectPerm.canUpdate || defectPerm.canDelete" class="flex flex-wrap items-center gap-2">
+          <Button v-if="defectPerm.canUpdate" variant="outline" @click="openEdit">
             <Pencil class="mr-2 size-4" />
             編輯
           </Button>
-          <Button variant="outline" class="text-destructive hover:text-destructive" @click="openRemove">
+          <Button
+            v-if="defectPerm.canDelete"
+            variant="outline"
+            class="text-destructive hover:text-destructive"
+            @click="openRemove"
+          >
             <Trash2 class="mr-2 size-4" />
             刪除
           </Button>

@@ -11,7 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
       </CardHeader>
       <CardContent>
         <p class="text-sm text-muted-foreground">
-          施工日誌功能，此頁面待實作。
+          施工日誌功能，此頁面待實作。實作時請以
+          <code class="rounded bg-muted px-1 py-0.5 text-xs">useProjectModuleActions(projectId, 'construction.diary')</code>
+          控管讀寫操作。
         </p>
       </CardContent>
     </Card>

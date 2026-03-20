@@ -25,9 +25,12 @@ import { wbsEndDateInclusive, wbsDurationInclusiveDays } from '@/lib/wbs-schedul
 import { useGantt } from '@/composables/useGantt'
 import type { GanttTask, GanttLeftColumnItem, GanttMilestoneLine, GanttScaleMode } from '@/types/gantt'
 import type { WbsNode } from '@/types/wbs'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
+const ganttPerm = useProjectModuleActions(projectId, 'project.gantt')
+const canMutateGantt = computed(() => ganttPerm.canUpdate.value)
 
 const STORAGE_KEY_LEFT_WIDTH = 'gantt-left-width'
 const STORAGE_KEY_TOOLBAR = 'gantt-toolbar'
@@ -284,7 +287,7 @@ function toggleExpand(id: string) {
 
 /** 拖移後呼叫 API 移動節點（與 WBS 頁面相同） */
 async function moveNodeToFlatIndex(nodeId: string, insertBeforeIndex: number) {
-  if (!projectId.value) return
+  if (!canMutateGantt.value || !projectId.value) return
   const flat = flattenedList.value
   const currentIndex = flat.findIndex((it) => it.node.id === nodeId)
   if (currentIndex === -1 || currentIndex === insertBeforeIndex) return
@@ -404,13 +407,14 @@ const newMilestoneLabel = ref('')
 const newMilestoneDate = ref('2025-06-01')
 
 function addMilestoneLine() {
+  if (!canMutateGantt.value) return
   milestoneDialogOpen.value = true
   newMilestoneLabel.value = ''
   newMilestoneDate.value = new Date().toISOString().slice(0, 10)
 }
 
 function confirmAddMilestone() {
-  if (!newMilestoneLabel.value.trim()) return
+  if (!canMutateGantt.value || !newMilestoneLabel.value.trim()) return
   milestoneLines.value = [
     ...milestoneLines.value,
     {
@@ -424,10 +428,12 @@ function confirmAddMilestone() {
 }
 
 function removeMilestoneLine(id: string) {
+  if (!canMutateGantt.value) return
   milestoneLines.value = milestoneLines.value.filter((m) => m.id !== id)
 }
 
 function updateDependencies(taskId: string, predecessorIds: string[]) {
+  if (!canMutateGantt.value) return
   const copy = { ...taskDependencies.value }
   if (predecessorIds.length === 0) delete copy[taskId]
   else copy[taskId] = predecessorIds
@@ -437,7 +443,7 @@ function updateDependencies(taskId: string, predecessorIds: string[]) {
 }
 
 function addDependency(fromTaskId: string, toTaskId: string) {
-  if (fromTaskId === toTaskId) return
+  if (!canMutateGantt.value || fromTaskId === toTaskId) return
   if (!leafIdSet.value.has(fromTaskId) || !leafIdSet.value.has(toTaskId)) return
   const current = taskDependencies.value[toTaskId] ?? []
   if (current.includes(fromTaskId)) return
@@ -450,7 +456,7 @@ function addDependency(fromTaskId: string, toTaskId: string) {
 }
 
 async function updateTask(updated: GanttTask) {
-  if (updated.isRollup) return
+  if (!canMutateGantt.value || updated.isRollup) return
   const id = projectId.value
   if (!id) return
   const startDate = updated.plannedStart
@@ -566,6 +572,7 @@ function zoomOutAroundCenter() {
         :show-milestone-lines="showMilestoneLines"
         :show-assignee="showAssignee"
         :show-progress="showProgress"
+        :allow-milestone-mutations="canMutateGantt"
         @update:show-actual-plan="setShowActualPlan"
         @update:show-critical-path="setShowCriticalPath"
         @update:show-today-line="setShowTodayLine"
@@ -641,6 +648,7 @@ function zoomOutAroundCenter() {
                 <span class="min-w-0 truncate text-foreground">{{ ml.label }}</span>
                 <span class="shrink-0 text-xs text-muted-foreground">{{ ml.date }}</span>
                 <Button
+                  v-if="canMutateGantt"
                   variant="ghost"
                   size="icon"
                   class="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
@@ -653,7 +661,7 @@ function zoomOutAroundCenter() {
             </ul>
           </div>
           <!-- 新增 -->
-          <div class="grid gap-2">
+          <div v-if="canMutateGantt" class="grid gap-2">
             <Label for="ml-label" class="text-xs">新增一筆</Label>
             <div class="flex gap-2">
               <Input

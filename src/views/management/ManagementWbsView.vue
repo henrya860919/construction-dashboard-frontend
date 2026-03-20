@@ -53,6 +53,7 @@ import WbsNetworkDiagram from '@/components/management/WbsNetworkDiagram.vue'
 import { isWbsLeaf, rollupWbsSchedule, rollupResourceLabels } from '@/lib/wbs-rollup'
 import { syncLeafStartDatesToFsConstraints, hasAnyTaskDependencies } from '@/lib/wbs-fs-schedule'
 import { wbsEndDateInclusive } from '@/lib/wbs-schedule-dates'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const STORAGE_KEY_WORK_PACKAGES = 'gantt-work-packages'
 const STORAGE_KEY_DEPS = 'gantt-dependencies'
@@ -142,6 +143,7 @@ const selectedIds = ref<Set<string>>(new Set())
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
+const wbsPerm = useProjectModuleActions(projectId, 'project.wbs')
 
 /** WBS 樹狀資料（由 API 取得） */
 const wbsTree = ref<WbsNode[]>([])
@@ -887,6 +889,7 @@ watch(projectId, async (id) => {
     <!-- 工具列 -->
     <div class="flex flex-wrap items-center justify-end gap-2">
       <Button
+        v-if="wbsPerm.canCreate"
         variant="default"
         size="sm"
         class="gap-1.5"
@@ -898,7 +901,7 @@ watch(projectId, async (id) => {
       </Button>
       <Button variant="outline" size="sm" @click="expandAll">全部展開</Button>
       <Button variant="outline" size="sm" @click="collapseAll">全部收合</Button>
-      <Dialog v-model:open="settingsOpen">
+      <Dialog v-if="wbsPerm.canUpdate" v-model:open="settingsOpen">
         <DialogTrigger as-child>
           <Button variant="outline" size="sm" class="gap-1.5">
             <Settings class="size-4" />
@@ -1030,7 +1033,7 @@ watch(projectId, async (id) => {
                 >
                   <TableCell class="w-8 p-1 align-middle">
                     <div
-                      v-if="!item.node.isProjectRoot"
+                      v-if="!item.node.isProjectRoot && wbsPerm.canUpdate"
                       role="button"
                       tabindex="0"
                       class="flex cursor-grab touch-none items-center justify-center rounded p-1 text-muted-foreground/60 hover:bg-muted/80 hover:text-foreground active:cursor-grabbing"
@@ -1041,7 +1044,8 @@ watch(projectId, async (id) => {
                     >
                       <GripVertical class="size-4" />
                     </div>
-                    <span v-else class="block size-8" aria-hidden="true" />
+                    <span v-else-if="item.node.isProjectRoot" class="block size-8" aria-hidden="true" />
+                    <span v-else class="block size-4" aria-hidden="true" />
                   </TableCell>
                   <TableCell class="w-10">
                     <Checkbox
@@ -1056,7 +1060,7 @@ watch(projectId, async (id) => {
                   </TableCell>
                   <TableCell class="w-16 text-center">
                     <Checkbox
-                      :disabled="item.hasChildren"
+                      :disabled="item.hasChildren || !wbsPerm.canUpdate"
                       :checked="workPackageIds.includes(item.node.id)"
                       :aria-label="`設為任務：${item.node.name}`"
                       :title="item.hasChildren ? '僅葉節點可設為任務' : undefined"
@@ -1246,23 +1250,29 @@ watch(projectId, async (id) => {
                     </template>
                   </TableCell>
                   <TableCell class="w-12 p-1">
-                    <DropdownMenu>
+                    <DropdownMenu
+                      v-if="
+                        wbsPerm.canCreate ||
+                        (!item.node.isProjectRoot && (wbsPerm.canUpdate || wbsPerm.canDelete))
+                      "
+                    >
                       <DropdownMenuTrigger as-child>
                         <Button variant="ghost" size="icon" class="size-8" aria-label="操作">
                           <MoreHorizontal class="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem @click="openCreateChild(item.node)">
+                        <DropdownMenuItem v-if="wbsPerm.canCreate" @click="openCreateChild(item.node)">
                           <Plus class="size-4" />
                           新增子節點
                         </DropdownMenuItem>
                         <template v-if="!item.node.isProjectRoot">
-                          <DropdownMenuItem @click="openEdit(item.node)">
+                          <DropdownMenuItem v-if="wbsPerm.canUpdate" @click="openEdit(item.node)">
                             <Pencil class="size-4" />
                             編輯
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            v-if="wbsPerm.canDelete"
                             class="text-destructive focus:text-destructive"
                             @click="openDelete(item.node)"
                           >
@@ -1272,6 +1282,7 @@ watch(projectId, async (id) => {
                         </template>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    <span v-else class="text-xs text-muted-foreground">—</span>
                   </TableCell>
                 </TableRow>
               </template>

@@ -36,6 +36,7 @@ import {
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import FileFormsRowActions from '@/views/files/FileFormsRowActions.vue'
 import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 import {
   listProjectFormTemplates,
   createProjectFormTemplate,
@@ -109,6 +110,7 @@ function openDelete(row: FormTemplateItem) {
 }
 
 async function handleDownload(row: FormTemplateItem) {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
   try {
     const { blob, fileName } = await getFormTemplateBlob(row.id, { fileName: row.fileName })
     const url = URL.createObjectURL(blob)
@@ -211,7 +213,6 @@ const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => {
         h(FileFormsRowActions, {
           row: row.original,
           canDelete: canDeleteForRow,
-          canDownload: uploadPerm.canRead.value,
           onDownload: handleDownload,
           onDelete: openDelete,
         }),
@@ -265,6 +266,11 @@ function clearSelection() {
   rowSelection.value = {}
 }
 
+function tryOpenAddDialog() {
+  if (!ensureProjectPermission(uploadPerm.canCreate.value, 'create')) return
+  addDialogOpen.value = true
+}
+
 function onAddFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
@@ -273,6 +279,7 @@ function onAddFileChange(e: Event) {
 }
 
 async function submitAdd() {
+  if (!ensureProjectPermission(uploadPerm.canCreate.value, 'create')) return
   if (!addForm.value.file || !projectId.value) {
     addError.value = '請選擇檔案'
     return
@@ -340,6 +347,7 @@ async function confirmBatchDelete() {
 
 const batchDownloadLoading = ref(false)
 async function batchDownload() {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
   const items = selectedRows.value.map((r) => r.original)
   if (!items.length) return
   batchDownloadLoading.value = true
@@ -375,19 +383,12 @@ async function batchDownload() {
     </div>
 
     <!-- 工具列：已選 + ButtonGroup + 新增 全部靠右 -->
-    <div
-      v-if="
-        uploadPerm.canCreate ||
-        (hasSelection && (uploadPerm.canRead || uploadPerm.canDelete))
-      "
-      class="flex flex-wrap items-center justify-end gap-3"
-    >
+    <div class="flex flex-wrap items-center justify-end gap-3">
       <template v-if="hasSelection && (uploadPerm.canRead || uploadPerm.canDelete)">
         <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
         <ButtonGroup>
           <Button variant="outline" @click="clearSelection"> 取消選取 </Button>
           <Button
-            v-if="uploadPerm.canRead"
             variant="outline"
             size="sm"
             :disabled="batchDownloadLoading"
@@ -410,7 +411,7 @@ async function batchDownload() {
           </Button>
         </ButtonGroup>
       </template>
-      <Button v-if="uploadPerm.canCreate" :disabled="!projectId" @click="addDialogOpen = true">
+      <Button :disabled="!projectId" @click="tryOpenAddDialog">
         <Upload class="mr-2 size-4" />
         新增專案樣板
       </Button>
@@ -448,10 +449,7 @@ async function batchDownload() {
             <template v-else>
               <TableRow>
                 <TableCell :colspan="columnCount" class="h-24 text-center text-muted-foreground">
-                  <template v-if="uploadPerm.canCreate">
-                    尚無表單樣板。請由後台「表單樣板」新增預設樣板，或在此新增專案樣板。
-                  </template>
-                  <template v-else>尚無表單樣板。</template>
+                  尚無表單樣板。請由後台「表單樣板」新增預設樣板，或在此新增專案樣板。
                 </TableCell>
               </TableRow>
             </template>

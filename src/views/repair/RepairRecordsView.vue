@@ -39,10 +39,13 @@ import { listRepairRequests, deleteRepairRequest } from '@/api/repair-requests'
 import type { RepairRequestItem, RepairRequestStatus } from '@/types/repair-request'
 import { ROUTE_NAME } from '@/constants'
 import RepairRecordsRowActions from '@/views/repair/RepairRecordsRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => route.params.projectId as string)
+const repairRecordPerm = useProjectModuleActions(projectId, 'repair.record')
 
 const ALL_STATUS = 'all' as const
 const statusFilter = ref<string>(ALL_STATUS)
@@ -256,7 +259,11 @@ const columns = computed<ColumnDef<RepairRequestItem, unknown>[]>(() => [
     cell: ({ row }) =>
       h(RepairRecordsRowActions, {
         row: row.original,
-        onView: goView,
+        canRemove: repairRecordPerm.canDelete.value,
+        onView: (r) => {
+          if (!ensureProjectPermission(repairRecordPerm.canRead.value, 'read')) return
+          goView(r)
+        },
         onRemove: openRemoveDialog,
       }),
     enableSorting: false,
@@ -419,6 +426,7 @@ watch(statusFilter, () => {
           <ButtonGroup>
             <Button variant="outline" @click="clearSelection">取消選取</Button>
             <Button
+              v-if="repairRecordPerm.canDelete"
               variant="outline"
               class="text-destructive hover:text-destructive"
               @click="openBatchDelete"

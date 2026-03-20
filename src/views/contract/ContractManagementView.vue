@@ -23,7 +23,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -57,9 +56,12 @@ import {
 } from 'lucide-vue-next'
 import { listProjectFiles, deleteFile, getFileBlob } from '@/api/files'
 import { useUploadQueue } from '@/composables/useUploadQueue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const overviewPerm = useProjectModuleActions(projectId, 'project.overview')
 const { enqueueAndUpload } = useUploadQueue()
 
 /** 單一分類項目（key、顯示名稱、圖示） */
@@ -95,6 +97,7 @@ const addCategoryDialogOpen = ref(false)
 const newCategoryLabel = ref('')
 
 function submitAddCategory() {
+  if (!ensureProjectPermission(overviewPerm.canUpdate.value, 'change')) return
   const label = newCategoryLabel.value.trim()
   if (!label) return
   const key = `custom-${Date.now()}`
@@ -293,6 +296,7 @@ const columns = computed<ColumnDef<ContractFileRow, unknown>[]>(() => [
       h('div', { class: 'flex' }, [
         h(ContractFileRowActions, {
           row: row.original,
+          canDelete: overviewPerm.canDelete.value,
           onDownload: (r) => handleDownload(r),
           onDelete: (r) => handleDelete(r),
         }),
@@ -302,6 +306,7 @@ const columns = computed<ColumnDef<ContractFileRow, unknown>[]>(() => [
 ])
 
 async function handleDownload(row: ContractFileRow) {
+  if (!ensureProjectPermission(overviewPerm.canRead.value, 'read')) return
   try {
     const { blob, fileName } = await getFileBlob(row.id, { download: true, fileName: row.fileName })
     const url = URL.createObjectURL(blob)
@@ -357,6 +362,7 @@ const hasSelection = computed(() => selectedRows.value.length > 0)
 
 /** 批次下載 */
 async function batchDownload() {
+  if (!ensureProjectPermission(overviewPerm.canRead.value, 'read')) return
   const rows = selectedRows.value.map((r) => r.original)
   for (let i = 0; i < rows.length; i++) {
     try {
@@ -402,6 +408,16 @@ function onFileSelect(e: Event) {
   uploadForm.value.files = [...uploadForm.value.files, ...newFiles]
   input.value = ''
 }
+
+function tryOpenAddCategoryDialog() {
+  if (!ensureProjectPermission(overviewPerm.canUpdate.value, 'change')) return
+  addCategoryDialogOpen.value = true
+}
+
+function tryOpenUploadDialog() {
+  if (!ensureProjectPermission(overviewPerm.canCreate.value, 'create')) return
+  uploadDialogOpen.value = true
+}
 </script>
 
 <template>
@@ -424,13 +440,16 @@ function onFileSelect(e: Event) {
         <component :is="c.icon" class="size-4 shrink-0" />
         {{ c.label }}
       </Button>
+      <Button
+        variant="outline"
+        class="gap-2"
+        aria-label="新增分類"
+        @click="tryOpenAddCategoryDialog"
+      >
+        <Plus class="size-4" />
+        新增分類
+      </Button>
       <Dialog v-model:open="addCategoryDialogOpen">
-        <DialogTrigger as-child>
-          <Button variant="outline" class="gap-2" aria-label="新增分類">
-            <Plus class="size-4" />
-            新增分類
-          </Button>
-        </DialogTrigger>
         <DialogContent class="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>新增分類</DialogTitle>
@@ -469,6 +488,7 @@ function onFileSelect(e: Event) {
             批次下載
           </Button>
           <Button
+            v-if="overviewPerm.canDelete"
             variant="outline"
             class="gap-2 text-destructive hover:text-destructive"
             @click="batchDelete"
@@ -478,13 +498,11 @@ function onFileSelect(e: Event) {
           </Button>
         </ButtonGroup>
       </template>
+      <Button class="gap-2" @click="tryOpenUploadDialog">
+        <Upload class="size-4" />
+        上傳檔案
+      </Button>
       <Dialog v-model:open="uploadDialogOpen">
-          <DialogTrigger as-child>
-            <Button class="gap-2">
-              <Upload class="size-4" />
-              上傳檔案
-            </Button>
-          </DialogTrigger>
           <DialogContent class="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>上傳契約檔案</DialogTitle>

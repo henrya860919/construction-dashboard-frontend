@@ -39,6 +39,7 @@ import {
   listDrawingRevisions,
   DRAWING_REVISION_CATEGORY,
 } from '@/api/drawing-nodes'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 import { uploadFile, getFileBlob } from '@/api/files'
 import {
   ChevronRight,
@@ -80,6 +81,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
+const drawingsPerm = useProjectModuleActions(projectId, 'project.drawings')
 
 const tree = ref<DrawingNodeTree[]>([])
 const loading = ref(false)
@@ -539,10 +541,31 @@ const colCount = 5
       </span>
       <ButtonGroup v-if="selectedCount > 0">
         <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
-        <Button variant="destructive" size="sm" @click="openBatchDelete">批次刪除</Button>
+        <Button
+          v-if="drawingsPerm.canDelete"
+          variant="destructive"
+          size="sm"
+          @click="openBatchDelete"
+        >
+          批次刪除
+        </Button>
       </ButtonGroup>
-      <Button variant="outline" size="sm" @click="openCreate(null, 'folder')">新增頂層分類</Button>
-      <Button variant="outline" size="sm" @click="openCreate(null, 'leaf')">新增頂層圖說</Button>
+      <Button
+        v-if="drawingsPerm.canCreate"
+        variant="outline"
+        size="sm"
+        @click="openCreate(null, 'folder')"
+      >
+        新增頂層分類
+      </Button>
+      <Button
+        v-if="drawingsPerm.canCreate"
+        variant="outline"
+        size="sm"
+        @click="openCreate(null, 'leaf')"
+      >
+        新增頂層圖說
+      </Button>
       <Button variant="outline" size="sm" :disabled="loading" @click="expandAll">全部展開</Button>
       <Button variant="outline" size="sm" :disabled="loading" @click="collapseAll">全部收合</Button>
     </div>
@@ -603,6 +626,7 @@ const colCount = 5
             >
               <TableCell class="w-8 p-1 align-middle">
                 <div
+                  v-if="drawingsPerm.canUpdate"
                   role="button"
                   tabindex="0"
                   class="flex cursor-grab touch-none items-center justify-center rounded p-1 text-muted-foreground/60 hover:bg-muted/80 hover:text-foreground active:cursor-grabbing"
@@ -611,6 +635,7 @@ const colCount = 5
                 >
                   <GripVertical class="size-4" />
                 </div>
+                <span v-else class="block size-4" aria-hidden="true" />
               </TableCell>
               <TableCell class="w-10 p-1 align-middle">
                 <Checkbox
@@ -663,6 +688,7 @@ const colCount = 5
                 <div class="flex flex-nowrap items-center justify-end gap-0.5">
                   <template v-if="item.node.kind === 'leaf'">
                     <Button
+                      v-if="drawingsPerm.canCreate"
                       variant="ghost"
                       size="icon"
                       class="size-8 shrink-0"
@@ -673,6 +699,7 @@ const colCount = 5
                       <Upload class="size-4" />
                     </Button>
                     <Button
+                      v-if="drawingsPerm.canRead"
                       variant="ghost"
                       size="icon"
                       class="size-8 shrink-0"
@@ -682,6 +709,7 @@ const colCount = 5
                       <History class="size-4" />
                     </Button>
                     <Button
+                      v-if="drawingsPerm.canRead"
                       variant="ghost"
                       size="icon"
                       class="size-8 shrink-0"
@@ -692,21 +720,39 @@ const colCount = 5
                       <Download class="size-4" />
                     </Button>
                   </template>
-                  <DropdownMenu>
+                  <DropdownMenu
+                    v-if="
+                      (item.node.kind === 'folder' && drawingsPerm.canCreate) ||
+                      drawingsPerm.canUpdate ||
+                      drawingsPerm.canDelete
+                    "
+                  >
                     <DropdownMenuTrigger as-child>
                       <Button variant="ghost" size="icon" class="size-8 shrink-0" aria-label="更多">
                         <MoreHorizontal class="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" class="w-48">
-                      <DropdownMenuItem v-if="item.node.kind === 'folder'" @click="openCreate(item.node.id, 'folder')">
+                      <DropdownMenuItem
+                        v-if="drawingsPerm.canCreate && item.node.kind === 'folder'"
+                        @click="openCreate(item.node.id, 'folder')"
+                      >
                         新增子分類
                       </DropdownMenuItem>
-                      <DropdownMenuItem v-if="item.node.kind === 'folder'" @click="openCreate(item.node.id, 'leaf')">
+                      <DropdownMenuItem
+                        v-if="drawingsPerm.canCreate && item.node.kind === 'folder'"
+                        @click="openCreate(item.node.id, 'leaf')"
+                      >
                         新增圖說項目
                       </DropdownMenuItem>
-                      <DropdownMenuItem @click="openEdit(item.node)">編輯名稱</DropdownMenuItem>
-                      <DropdownMenuItem class="text-destructive" @click="openDelete(item.node)">
+                      <DropdownMenuItem v-if="drawingsPerm.canUpdate" @click="openEdit(item.node)">
+                        編輯名稱
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        v-if="drawingsPerm.canDelete"
+                        class="text-destructive"
+                        @click="openDelete(item.node)"
+                      >
                         刪除
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -872,6 +918,7 @@ const colCount = 5
                 </TableCell>
                 <TableCell>
                   <Button
+                    v-if="drawingsPerm.canRead"
                     variant="ghost"
                     size="icon"
                     :disabled="historyDownloadId === row.id"

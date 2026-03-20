@@ -28,6 +28,7 @@ import {
   type UpdateCameraPayload,
 } from '@/api/cameras'
 import { useWhepPlayer } from '@/composables/useWhepPlayer'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,6 +36,7 @@ const deviceBreadcrumbStore = useDeviceBreadcrumbStore()
 
 const cameraId = computed(() => route.params.deviceId as string)
 const projectId = computed(() => route.params.projectId as string)
+const equipmentPerm = useProjectModuleActions(projectId, 'construction.equipment')
 
 const camera = ref<CameraItem | null>(null)
 const cameraLoading = ref(true)
@@ -255,8 +257,11 @@ async function handleDeleteCamera() {
         <ArrowLeft class="size-4" />
         返回設備列表
       </Button>
-      <div class="flex items-center gap-2">
-        <Dialog v-model:open="settingsOpen">
+      <div
+        v-if="equipmentPerm.canUpdate || equipmentPerm.canDelete"
+        class="flex items-center gap-2"
+      >
+        <Dialog v-if="equipmentPerm.canUpdate" v-model:open="settingsOpen">
           <DialogTrigger as-child>
             <Button
               variant="outline"
@@ -388,6 +393,7 @@ async function handleDeleteCamera() {
           </DialogContent>
         </Dialog>
         <Button
+          v-if="equipmentPerm.canDelete"
           variant="outline"
           size="sm"
           class="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -477,6 +483,7 @@ async function handleDeleteCamera() {
             <template v-if="camera?.connectionStatusOverride === 'offline'">
               <span class="text-amber-600 dark:text-amber-400">· 已手動標示為離線</span>
               <Button
+                v-if="equipmentPerm.canUpdate"
                 variant="link"
                 size="sm"
                 class="h-auto p-0 text-xs"
@@ -492,6 +499,7 @@ async function handleDeleteCamera() {
             </template>
             <template v-else>
               <Button
+                v-if="equipmentPerm.canUpdate"
                 variant="link"
                 size="sm"
                 class="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"

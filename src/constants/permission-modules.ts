@@ -45,6 +45,10 @@ export const NAV_PATH_PERMISSION_MODULE: Record<string, PermissionModuleId> = {
   '/management/risks': 'project.risk',
   '/contract/schedule': 'project.duration',
   '/monitoring/history': 'construction.monitor',
+  /** 與 router redirect 路徑一致，便於書籤／守衛解析 */
+  '/monitoring/metrics': 'construction.monitor',
+  '/monitoring/alerts': 'construction.monitor',
+  '/monitoring/media': 'construction.monitor',
   '/monitoring/upload': 'construction.upload',
   '/monitoring/devices': 'construction.equipment',
   '/monitoring/reports': 'construction.monitor',

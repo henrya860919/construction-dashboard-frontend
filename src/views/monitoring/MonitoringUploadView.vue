@@ -13,10 +13,12 @@ import { Download, Upload, FileSpreadsheet, ArrowRight, AlertCircle, X } from 'l
 import { buildProjectPath } from '@/constants/routes'
 import { API_PATH } from '@/constants/api'
 import { useUploadQueue } from '@/composables/useUploadQueue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const uploadPerm = useProjectModuleActions(projectId, 'construction.upload')
 const { enqueueAndRun } = useUploadQueue()
 
 /** 選定的檔案（待上傳，可多選） */
@@ -85,6 +87,7 @@ function removeSelectedFile(index: number) {
 
 /** 上傳：多檔並行，經由統一上傳佇列，進度顯示於 Header「檔案上傳進度」 */
 async function handleUpload() {
+  if (!uploadPerm.canCreate.value) return
   const files = selectedFiles.value
   if (!files.length || !projectId.value) return
   isUploading.value = true
@@ -181,8 +184,15 @@ function goToMetrics() {
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
+        <p
+          v-if="!uploadPerm.canCreate"
+          class="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+        >
+          您沒有上傳監測資料的權限；如需使用請洽專案管理員。
+        </p>
         <!-- 拖曳 / 選擇檔案區（可多選） -->
         <div
+          v-else
           class="relative flex min-h-[160px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-6 transition-colors hover:bg-muted/50"
           :class="{ 'border-primary bg-primary/5': hasFiles }"
           @dragover="onDragOver"
@@ -239,7 +249,10 @@ function goToMetrics() {
         </ul>
 
         <!-- 上傳按鈕與結果訊息 -->
-        <div class="flex flex-wrap items-center gap-3">
+        <div
+          v-if="uploadPerm.canCreate"
+          class="flex flex-wrap items-center gap-3"
+        >
           <Button
             type="button"
             variant="default"

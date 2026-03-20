@@ -47,11 +47,14 @@ import StateCard from '@/components/common/StateCard.vue'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import ConstructionDefectsRowActions from '@/views/construction/ConstructionDefectsRowActions.vue'
 import { ROUTE_NAME } from '@/constants/routes'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 const router = useRouter()
 
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const defectPerm = useProjectModuleActions(projectId, 'construction.defect')
 
 const list = ref<DefectItem[]>([])
 const meta = ref<{ page: number; limit: number; total: number } | null>(null)
@@ -168,6 +171,7 @@ function formatDateTime(iso: string) {
 }
 
 function openCreateDialog() {
+  if (!ensureProjectPermission(defectPerm.canCreate.value, 'create')) return
   formMode.value = 'create'
   editingItem.value = null
   formDescription.value = ''
@@ -237,6 +241,11 @@ async function onFormPhotosChange(e: Event) {
 }
 
 async function submitForm() {
+  if (formMode.value === 'create') {
+    if (!ensureProjectPermission(defectPerm.canCreate.value, 'create')) return
+  } else if (editingItem.value) {
+    if (!ensureProjectPermission(defectPerm.canUpdate.value, 'change')) return
+  }
   const desc = formDescription.value.trim()
   const by = formDiscoveredBy.value.trim()
   if (!desc) {
@@ -285,6 +294,7 @@ async function submitForm() {
 }
 
 function goView(row: DefectItem) {
+  if (!ensureProjectPermission(defectPerm.canRead.value, 'read')) return
   router.push({
     name: ROUTE_NAME.PROJECT_CONSTRUCTION_DEFECT_DETAIL,
     params: { projectId: projectId.value, defectId: row.id },
@@ -417,6 +427,8 @@ const columns = computed<ColumnDef<DefectItem, unknown>[]>(() => [
     cell: ({ row }) =>
       h(ConstructionDefectsRowActions, {
         row: row.original,
+        canEdit: defectPerm.canUpdate.value,
+        canRemove: defectPerm.canDelete.value,
         onView: goView,
         onEdit: openEditDialog,
         onRemove: openRemoveDialog,
@@ -568,6 +580,7 @@ watch(projectId, (id) => {
           <ButtonGroup>
             <Button variant="outline" @click="clearSelection">取消選取</Button>
             <Button
+              v-if="defectPerm.canDelete"
               variant="outline"
               class="text-destructive hover:text-destructive"
               @click="openBatchDelete"

@@ -37,6 +37,7 @@ import type { AttachmentItem } from '@/api/files'
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import FileManagementRowActions from '@/views/files/FileManagementRowActions.vue'
 import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 import { Upload, Loader2, Trash2, Download, FileIcon } from 'lucide-vue-next'
 
 /** 檔案管理專用 category，與契約分開 */
@@ -154,7 +155,6 @@ const columns = computed<ColumnDef<AttachmentItem, unknown>[]>(() => {
       h('div', { class: 'flex justify-end' }, [
         h(FileManagementRowActions, {
           row: row.original,
-          canDownload: uploadPerm.canRead.value,
           canDelete: uploadPerm.canDelete.value,
           onDownload: handleDownload,
           onDelete: openDeleteDialog,
@@ -204,6 +204,7 @@ function clearSelection() {
 }
 
 function triggerAddFile() {
+  if (!ensureProjectPermission(uploadPerm.canCreate.value, 'create')) return
   fileInputRef.value?.click()
 }
 
@@ -231,6 +232,7 @@ async function onFileInputChange(e: Event) {
 }
 
 async function handleDownload(row: AttachmentItem) {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
   try {
     const { blob, fileName } = await getFileBlob(row.id, { download: true, fileName: row.fileName })
     const url = URL.createObjectURL(blob)
@@ -268,6 +270,7 @@ async function confirmDelete() {
 }
 
 async function batchDownload() {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
   const rows = selectedRows.value.map((r) => r.original)
   for (let i = 0; i < rows.length; i++) {
     try {
@@ -324,15 +327,8 @@ async function confirmBatchDelete() {
     </div>
 
     <!-- 工具列：已選 + ButtonGroup + 新增在右 -->
-    <div
-      v-if="
-        uploadPerm.canCreate ||
-        (hasSelection && (uploadPerm.canRead || uploadPerm.canDelete))
-      "
-      class="flex flex-wrap items-center justify-end gap-3"
-    >
+    <div class="flex flex-wrap items-center justify-end gap-3">
       <input
-        v-if="uploadPerm.canCreate"
         ref="fileInputRef"
         type="file"
         class="hidden"
@@ -345,7 +341,7 @@ async function confirmBatchDelete() {
           <Button variant="outline" @click="clearSelection">
             取消選取
           </Button>
-          <Button v-if="uploadPerm.canRead" variant="outline" @click="batchDownload">
+          <Button variant="outline" @click="batchDownload">
             <Download class="size-4" />
             批次下載
           </Button>
@@ -361,7 +357,6 @@ async function confirmBatchDelete() {
         </ButtonGroup>
       </template>
       <Button
-        v-if="uploadPerm.canCreate"
         :disabled="uploadInProgress || !projectId"
         class="gap-2"
         @click="triggerAddFile"
@@ -405,8 +400,7 @@ async function confirmBatchDelete() {
             <template v-else>
               <TableRow>
                 <TableCell :colspan="columnCount" class="h-24 text-center text-muted-foreground">
-                  <template v-if="uploadPerm.canCreate">尚無檔案，點擊「新增檔案」上傳</template>
-                  <template v-else>尚無檔案</template>
+                  尚無檔案，點擊「新增檔案」上傳
                 </TableCell>
               </TableRow>
             </template>

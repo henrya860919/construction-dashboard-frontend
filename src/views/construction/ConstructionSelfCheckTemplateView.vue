@@ -27,12 +27,15 @@ import type { SelfInspectionRecordItem } from '@/api/project-self-inspections'
 import { ROUTE_NAME } from '@/constants/routes'
 import { useSelfCheckBreadcrumbStore } from '@/stores/selfCheckBreadcrumb'
 import SelfCheckRecordsRowActions from '@/views/construction/SelfCheckRecordsRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 const router = useRouter()
 const selfCheckBreadcrumbStore = useSelfCheckBreadcrumbStore()
 
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const inspectionPerm = useProjectModuleActions(projectId, 'construction.inspection')
 const templateId = computed(() => (route.params.templateId as string) ?? '')
 
 const hubLoading = ref(true)
@@ -113,6 +116,7 @@ function goBack() {
 }
 
 function goNew() {
+  if (!ensureProjectPermission(inspectionPerm.canCreate.value, 'create')) return
   router.push({
     name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_NEW,
     params: { projectId: projectId.value, templateId: templateId.value },
@@ -188,7 +192,10 @@ const columns = computed<ColumnDef<SelfInspectionRecordItem, unknown>[]>(() => [
     header: () => '',
     cell: ({ row }) =>
       h(SelfCheckRecordsRowActions, {
-        onView: () => goRecord(row.original),
+        onView: () => {
+          if (!ensureProjectPermission(inspectionPerm.canRead.value, 'read')) return
+          goRecord(row.original)
+        },
       }),
     enableSorting: false,
   },
@@ -242,7 +249,11 @@ const table = useVueTable({
           {{ hubLoading ? '載入中…' : templateName || '自主查驗' }}
         </h1>
       </div>
-      <Button :disabled="hubLoading || !!hubError" class="gap-1.5" @click="goNew">
+      <Button
+        :disabled="hubLoading || !!hubError"
+        class="gap-1.5"
+        @click="goNew"
+      >
         <Plus class="size-4" />
         新增查驗紀錄
       </Button>

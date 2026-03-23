@@ -41,6 +41,12 @@ export interface ConstructionDailyLogPersonnelEquipmentDto {
   accumulatedEquipmentQty: string
 }
 
+/** 進度管理主計畫：時間區間與累計預定 %（供日誌預定進度內插，與後端一致） */
+export interface ConstructionDailyLogProgressPlanKnot {
+  periodDate: string
+  cumulativePlanned: string
+}
+
 export interface ConstructionDailyLogDto {
   id: string
   projectId: string
@@ -57,6 +63,8 @@ export interface ConstructionDailyLogDto {
   startDate: string | null
   completionDate: string | null
   plannedProgress: number | null
+  /** 與預定進度內插相同之節點（供前端即時預覽） */
+  progressPlanKnots?: ConstructionDailyLogProgressPlanKnot[]
   actualProgress: string | null
   specialItemA: string
   specialItemB: string
@@ -94,6 +102,7 @@ export interface ConstructionDailyLogFormDefaults {
   contractorName: string
   startDate: string | null
   approvedDurationDays: number | null
+  progressPlanKnots: ConstructionDailyLogProgressPlanKnot[]
 }
 
 export type ConstructionDailyLogUpsertPayload = Omit<
@@ -135,11 +144,26 @@ export async function listConstructionDailyLogs(
 }
 
 export async function getConstructionDailyLogDefaults(
-  projectId: string
+  projectId: string,
+  params?: { logDate?: string }
 ): Promise<ConstructionDailyLogFormDefaults> {
-  const { data } = await apiClient.get<ApiResponse<ConstructionDailyLogFormDefaults>>(
-    API_PATH.PROJECT_CONSTRUCTION_DAILY_LOG_DEFAULTS(projectId)
-  )
+  const search = new URLSearchParams()
+  if (params?.logDate) search.set('logDate', params.logDate)
+  const q = search.toString()
+  const url = `${API_PATH.PROJECT_CONSTRUCTION_DAILY_LOG_DEFAULTS(projectId)}${q ? `?${q}` : ''}`
+  const { data } = await apiClient.get<ApiResponse<ConstructionDailyLogFormDefaults>>(url)
+  return data.data
+}
+
+export async function getConstructionDailyLogProgressPlanKnots(
+  projectId: string,
+  logDate: string
+): Promise<{ progressPlanKnots: ConstructionDailyLogProgressPlanKnot[] }> {
+  const search = new URLSearchParams({ logDate })
+  const url = `${API_PATH.PROJECT_CONSTRUCTION_DAILY_LOG_PROGRESS_PLAN_KNOTS(projectId)}?${search}`
+  const { data } = await apiClient.get<
+    ApiResponse<{ progressPlanKnots: ConstructionDailyLogProgressPlanKnot[] }>
+  >(url)
   return data.data
 }
 
@@ -148,6 +172,8 @@ export interface ConstructionDailyLogPccesPickerImport {
   version: number
   approvedAt: string | null
   approvedById: string | null
+  /** 與匯入紀錄「核定生效時間」一致；null 表示以核定操作日為生效日曆日 */
+  approvalEffectiveAt: string | null
 }
 
 /** 與「PCCES 明細／全部類型」同序（itemKey 升序）；父列與末層欄位一致 */
@@ -191,6 +217,30 @@ export async function getConstructionDailyLogPccesWorkItems(
   if (params.excludeLogId) search.set('excludeLogId', params.excludeLogId)
   const url = `${API_PATH.PROJECT_CONSTRUCTION_DAILY_LOG_PCCES_WORK_ITEMS(projectId)}?${search}`
   const { data } = await apiClient.get<ApiResponse<ConstructionDailyLogPccesPickerResponse>>(url)
+  return data.data
+}
+
+export interface PreviewPccesActualProgressBody {
+  logDate: string
+  excludeLogId?: string
+  overlayWorkItems: { pccesItemId: string; dailyQty: string }[]
+}
+
+export interface PreviewPccesActualProgressResult {
+  actualProgress: string
+  contractTotalAmount: string
+  weightedDoneAmount: string
+  generalLeafCount: number
+}
+
+export async function previewConstructionDailyLogPccesActualProgress(
+  projectId: string,
+  body: PreviewPccesActualProgressBody
+): Promise<PreviewPccesActualProgressResult> {
+  const { data } = await apiClient.post<ApiResponse<PreviewPccesActualProgressResult>>(
+    API_PATH.PROJECT_CONSTRUCTION_DAILY_LOG_PREVIEW_PCCES_ACTUAL(projectId),
+    body
+  )
   return data.data
 }
 

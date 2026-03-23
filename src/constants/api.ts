@@ -123,8 +123,12 @@ export const API_PATH = {
     `${API_V1}/projects/${projectId}/construction-daily-logs`,
   PROJECT_CONSTRUCTION_DAILY_LOG_DEFAULTS: (projectId: string) =>
     `${API_V1}/projects/${projectId}/construction-daily-logs/defaults`,
+  PROJECT_CONSTRUCTION_DAILY_LOG_PROGRESS_PLAN_KNOTS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs/progress-plan-knots`,
   PROJECT_CONSTRUCTION_DAILY_LOG_PCCES_WORK_ITEMS: (projectId: string) =>
     `${API_V1}/projects/${projectId}/construction-daily-logs/pcces-work-items`,
+  PROJECT_CONSTRUCTION_DAILY_LOG_PREVIEW_PCCES_ACTUAL: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs/preview-pcces-actual-progress`,
   PROJECT_CONSTRUCTION_DAILY_LOG: (projectId: string, logId: string) =>
     `${API_V1}/projects/${projectId}/construction-daily-logs/${logId}`,
   /** 估驗計價 */
@@ -134,6 +138,24 @@ export const API_PATH = {
     `${API_V1}/projects/${projectId}/construction-valuations/pcces-lines`,
   PROJECT_CONSTRUCTION_VALUATION: (projectId: string, valuationId: string) =>
     `${API_V1}/projects/${projectId}/construction-valuations/${valuationId}`,
+  /** 進度管理 */
+  PROJECT_PROGRESS_DASHBOARD: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/dashboard`,
+  PROJECT_PROGRESS_PLANS: (projectId: string) => `${API_V1}/projects/${projectId}/progress/plans`,
+  PROJECT_PROGRESS_PLAN: (projectId: string, planId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/${planId}`,
+  PROJECT_PROGRESS_PLAN_WITH_UPLOAD: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/with-upload`,
+  PROJECT_PROGRESS_PLAN_UPLOADS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plan-uploads`,
+  PROJECT_PROGRESS_PLAN_DUPLICATE: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/duplicate`,
+  PROJECT_PROGRESS_PLAN_ENTRIES: (projectId: string, planId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/${planId}/entries`,
+  PROJECT_PROGRESS_PLAN_EFFECTIVE: (projectId: string, planId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/${planId}/effective`,
+  PROJECT_PROGRESS_ACTUALS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/actuals`,
   /** WBS 工作分解結構（樹狀） */
   PROJECT_WBS: (projectId: string) => `${API_V1}/projects/${projectId}/wbs`,
   PROJECT_WBS_NODE: (projectId: string, nodeId: string) => `${API_V1}/projects/${projectId}/wbs/${nodeId}`,

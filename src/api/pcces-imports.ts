@@ -16,6 +16,8 @@ export interface PccesImportSummary {
   /** ISO；null 表示尚未核定（施工日誌僅能引用已核定版之工項） */
   approvedAt: string | null
   approvedById: string | null
+  /** ISO；施工日誌依填表日選版時之「生效」日曆日以此為準；null 則以核定操作時間之日為準 */
+  approvalEffectiveAt: string | null
   createdAt: string
   createdById: string
 }
@@ -76,16 +78,24 @@ export async function uploadPccesImport(
   return data.data
 }
 
+export async function patchPccesImport(
+  projectId: string,
+  importId: string,
+  body: { versionLabel?: string; approvalEffectiveAt?: string | null }
+): Promise<PccesImportSummary> {
+  const { data } = await apiClient.patch<ApiResponse<PccesImportSummary>>(
+    API_PATH.PROJECT_PCCES_IMPORT(projectId, importId),
+    body
+  )
+  return data.data
+}
+
 export async function patchPccesImportVersionLabel(
   projectId: string,
   importId: string,
   versionLabel: string
 ): Promise<PccesImportSummary> {
-  const { data } = await apiClient.patch<ApiResponse<PccesImportSummary>>(
-    API_PATH.PROJECT_PCCES_IMPORT(projectId, importId),
-    { versionLabel }
-  )
-  return data.data
+  return patchPccesImport(projectId, importId, { versionLabel })
 }
 
 export async function getPccesImport(

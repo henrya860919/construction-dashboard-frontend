@@ -96,6 +96,13 @@ function formatDate(iso: string) {
   })
 }
 
+/** 施工日誌選版用之「生效」日曆日顯示 */
+function formatDailyLogEffective(row: PccesImportSummary) {
+  if (!row.approvedAt) return '—'
+  if (row.approvalEffectiveAt) return formatDate(row.approvalEffectiveAt)
+  return `同核定 ${formatDate(row.approvedAt)}`
+}
+
 function openDelete(row: PccesImportSummary) {
   deleteTarget.value = row
   deleteOpen.value = true
@@ -157,7 +164,7 @@ async function confirmDelete() {
       <h1 class="text-xl font-semibold text-foreground">PCCES 匯入紀錄</h1>
       <p class="mt-1 text-sm text-muted-foreground">
         依版次新到舊排列；第 1 版顯示為「原契約」，其餘版本名稱於上傳或 Excel
-        確認時自訂，可於明細修改。可刪除整次匯入（軟刪除，無法復原）。
+        確認時自訂，可於明細修改。各版可另填「核定生效時間」供施工日誌依填表日對應契約欄位版本。可刪除整次匯入（軟刪除，無法復原）。
       </p>
     </div>
 
@@ -234,6 +241,7 @@ async function confirmDelete() {
               <TableHead>類型</TableHead>
               <TableHead>筆數</TableHead>
               <TableHead>匯入時間</TableHead>
+              <TableHead class="min-w-[10rem]">生效（日誌）</TableHead>
               <TableHead class="text-center">核定</TableHead>
               <TableHead class="text-end">操作</TableHead>
             </TableRow>
@@ -252,6 +260,7 @@ async function confirmDelete() {
                 {{ row.itemCount }}（葉節點 {{ row.generalCount }}）
               </TableCell>
               <TableCell class="text-sm text-muted-foreground">{{ formatDate(row.createdAt) }}</TableCell>
+              <TableCell class="text-xs text-muted-foreground">{{ formatDailyLogEffective(row) }}</TableCell>
               <TableCell class="text-center text-sm">
                 <span v-if="row.approvedAt" class="text-muted-foreground">已核定</span>
                 <span v-else class="font-medium text-foreground">待核定</span>

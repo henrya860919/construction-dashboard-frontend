@@ -132,6 +132,12 @@ export const LAYER3_CONSTRUCTION: NavItemProject[] = [
     icon: 'ClipboardCheck',
   },
   {
+    id: 'construction-progress',
+    label: '進度管理',
+    pathSuffix: '/construction/progress',
+    icon: 'TrendingUp',
+  },
+  {
     id: 'construction-diary',
     label: '施工日誌',
     pathSuffix: '/construction/diary',

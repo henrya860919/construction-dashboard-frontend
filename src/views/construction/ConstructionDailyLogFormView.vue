@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { isAxiosError } from 'axios'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,13 +28,22 @@ import { buildProjectPath, ROUTE_PATH, ROUTE_NAME } from '@/constants/routes'
 import { parseLocaleNumber, formatThousands } from '@/lib/format-number'
 import { computePlannedProgressPreview } from '@/lib/construction-daily-log-plan'
 import {
+  CONSTRUCTION_DAILY_LOG_BREADCRUMB_STATE_KEY,
+  formatLogDateForBreadcrumb,
+  persistDailyLogBreadcrumbDateToSession,
+} from '@/lib/construction-daily-log-breadcrumb'
+import {
   createConstructionDailyLog,
   deleteConstructionDailyLog,
   getConstructionDailyLog,
   getConstructionDailyLogDefaults,
+  getConstructionDailyLogProgressPlanKnots,
   getConstructionDailyLogPccesWorkItems,
+  previewConstructionDailyLogPccesActualProgress,
   updateConstructionDailyLog,
   type ConstructionDailyLogDto,
+  type ConstructionDailyLogPccesPickerImport,
+  type ConstructionDailyLogProgressPlanKnot,
   type ConstructionDailyLogUpsertPayload,
 } from '@/api/construction-daily-logs'
 import {
@@ -53,6 +63,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { useConstructionDailyLogBreadcrumbStore } from '@/stores/constructionDailyLogBreadcrumb'
 import { toast } from '@/components/ui/sonner'
 import { Loader2, Plus, Trash2 } from 'lucide-vue-next'
 
@@ -121,13 +132,33 @@ const projectId = computed(() => (route.params.projectId as string) ?? '')
 const logId = computed(() => (route.params.logId as string) ?? '')
 const isNew = computed(() => route.name === ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_LOG_NEW)
 const perm = useProjectModuleActions(projectId, 'construction.diary')
+const dailyLogBreadcrumbStore = useConstructionDailyLogBreadcrumbStore()
+
+function syncDailyLogBreadcrumbTitle() {
+  if (isNew.value || !logId.value) {
+    dailyLogBreadcrumbStore.setCurrentTitle(null)
+    return
+  }
+  if (!form.logDate?.trim()) {
+    dailyLogBreadcrumbStore.setCurrentTitle(null)
+    return
+  }
+  const ymd = form.logDate.trim()
+  dailyLogBreadcrumbStore.setCurrentTitle(formatLogDateForBreadcrumb(ymd))
+  persistDailyLogBreadcrumbDateToSession(projectId.value, logId.value, ymd)
+}
+
+const canEditDiary = computed(() =>
+  isNew.value ? perm.canCreate.value : perm.canUpdate.value
+)
 
 const listPath = computed(() =>
-  buildProjectPath(projectId.value, ROUTE_PATH.PROJECT_CONSTRUCTION_DIARY_LOGS)
+  buildProjectPath(projectId.value, ROUTE_PATH.PROJECT_CONSTRUCTION_DIARY)
 )
 
 const loading = ref(true)
 const saving = ref(false)
+const pccesActualLoading = ref(false)
 const deleteOpen = ref(false)
 const deleteLoading = ref(false)
 
@@ -162,10 +193,15 @@ const workItems = ref<WorkDraft[]>([])
 const materials = ref<MatDraft[]>([])
 const personnelRows = ref<PeDraft[]>([])
 
+/** 進度管理主計畫節點（累計預定 %），供預定進度依日內插預覽 */
+const progressPlanKnots = ref<ConstructionDailyLogProgressPlanKnot[]>([])
+
 const workModalOpen = ref(false)
 const workModalLoading = ref(false)
 const workModalError = ref('')
 const modalTableRows = ref<WorkModalTableRow[]>([])
+/** 最近一次成功載入之「契約欄位所依版本」摘要（填表日變更時清空） */
+const lastPccesPickerImport = ref<ConstructionDailyLogPccesPickerImport | null>(null)
 
 const modalHasStructuralLeaves = computed(() =>
   modalTableRows.value.some((r) => r.isStructuralLeaf)
@@ -174,6 +210,13 @@ const modalHasStructuralLeaves = computed(() =>
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
+
+watch(
+  () => form.logDate,
+  () => {
+    lastPccesPickerImport.value = null
+  }
+)
 
 function emptyWork(): WorkDraft {
   return {
@@ -225,10 +268,12 @@ async function openWorkItemsModal() {
     const hasLeaf = res.rows.some((r) => r.isStructuralLeaf)
     if (!res.pccesImport || !hasLeaf || res.rows.length === 0) {
       modalTableRows.value = []
+      lastPccesPickerImport.value = null
       workModalError.value =
         '專案尚無已核定之 PCCES 版本，或該版無可填寫之明細工項。請至「PCCES 匯入紀錄」核定其中一版後再試。'
       return
     }
+    lastPccesPickerImport.value = res.pccesImport
     const existingByPcces = new Map(
       workItems.value.filter((w) => w.pccesItemId).map((w) => [w.pccesItemId as string, w])
     )
@@ -254,6 +299,7 @@ async function openWorkItemsModal() {
   } catch {
     workModalError.value = '無法載入核定工項'
     modalTableRows.value = []
+    lastPccesPickerImport.value = null
   } finally {
     workModalLoading.value = false
   }
@@ -323,7 +369,8 @@ const plannedPreview = computed(() => {
   return computePlannedProgressPreview(
     form.logDate || todayIso(),
     form.startDate.trim() || null,
-    ad != null && Number.isFinite(ad) ? ad : null
+    ad != null && Number.isFinite(ad) ? ad : null,
+    progressPlanKnots.value.length > 0 ? progressPlanKnots.value : null
   )
 })
 
@@ -332,6 +379,32 @@ const plannedDisplay = computed(() => {
   if (p == null) return '—（請填開工日與核定工期）'
   return `${formatThousands(p, { maximumFractionDigits: 2 })}%`
 })
+
+/** 填表日變更時改抓「該日已生效」進度計畫之累計節點（含變更版），供預定進度內插與後端一致 */
+async function syncProgressPlanKnotsToLogDate() {
+  if (!projectId.value) return
+  const ymd = form.logDate?.trim()
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return
+  try {
+    const { progressPlanKnots: k } = await getConstructionDailyLogProgressPlanKnots(
+      projectId.value,
+      ymd
+    )
+    progressPlanKnots.value = k ?? []
+  } catch {
+    // 預覽失敗不阻斷；儲存後仍由 API 回傳正確 plannedProgress
+  }
+}
+
+const debouncedSyncProgressPlanKnots = useDebounceFn(syncProgressPlanKnotsToLogDate, 350)
+
+watch(
+  () => form.logDate,
+  (next, prev) => {
+    if (!next?.trim() || next === prev) return
+    debouncedSyncProgressPlanKnots()
+  }
+)
 
 function parseOptionalInt(s: string): number | null {
   const t = s.trim()
@@ -501,13 +574,16 @@ async function init() {
         await router.replace(listPath.value)
         return
       }
-      const defs = await getConstructionDailyLogDefaults(projectId.value)
       form.logDate = todayIso()
+      const defs = await getConstructionDailyLogDefaults(projectId.value, {
+        logDate: form.logDate,
+      })
       form.projectName = defs.projectName
       form.contractorName = defs.contractorName
       form.startDate = defs.startDate ?? ''
       form.approvedDurationDays =
         defs.approvedDurationDays != null ? String(defs.approvedDurationDays) : ''
+      progressPlanKnots.value = defs.progressPlanKnots ?? []
       workItems.value = []
       materials.value = []
       personnelRows.value = []
@@ -519,6 +595,8 @@ async function init() {
       }
       const d = await getConstructionDailyLog(projectId.value, logId.value)
       applyDto(d)
+      progressPlanKnots.value = d.progressPlanKnots ?? []
+      syncDailyLogBreadcrumbTitle()
     }
   } catch {
     toast.error('無法載入資料')
@@ -546,6 +624,7 @@ async function onSubmit() {
       await router.replace({
         name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_LOG_DETAIL,
         params: { projectId: projectId.value, logId: created.id },
+        state: { [CONSTRUCTION_DAILY_LOG_BREADCRUMB_STATE_KEY]: form.logDate.trim() },
       })
     } else {
       await updateConstructionDailyLog(projectId.value, logId.value, payload)
@@ -559,6 +638,36 @@ async function onSubmit() {
     toast.error(msg ?? '儲存失敗')
   } finally {
     saving.value = false
+  }
+}
+
+async function fillActualProgressFromPcces() {
+  if (!canEditDiary.value) return
+  if (!form.logDate?.trim()) {
+    toast.error('請先選擇填表日期')
+    return
+  }
+  pccesActualLoading.value = true
+  try {
+    const overlayWorkItems = workItems.value
+      .filter((w) => w.pccesItemId)
+      .map((w) => ({
+        pccesItemId: w.pccesItemId as string,
+        dailyQty: w.dailyQty ?? '0',
+      }))
+    const result = await previewConstructionDailyLogPccesActualProgress(projectId.value, {
+      logDate: form.logDate,
+      excludeLogId: isNew.value ? undefined : logId.value,
+      overlayWorkItems,
+    })
+    form.actualProgress = result.actualProgress
+  } catch (e) {
+    const msg = isAxiosError(e)
+      ? (e.response?.data as { error?: { message?: string } })?.error?.message
+      : null
+    toast.error(msg ?? '無法計算實際進度')
+  } finally {
+    pccesActualLoading.value = false
   }
 }
 
@@ -590,6 +699,17 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => form.logDate,
+  () => {
+    if (!isNew.value && logId.value) syncDailyLogBreadcrumbTitle()
+  }
+)
+
+onUnmounted(() => {
+  dailyLogBreadcrumbStore.setCurrentTitle(null)
+})
 </script>
 
 <template>
@@ -612,7 +732,8 @@ watch(
             {{ isNew ? '新增施工日誌' : '編輯施工日誌' }}
           </h1>
           <p class="mt-1 text-sm text-muted-foreground">
-            公共工程依附表四；預定進度由系統依開工日與核定工期推算（儲存後以伺服器計算為準）。
+            公共工程依附表四；若專案已有進度管理主計畫，預定進度依各期<strong class="text-foreground">累計預定
+            %</strong>對填表日<strong class="text-foreground">線性內插</strong>；否則依開工日與核定工期推算（儲存後與列表以伺服器計算為準）。
           </p>
         </div>
         <div v-if="!isNew && perm.canDelete.value" class="flex flex-wrap items-center gap-2">
@@ -734,16 +855,31 @@ watch(
             </div>
             <div class="space-y-2">
               <Label for="actualProgress">實際進度（%）</Label>
-              <Input
-                id="actualProgress"
-                v-model="form.actualProgress"
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                class="bg-background"
-                placeholder="人工填寫"
-              />
+              <div class="flex flex-wrap items-center gap-2">
+                <Input
+                  id="actualProgress"
+                  v-model="form.actualProgress"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  class="min-w-0 flex-1 bg-background"
+                  placeholder="人工填寫或由工項帶入"
+                />
+                <Button
+                  v-if="canEditDiary"
+                  type="button"
+                  variant="outline"
+                  :disabled="pccesActualLoading"
+                  @click="fillActualProgressFromPcces"
+                >
+                  <Loader2 v-if="pccesActualLoading" class="mr-1 size-4 animate-spin" />
+                  由工項帶入
+                </Button>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                依最新核定 PCCES 一般葉節點：累計完成×單價加總／總工程費（頂層壹／發包金額）；納入表上核定工項之本日完成量，可再手改。
+              </p>
             </div>
           </div>
         </CardContent>
@@ -754,8 +890,27 @@ watch(
         <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <CardTitle class="text-lg">一、施工項目</CardTitle>
-            <CardDescription>
-              核定工項請以視窗填寫（本日完成、備註）；累計由系統依歷史推算並於儲存時由伺服器覆核。可另增手動列。
+            <CardDescription class="space-y-1">
+              <p>
+                核定工項請以視窗填寫（本日完成、備註）；累計由系統依歷史推算並於儲存時由伺服器覆核。可另增手動列。
+              </p>
+              <p class="text-xs text-muted-foreground">
+                契約數量／單價等會依<strong class="text-foreground">填表日期</strong>，對應「該日已生效」的
+                PCCES 版次（詳見匯入紀錄的「核定生效時間」；未填則以核定當日日曆為準）。
+              </p>
+              <p
+                v-if="lastPccesPickerImport"
+                class="text-xs text-muted-foreground"
+              >
+                最近一次開啟選單：契約欄位依第
+                <span class="text-foreground">{{ lastPccesPickerImport.version }}</span>
+                版；生效基準：
+                <span class="text-foreground">{{
+                  lastPccesPickerImport.approvalEffectiveAt
+                    ? new Date(lastPccesPickerImport.approvalEffectiveAt).toLocaleString('zh-TW')
+                    : '核定操作時間（日曆日）'
+                }}</span>
+              </p>
             </CardDescription>
           </div>
           <div class="flex flex-wrap gap-2">

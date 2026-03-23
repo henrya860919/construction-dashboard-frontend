@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { isAxiosError } from 'axios'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,7 +43,7 @@ import {
   getPccesImportItems,
   deletePccesImport,
   approvePccesImport,
-  patchPccesImportVersionLabel,
+  patchPccesImport,
   displayPccesVersionLabel,
   type PccesItemDto,
 } from '@/api/pcces-imports'
@@ -64,7 +65,7 @@ const summaryFileName = ref('')
 const summaryDocType = ref<string | null>(null)
 const summaryVersionLabelRaw = ref<string | null>(null)
 const editVersionLabel = ref('')
-const savingVersionLabel = ref(false)
+const savingPccesSettings = ref(false)
 const items = ref<PccesItemDto[]>([])
 const itemTotal = ref(0)
 /** all 或任一 XML itemKind（後端原字串篩選） */
@@ -73,6 +74,9 @@ const kindFilter = ref<'all' | 'general' | 'mainItem' | 'formula' | 'variablePri
 const deleteOpen = ref(false)
 const deleteLoading = ref(false)
 const importApprovedAt = ref<string | null>(null)
+const summaryApprovalEffectiveAt = ref<string | null>(null)
+const editApprovalEffectiveLocal = ref('')
+const clearingApprovalEffective = ref(false)
 const approveLoading = ref(false)
 
 const versionsPath = computed(() =>
@@ -97,6 +101,14 @@ const itemKindParam = computed(() => {
   return kindFilter.value
 })
 
+function isoToDatetimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 async function load() {
   if (!projectId.value || !importId.value) return
   loading.value = true
@@ -114,6 +126,8 @@ async function load() {
     const raw = (res.import.versionLabel ?? '').trim()
     editVersionLabel.value = raw !== '' ? raw : v === 1 ? '原契約' : ''
     importApprovedAt.value = res.import.approvedAt ?? null
+    summaryApprovalEffectiveAt.value = res.import.approvalEffectiveAt ?? null
+    editApprovalEffectiveLocal.value = isoToDatetimeLocalValue(res.import.approvalEffectiveAt)
     items.value = res.items
     itemTotal.value = res.meta.total
   } catch {
@@ -269,38 +283,64 @@ const summaryDisplayLabel = computed(() => {
   })
 })
 
-async function saveVersionLabel() {
+/** 同時儲存版本名稱；核定生效時間僅在日期欄有值時一併更新（空白表示不變更該欄，請用「清除」改回核定日） */
+async function savePccesVersionSettings() {
   if (!projectId.value || !importId.value) return
   if (!perm.canUpdate.value) {
     toast.error('您沒有修改權限')
     return
   }
-  savingVersionLabel.value = true
+  const body: { versionLabel: string; approvalEffectiveAt?: string } = {
+    versionLabel: editVersionLabel.value.trim(),
+  }
+  if (editApprovalEffectiveLocal.value.trim()) {
+    const parsed = new Date(editApprovalEffectiveLocal.value)
+    if (Number.isNaN(parsed.getTime())) {
+      toast.error('日期時間無效')
+      return
+    }
+    body.approvalEffectiveAt = parsed.toISOString()
+  }
+  savingPccesSettings.value = true
   try {
-    const updated = await patchPccesImportVersionLabel(
-      projectId.value,
-      importId.value,
-      editVersionLabel.value.trim()
-    )
-    summaryVersionLabelRaw.value = updated.versionLabel
-    const v = updated.version
-    const raw = (updated.versionLabel ?? '').trim()
-    editVersionLabel.value = raw !== '' ? raw : v === 1 ? '原契約' : ''
-    toast.success('已更新版本名稱')
+    await patchPccesImport(projectId.value, importId.value, body)
+    await load()
+    toast.success('已儲存')
   } catch (e) {
     const msg = isAxiosError(e)
       ? (e.response?.data as { error?: { message?: string } })?.error?.message
       : null
-    toast.error(msg ?? '更新失敗')
+    toast.error(msg ?? '儲存失敗')
   } finally {
-    savingVersionLabel.value = false
+    savingPccesSettings.value = false
+  }
+}
+
+async function clearApprovalEffectiveAt() {
+  if (!projectId.value || !importId.value) return
+  if (!perm.canUpdate.value) {
+    toast.error('您沒有修改權限')
+    return
+  }
+  clearingApprovalEffective.value = true
+  try {
+    await patchPccesImport(projectId.value, importId.value, { approvalEffectiveAt: null })
+    await load()
+    toast.success('已改回以核定操作日為生效日')
+  } catch (e) {
+    const msg = isAxiosError(e)
+      ? (e.response?.data as { error?: { message?: string } })?.error?.message
+      : null
+    toast.error(msg ?? '清除失敗')
+  } finally {
+    clearingApprovalEffective.value = false
   }
 }
 
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col gap-6">
+  <div class="flex flex-col gap-6 pb-8">
     <div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
       <Button variant="outline" as-child>
         <RouterLink :to="versionsPath">返回列表</RouterLink>
@@ -383,34 +423,94 @@ async function saveVersionLabel() {
     </div>
 
     <Card
-      v-if="perm.canRead.value && !loading && !loadError && summaryVersion != null && perm.canUpdate.value"
-      class="shrink-0 border-border bg-card"
+      v-if="perm.canRead.value && !loading && !loadError && summaryVersion != null"
+      class="border-border bg-card"
     >
       <CardHeader class="pb-3">
-        <CardTitle class="text-base">版本名稱</CardTitle>
+        <CardTitle class="text-base">版本與施工日誌生效</CardTitle>
         <CardDescription>
-          可隨時修改在列表與本頁顯示的名稱。第 1 版無自訂時語意為「原契約」；第 2 版起若清空並儲存，將顯示「第 N 版」。
+          版本顯示名稱可隨時調整；施工日誌依填表日對應契約欄位時，會比對各版之<strong class="text-foreground"
+            >生效日曆日</strong
+          >（右欄可自訂，未填則以核定當日日曆為準）。儲存會一併寫入兩欄；生效時間空白時不變更原設定，請用「清除」改回核定日。
         </CardDescription>
       </CardHeader>
-      <CardContent class="flex flex-wrap items-end gap-3">
-        <div class="flex min-w-[12rem] flex-1 flex-col gap-2">
-          <Label for="pcces-detail-version-label">顯示名稱</Label>
-          <Input
-            id="pcces-detail-version-label"
-            v-model="editVersionLabel"
-            class="max-w-md bg-background"
-            autocomplete="off"
+      <CardContent class="space-y-6">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-0">
+          <div class="min-w-0 flex-1 space-y-3 lg:pr-6">
+            <h3 class="text-sm font-semibold text-foreground">版本名稱</h3>
+            <p class="text-sm text-muted-foreground">
+              可隨時修改在列表與本頁顯示的名稱。第 1 版無自訂時語意為「原契約」；第 2 版起若清空並儲存，將顯示「第 N 版」。
+            </p>
+            <template v-if="perm.canUpdate.value">
+              <div class="flex flex-col gap-2">
+                <Label for="pcces-detail-version-label">顯示名稱</Label>
+                <Input
+                  id="pcces-detail-version-label"
+                  v-model="editVersionLabel"
+                  class="max-w-full bg-background sm:max-w-md"
+                  autocomplete="off"
+                />
+              </div>
+            </template>
+          </div>
+
+          <Separator
+            orientation="vertical"
+            class="hidden bg-border lg:block lg:min-h-[10rem] lg:self-stretch"
           />
+          <Separator class="bg-border lg:hidden" />
+
+          <div class="min-w-0 flex-1 space-y-3 lg:pl-6">
+            <h3 class="text-sm font-semibold text-foreground">核定生效時間（施工日誌）</h3>
+            <p class="text-sm text-muted-foreground">
+              施工日誌依「填表日期」決定契約數量、單價等應對應哪一版 PCCES；此處設定該版之生效日曆日。未填時，生效日＝按下「核定此版本」當天的日曆日。
+            </p>
+            <template v-if="perm.canUpdate.value">
+              <div class="flex flex-col gap-2">
+                <Label for="pcces-approval-effective">日期與時間</Label>
+                <Input
+                  id="pcces-approval-effective"
+                  v-model="editApprovalEffectiveLocal"
+                  type="datetime-local"
+                  class="max-w-full bg-background sm:max-w-md"
+                />
+              </div>
+            </template>
+            <p v-if="summaryApprovalEffectiveAt" class="text-sm text-muted-foreground">
+              目前設定：<span class="text-foreground">{{ formatDateTime(summaryApprovalEffectiveAt) }}</span>
+            </p>
+            <p v-else-if="importApprovedAt" class="text-sm text-muted-foreground">
+              目前未自訂，生效日為核定日：<span class="text-foreground">{{
+                formatDateTime(importApprovedAt)
+              }}</span>
+            </p>
+            <p v-else class="text-sm text-muted-foreground">尚未核定時此欄位不影響施工日誌。</p>
+          </div>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          :disabled="savingVersionLabel"
-          @click="saveVersionLabel"
+
+        <div
+          v-if="perm.canUpdate.value"
+          class="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4"
         >
-          <Loader2 v-if="savingVersionLabel" class="mr-2 size-4 animate-spin" />
-          儲存名稱
-        </Button>
+          <Button
+            type="button"
+            variant="outline"
+            :disabled="savingPccesSettings || clearingApprovalEffective || !summaryApprovalEffectiveAt"
+            @click="clearApprovalEffectiveAt"
+          >
+            <Loader2 v-if="clearingApprovalEffective" class="mr-2 size-4 animate-spin" />
+            清除（改回核定日）
+          </Button>
+          <Button
+            type="button"
+            variant="default"
+            :disabled="savingPccesSettings || clearingApprovalEffective"
+            @click="savePccesVersionSettings"
+          >
+            <Loader2 v-if="savingPccesSettings" class="mr-2 size-4 animate-spin" />
+            儲存
+          </Button>
+        </div>
       </CardContent>
     </Card>
 
@@ -419,9 +519,9 @@ async function saveVersionLabel() {
     </Card>
 
     <template v-else>
-      <Card class="min-h-0 flex-1 border-border bg-card">
+      <Card class="border-border bg-card">
         <CardHeader
-          class="flex shrink-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
+          class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
         >
           <div>
             <CardTitle class="text-lg">工項列表</CardTitle>
@@ -446,17 +546,17 @@ async function saveVersionLabel() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent class="flex min-h-0 flex-1 flex-col gap-4">
+        <CardContent class="flex flex-col gap-4">
           <div
             v-if="loading"
-            class="flex shrink-0 items-center gap-2 text-sm text-muted-foreground"
+            class="flex items-center gap-2 text-sm text-muted-foreground"
           >
             <Loader2 class="size-4 animate-spin" />
             載入中…
           </div>
-          <p v-else-if="loadError" class="shrink-0 text-sm text-destructive">{{ loadError }}</p>
+          <p v-else-if="loadError" class="text-sm text-destructive">{{ loadError }}</p>
           <template v-else>
-            <div class="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
+            <div class="overflow-x-auto rounded-lg border border-border">
               <Table>
                 <TableHeader>
                   <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">

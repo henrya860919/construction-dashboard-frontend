@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BREADCRUMB_LABELS,
@@ -6,6 +6,13 @@ import {
   getBreadcrumbModuleForSuffix,
 } from '@/constants/breadcrumb'
 import { useDeviceBreadcrumbStore } from '@/stores/deviceBreadcrumb'
+import { useConstructionDailyLogBreadcrumbStore } from '@/stores/constructionDailyLogBreadcrumb'
+import {
+  formatLogDateForBreadcrumb,
+  parseConstructionDailyLogDetailFromPath,
+  readDailyLogBreadcrumbDateFromHistory,
+  readDailyLogBreadcrumbDateFromSession,
+} from '@/lib/construction-daily-log-breadcrumb'
 import { useRepairBreadcrumbStore } from '@/stores/repairBreadcrumb'
 import { useSelfInspectionTemplateBreadcrumbStore } from '@/stores/selfInspectionTemplateBreadcrumb'
 import { useSelfCheckBreadcrumbStore } from '@/stores/selfCheckBreadcrumb'
@@ -26,12 +33,33 @@ export type { BreadcrumbItem }
 export function useBreadcrumb() {
   const route = useRoute()
   const deviceBreadcrumbStore = useDeviceBreadcrumbStore()
+  const constructionDailyLogBreadcrumbStore = useConstructionDailyLogBreadcrumbStore()
   const repairBreadcrumbStore = useRepairBreadcrumbStore()
   const selfInspectionTemplateBreadcrumbStore = useSelfInspectionTemplateBreadcrumbStore()
   const selfCheckBreadcrumbStore = useSelfCheckBreadcrumbStore()
   const projectStore = useProjectStore()
 
   const tenantStore = useTenantStore()
+
+  watch(
+    () => route.path,
+    () => {
+      const ctx = parseConstructionDailyLogDetailFromPath(route.path)
+      if (!ctx) {
+        constructionDailyLogBreadcrumbStore.setCurrentTitle(null)
+        return
+      }
+      const ymd =
+        readDailyLogBreadcrumbDateFromHistory() ??
+        readDailyLogBreadcrumbDateFromSession(ctx.projectId, ctx.logId)
+      if (ymd) {
+        constructionDailyLogBreadcrumbStore.setCurrentTitle(formatLogDateForBreadcrumb(ymd))
+      } else {
+        constructionDailyLogBreadcrumbStore.setCurrentTitle(null)
+      }
+    },
+    { immediate: true }
+  )
 
   const items = computed<BreadcrumbItem[]>(() => {
     const path = route.path
@@ -131,6 +159,15 @@ export function useBreadcrumb() {
           rest[3] !== 'new'
         if (isValuationDetail) {
           pageLabel = '估驗明細'
+        }
+        const dailyLogReserved = new Set(['new', 'valuations', 'pcces'])
+        const isDailyLogDetail =
+          rest[0] === 'construction' &&
+          rest[1] === 'diary' &&
+          rest.length === 3 &&
+          !dailyLogReserved.has(rest[2])
+        if (isDailyLogDetail) {
+          pageLabel = constructionDailyLogBreadcrumbStore.currentTitle ?? '…'
         }
         const moduleName = getBreadcrumbModuleForSuffix(suffix)
         if (moduleName) {

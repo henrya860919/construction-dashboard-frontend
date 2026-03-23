@@ -299,8 +299,6 @@ const confirmLoading = ref(false)
 /** 確認匯入後產生之新版本顯示名稱（必填，不預設） */
 const newVersionLabel = ref('')
 
-const sortedItems = computed(() => [...items.value].sort((a, b) => a.itemKey - b.itemKey))
-
 const mainItemOptions = computed(() =>
   [...items.value].filter((i) => i.itemKind === 'mainItem').sort((a, b) => a.itemKey - b.itemKey)
 )
@@ -321,42 +319,62 @@ type DisplayTableRow =
   | { kind: 'manual'; manual: ManualPlacedRow }
 
 /**
- * 同一父層下：既有子工項與手動掛載列依「項次」合併排序（避免手動列全擠在父層正下方）。
+ * 同一父層下：清冊子列依 itemKey 遞增（與後端／明細列表一致）；手動掛載列無 itemKey，排在該父層清冊子列之後、依項次排序。
+ * 親子關係以 parentItemKey／itemKey 為準（pcces-item-tree）。
  */
 function mergedChildSlotsUnderParent(parentItemKey: number): DisplayTableRow[] {
-  const base = items.value.filter((i) => i.parentItemKey === parentItemKey)
-  const manuals = manualPlaced.value.filter((m) => m.parentItemKey === parentItemKey)
-  const slots: DisplayTableRow[] = [
+  const base = items.value
+    .filter((i) => i.parentItemKey === parentItemKey)
+    .sort((a, b) => a.itemKey - b.itemKey)
+  const manuals = manualPlaced.value
+    .filter((m) => m.parentItemKey === parentItemKey)
+    .sort((a, b) => {
+      const byNo = comparePccesItemNoSort(sortKeyManualItemNo(a), sortKeyManualItemNo(b))
+      return byNo !== 0 ? byNo : a.id.localeCompare(b.id)
+    })
+  return [
     ...base.map((item) => ({ kind: 'item' as const, item })),
     ...manuals.map((manual) => ({ kind: 'manual' as const, manual })),
   ]
-  slots.sort((a, b) => {
-    const ka = a.kind === 'item' ? a.item.itemNo.trim() : sortKeyManualItemNo(a.manual)
-    const kb = b.kind === 'item' ? b.item.itemNo.trim() : sortKeyManualItemNo(b.manual)
-    return comparePccesItemNoSort(ka, kb)
-  })
-  return slots
 }
 
-function walkItemIntoDisplayRows(item: PccesItemDto, out: DisplayTableRow[]): void {
+function walkItemIntoDisplayRows(
+  item: PccesItemDto,
+  out: DisplayTableRow[],
+  visited: Set<number>
+): void {
+  if (visited.has(item.itemKey)) return
+  visited.add(item.itemKey)
   out.push({ kind: 'item', item })
   for (const slot of mergedChildSlotsUnderParent(item.itemKey)) {
     if (slot.kind === 'manual') {
       out.push(slot)
     } else {
-      walkItemIntoDisplayRows(slot.item, out)
+      walkItemIntoDisplayRows(slot.item, out, visited)
     }
   }
 }
 
+/** 清冊階層順序（深度優先前序）：根 → 子→孫…；同層清冊列依 itemKey 遞增；parent 不在表內者視為根。 */
 const displayRows = computed((): DisplayTableRow[] => {
   const out: DisplayTableRow[] = []
+  const visited = new Set<number>()
+  const byKey = new Map(items.value.map((i) => [i.itemKey, i]))
+
   const roots = items.value
-    .filter((i) => i.parentItemKey === null)
+    .filter((i) => i.parentItemKey === null || !byKey.has(i.parentItemKey))
     .sort((a, b) => a.itemKey - b.itemKey)
   for (const r of roots) {
-    walkItemIntoDisplayRows(r, out)
+    walkItemIntoDisplayRows(r, out, visited)
   }
+
+  const leftovers = items.value
+    .filter((i) => !visited.has(i.itemKey))
+    .sort((a, b) => a.itemKey - b.itemKey)
+  for (const r of leftovers) {
+    walkItemIntoDisplayRows(r, out, visited)
+  }
+
   return out
 })
 
@@ -816,13 +834,14 @@ async function onConfirmImport() {
     perParentNos.set(m.parentItemKey, set)
   }
 
-  const itemOrderInTree = new Map<number, number>()
-  sortedItems.value.forEach((it, idx) => {
-    itemOrderInTree.set(it.itemKey, idx)
+  /** 與「對應結果」表相同：父列在 displayRows 中第一次出現的列序，供手動掛載列與畫面階層一致 */
+  const parentRowOrder = new Map<number, number>()
+  displayRows.value.forEach((row, idx) => {
+    if (row.kind === 'item') parentRowOrder.set(row.item.itemKey, idx)
   })
   const manualOrdered = [...manualPlaced.value].sort((x, y) => {
-    const ix = itemOrderInTree.get(x.parentItemKey) ?? 0
-    const iy = itemOrderInTree.get(y.parentItemKey) ?? 0
+    const ix = parentRowOrder.get(x.parentItemKey) ?? 1_000_000
+    const iy = parentRowOrder.get(y.parentItemKey) ?? 1_000_000
     if (ix !== iy) return ix - iy
     return comparePccesItemNoSort(sortKeyManualItemNo(x), sortKeyManualItemNo(y))
   })
@@ -914,6 +933,41 @@ watch([projectId, baseImportId], () => loadBaseItems())
         </div>
 
         <template v-else>
+          <div class="rounded-lg border border-border bg-card p-4">
+            <div
+              class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
+            >
+              <div class="min-w-0 w-full max-w-md flex-1 space-y-2">
+                <Label for="pcces-new-version-label">新版本名稱</Label>
+                <Input
+                  id="pcces-new-version-label"
+                  v-model="newVersionLabel"
+                  class="bg-background"
+                  placeholder="請自訂此版名稱（例如：第一次契約變更）"
+                  autocomplete="off"
+                />
+                <p class="text-xs text-muted-foreground">
+                  確認匯入後會新增一版（Excel 變更）；名稱不預設，請自行填寫，之後可在匯入紀錄明細修改。
+                </p>
+              </div>
+              <div class="flex shrink-0 flex-wrap justify-end gap-3">
+                <Button
+                  type="button"
+                  :disabled="
+                    confirmLoading ||
+                    !perm.canCreate.value ||
+                    loadingItems ||
+                    !!loadError
+                  "
+                  @click="onConfirmImport"
+                >
+                  <Loader2 v-if="confirmLoading" class="mr-2 size-4 animate-spin" />
+                  確認匯入
+                </Button>
+              </div>
+            </div>
+          </div>
+
           <Card class="border-border bg-card">
             <CardHeader>
               <CardTitle class="text-lg">基底版本</CardTitle>
@@ -1051,7 +1105,11 @@ watch([projectId, baseImportId], () => loadBaseItems())
               <div class="border-b border-border px-4 py-3">
                 <h2 class="text-base font-medium text-foreground">對應結果（工項表）</h2>
                 <p class="mt-1 text-xs text-muted-foreground">
-                  變更後數量／單價以淡黃底標示；滑鼠暫留可見 Excel
+                  <span class="text-foreground">列順序</span>：依清冊階層（先父後子、深度優先），同層清冊列依
+                  <code class="rounded bg-muted px-1">itemKey</code>
+                  遞增；手動掛載列排在該父層清冊子列之後。親子以
+                  <code class="rounded bg-muted px-1">parentItemKey</code>
+                  為準（與後端 PCCES 工項樹一致）。變更後數量／單價以淡黃底標示；滑鼠暫留可見 Excel
                   原始字串。「變更後複價」為套用變更後數量／單價（未變更列沿用基底）再依階層加總之預覽，與確認匯入後後端
                   rollup 邏輯一致。
                 </p>
@@ -1225,32 +1283,6 @@ watch([projectId, baseImportId], () => loadBaseItems())
                     </TableRow>
                   </TableBody>
                 </Table>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-              <div v-if="!loadingItems && !loadError && baseImportId" class="w-full max-w-md space-y-2">
-                <Label for="pcces-new-version-label">新版本名稱</Label>
-                <Input
-                  id="pcces-new-version-label"
-                  v-model="newVersionLabel"
-                  class="bg-background"
-                  placeholder="請自訂此版名稱（例如：第一次契約變更）"
-                  autocomplete="off"
-                />
-                <p class="text-xs text-muted-foreground">
-                  確認匯入後會新增一版（Excel 變更）；名稱不預設，請自行填寫，之後可在匯入紀錄明細修改。
-                </p>
-              </div>
-              <div class="flex flex-wrap justify-end gap-3">
-              <Button
-                type="button"
-                :disabled="confirmLoading || !perm.canCreate.value || loadingItems"
-                @click="onConfirmImport"
-              >
-                <Loader2 v-if="confirmLoading" class="mr-2 size-4 animate-spin" />
-                確認匯入
-              </Button>
               </div>
             </div>
           </template>

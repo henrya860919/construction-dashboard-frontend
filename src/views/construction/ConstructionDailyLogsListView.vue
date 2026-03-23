@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import { buildProjectPath, ROUTE_PATH, ROUTE_NAME } from '@/constants/routes'
+import { CONSTRUCTION_DAILY_LOG_BREADCRUMB_STATE_KEY } from '@/lib/construction-daily-log-breadcrumb'
 import { formatThousands } from '@/lib/format-number'
 import {
   listConstructionDailyLogs,
@@ -111,6 +112,7 @@ const columns = computed<ColumnDef<ConstructionDailyLogListItemDto, unknown>[]>(
       const to: RouteLocationRaw = {
         name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_LOG_DETAIL,
         params: { projectId: projectId.value, logId: row.original.id },
+        state: { [CONSTRUCTION_DAILY_LOG_BREADCRUMB_STATE_KEY]: row.original.logDate },
       }
       return h(
         RouterLink,

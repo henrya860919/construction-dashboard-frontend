@@ -17,6 +17,15 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  // 預設 Content-Type: application/json 不可蓋掉 multipart boundary；FormData 務必讓瀏覽器自帶 boundary
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    const h = config.headers
+    if (h && typeof (h as { delete?: (k: string) => void }).delete === 'function') {
+      ;(h as { delete: (k: string) => void }).delete('Content-Type')
+    } else if (h && typeof h === 'object' && 'Content-Type' in h) {
+      delete (h as Record<string, unknown>)['Content-Type']
+    }
+  }
   return config
 })
 

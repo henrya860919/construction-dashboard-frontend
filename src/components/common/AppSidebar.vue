@@ -40,6 +40,7 @@ import {
   DraftingCompass,
   FileSpreadsheet,
   Calculator,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -104,6 +105,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   DraftingCompass,
   FileSpreadsheet,
   Calculator,
+  TrendingUp,
 }
 
 withDefaults(
@@ -241,8 +243,27 @@ function projectChildPath(pathSuffix: string): string {
   return projectId.value ? buildProjectPath(projectId.value, pathSuffix) : '/projects'
 }
 
-function isProjectChildActive(pathSuffix: string): boolean {
-  return route.path === projectChildPath(pathSuffix)
+/** 在候選 pathSuffix 中選「最長」且符合目前 route 者，避免 /files 與 /files/forms 同時 active */
+function resolveActiveProjectPathSuffix(candidateSuffixes: string[]): string | null {
+  const sorted = [...candidateSuffixes].sort((a, b) => b.length - a.length)
+  for (const suffix of sorted) {
+    const full = projectChildPath(suffix)
+    if (route.path === full) return suffix
+    if (full !== '/' && route.path.startsWith(`${full}/`)) return suffix
+  }
+  return null
+}
+
+const layer2ActiveSuffix = computed(() => {
+  const suffixes = LAYER2_ITEMS.filter(
+    (i): i is Extract<(typeof LAYER2_ITEMS)[number], { type: 'link' }> =>
+      i.type === 'link' && isProjectNavPathVisible(i.pathSuffix)
+  ).map((i) => i.pathSuffix)
+  return resolveActiveProjectPathSuffix(suffixes)
+})
+
+function isLayer2NavActive(pathSuffix: string): boolean {
+  return layer2ActiveSuffix.value === pathSuffix
 }
 
 function goToProjectPath(pathSuffix: string) {
@@ -264,6 +285,14 @@ const layer3Items = computed(() => {
           : []
   return raw.filter((c) => isProjectNavPathVisible(c.pathSuffix))
 })
+
+const layer3ActiveSuffix = computed(() =>
+  resolveActiveProjectPathSuffix(layer3Items.value.map((c) => c.pathSuffix))
+)
+
+function isLayer3NavActive(pathSuffix: string): boolean {
+  return layer3ActiveSuffix.value === pathSuffix
+}
 
 /** 各 Layer 3 模組的第一個可見頁 pathSuffix，drill 進入時導向該頁 */
 function getFirstPathSuffixForPanel(panelId: 'project-mgmt' | 'construction' | 'repair'): string {
@@ -526,7 +555,7 @@ function handleDrillOut() {
                           :class="
                             cn(
                               'h-9 w-9 shrink-0 justify-center rounded-md',
-                              isProjectChildActive(item.pathSuffix) &&
+                              isLayer2NavActive(item.pathSuffix) &&
                                 'bg-accent text-accent-foreground'
                             )
                           "
@@ -546,7 +575,7 @@ function handleDrillOut() {
                       :class="
                         cn(
                           'h-9 w-full justify-start gap-3 rounded-md px-3',
-                          isProjectChildActive(item.pathSuffix) &&
+                          isLayer2NavActive(item.pathSuffix) &&
                             'bg-accent text-accent-foreground'
                         )
                       "
@@ -641,7 +670,7 @@ function handleDrillOut() {
                         :class="
                           cn(
                             'h-9 w-9 shrink-0 justify-center rounded-md',
-                            isProjectChildActive(child.pathSuffix) &&
+                            isLayer3NavActive(child.pathSuffix) &&
                               'bg-accent text-accent-foreground'
                           )
                         "
@@ -661,7 +690,7 @@ function handleDrillOut() {
                     :class="
                       cn(
                         'h-9 w-full justify-start gap-3 rounded-md px-3',
-                        isProjectChildActive(child.pathSuffix) && 'bg-accent text-accent-foreground'
+                        isLayer3NavActive(child.pathSuffix) && 'bg-accent text-accent-foreground'
                       )
                     "
                     @click="goToProjectPath(child.pathSuffix)"

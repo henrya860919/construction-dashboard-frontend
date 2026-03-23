@@ -1,11 +1,30 @@
 import { isAxiosError } from 'axios'
 
-/** 從 API／網路錯誤取出可給使用者看的說明（含 HTTP status、後端 error.message） */
+type ApiErrorBody = {
+  error?: {
+    message?: string
+    code?: string
+    details?: Array<{ path?: string; message?: string }>
+  }
+}
+
+/** 從 API／網路錯誤取出可給使用者看的說明（含 HTTP status、後端 error.message、驗證 details） */
 export function getApiErrorMessage(e: unknown): string {
   if (isAxiosError(e)) {
-    const data = e.response?.data as { error?: { message?: string; code?: string } } | undefined
+    const data = e.response?.data as ApiErrorBody | undefined
     const apiMsg = data?.error?.message?.trim()
-    if (apiMsg) return apiMsg
+    const details = data?.error?.details
+    if (apiMsg) {
+      if (Array.isArray(details) && details.length > 1) {
+        const extra = details
+          .slice(1, 4)
+          .map((d) => (d.path && d.message ? `${d.path}：${d.message}` : d.message))
+          .filter(Boolean)
+          .join('；')
+        if (extra) return `${apiMsg} ${extra}`
+      }
+      return apiMsg
+    }
     const status = e.response?.status
     if (status != null) {
       const base = `HTTP ${status}`

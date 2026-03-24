@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { buildProjectPath, ROUTE_PATH, ROUTE_NAME } from '@/constants/routes'
-import { parseLocaleNumber, formatThousands } from '@/lib/format-number'
+import { parseLocaleNumber, formatThousands, formatMoneyNtd } from '@/lib/format-number'
 import {
   createConstructionValuation,
   deleteConstructionValuation,
@@ -65,6 +65,8 @@ type LineDraft = {
   currentPeriodQty: string
   remark: string
   priorBilledQty: string
+  /** 他次估驗已請款金額加總（與後端 priorBilledAmount）；手填為 0 */
+  priorBilledAmount: string
   maxQty: string
   /** PCCES：施工日誌截至估驗日累計完成（與契約上限取 min 得可估驗空間）；手填留空 */
   logAccumulatedQtyToDate: string
@@ -124,7 +126,8 @@ function lineCurrentAmountN(line: LineDraft): number {
 }
 
 function lineCumulativeAmountN(line: LineDraft): number {
-  return cumulativeQtyN(line) * unitPriceN(line)
+  const priorAmt = parseLocaleNumber(line.priorBilledAmount) ?? 0
+  return priorAmt + lineCurrentAmountN(line)
 }
 
 function getLine(rowKey: string): LineDraft | undefined {
@@ -235,6 +238,7 @@ function draftFromDto(d: ConstructionValuationDto): void {
     currentPeriodQty: l.currentPeriodQty,
     remark: l.remark,
     priorBilledQty: l.priorBilledQty,
+    priorBilledAmount: l.priorBilledAmount ?? '0',
     maxQty: l.maxQty,
     logAccumulatedQtyToDate: l.logAccumulatedQtyToDate ?? (l.pccesItemId ? '0' : ''),
   }))
@@ -376,6 +380,7 @@ async function fillFromPcces() {
           currentPeriodQty: '0',
           remark: '',
           priorBilledQty: c.priorBilledQty ?? '0',
+          priorBilledAmount: c.priorBilledAmount ?? '0',
           maxQty: c.maxQty ?? '0',
           logAccumulatedQtyToDate: c.logAccumulatedQtyToDate ?? '0',
         })
@@ -409,6 +414,7 @@ async function fillFromPcces() {
           currentPeriodQty: '0',
           remark: '',
           priorBilledQty: c.priorBilledQty ?? '0',
+          priorBilledAmount: c.priorBilledAmount ?? '0',
           maxQty: c.maxQty ?? '0',
           logAccumulatedQtyToDate: c.logAccumulatedQtyToDate ?? '0',
         })
@@ -438,6 +444,7 @@ function addManualRow() {
     currentPeriodQty: '0',
     remark: '',
     priorBilledQty: '0',
+    priorBilledAmount: '0',
     maxQty: '0',
     logAccumulatedQtyToDate: '',
   })
@@ -747,18 +754,10 @@ async function confirmDelete() {
                 <TableCell class="text-end text-muted-foreground">—</TableCell>
                 <TableCell class="text-end text-muted-foreground">—</TableCell>
                 <TableCell class="text-end tabular-nums font-medium text-foreground">
-                  {{
-                    formatThousands(sectionAmounts67(row.section).a6, {
-                      maximumFractionDigits: 2,
-                    })
-                  }}
+                  {{ formatMoneyNtd(sectionAmounts67(row.section).a6) }}
                 </TableCell>
                 <TableCell class="text-end tabular-nums font-medium text-muted-foreground">
-                  {{
-                    formatThousands(sectionAmounts67(row.section).a7, {
-                      maximumFractionDigits: 2,
-                    })
-                  }}
+                  {{ formatMoneyNtd(sectionAmounts67(row.section).a7) }}
                 </TableCell>
                 <TableCell />
                 <TableCell v-if="canEdit" />
@@ -818,7 +817,7 @@ async function confirmDelete() {
                 <TableCell class="text-end">
                   <template v-if="isPccesBoundLine(row.line) || !canEdit">
                     <span class="tabular-nums text-sm text-foreground">
-                      {{ formatThousands(unitPriceN(row.line), { maximumFractionDigits: 2 }) }}
+                      {{ formatMoneyNtd(unitPriceN(row.line)) }}
                     </span>
                   </template>
                   <Input
@@ -854,18 +853,10 @@ async function confirmDelete() {
                   {{ formatThousands(cumulativeQtyN(row.line), { maximumFractionDigits: 4 }) }}
                 </TableCell>
                 <TableCell class="text-end tabular-nums text-foreground">
-                  {{
-                    formatThousands(lineCurrentAmountN(row.line), {
-                      maximumFractionDigits: 2,
-                    })
-                  }}
+                  {{ formatMoneyNtd(lineCurrentAmountN(row.line)) }}
                 </TableCell>
                 <TableCell class="text-end tabular-nums text-muted-foreground">
-                  {{
-                    formatThousands(lineCumulativeAmountN(row.line), {
-                      maximumFractionDigits: 2,
-                    })
-                  }}
+                  {{ formatMoneyNtd(lineCumulativeAmountN(row.line)) }}
                 </TableCell>
                 <!-- 備註：日後可併顯 PCCES 變更版次等（後端／匯入流程另議） -->
                 <TableCell

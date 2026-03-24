@@ -478,14 +478,15 @@ function tryOpenUploadDialog() {
       <template v-if="hasSelection">
         <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
         <ButtonGroup>
-          <Button variant="outline" class="gap-2" @click="clearSelection"> 取消選取 </Button>
-          <Button variant="outline" class="gap-2" @click="batchDownload">
+          <Button variant="outline" size="sm" class="gap-2" @click="clearSelection"> 取消選取 </Button>
+          <Button variant="outline" size="sm" class="gap-2" @click="batchDownload">
             <Download class="size-4" />
             批次下載
           </Button>
           <Button
             v-if="overviewPerm.canDelete"
             variant="outline"
+            size="sm"
             class="gap-2 text-destructive hover:text-destructive"
             @click="batchDelete"
           >

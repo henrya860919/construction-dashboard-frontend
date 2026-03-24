@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="TData">
 import type { Table } from '@tanstack/vue-table'
+import { Search } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { Input } from '@/components/ui/input'
 import type { TableListFeatures } from '@/types/data-table'
@@ -73,15 +74,23 @@ const effectiveHasActiveFilters = computed(
   >
     <template #filters>
       <template v-if="showFilterAndSortChrome">
-        <Input
+        <div
           v-if="features.search && !searchDisabled"
-          :model-value="globalFilter"
-          type="search"
-          class="h-8 min-w-0 max-w-sm shrink-0 bg-background sm:min-w-[240px]"
-          :placeholder="searchPlaceholder ?? '搜尋…'"
-          autocomplete="off"
-          @update:model-value="(v) => table.setGlobalFilter(String(v ?? ''))"
-        />
+          class="relative min-w-0 max-w-sm shrink-0 sm:min-w-[240px]"
+        >
+          <Search
+            class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            :model-value="globalFilter"
+            type="search"
+            class="h-8 w-full bg-background pl-9"
+            :placeholder="searchPlaceholder ?? '搜尋…'"
+            autocomplete="off"
+            @update:model-value="(v) => table.setGlobalFilter(String(v ?? ''))"
+          />
+        </div>
       </template>
       <slot name="prepend-filters" />
       <template v-if="showFilterAndSortChrome">

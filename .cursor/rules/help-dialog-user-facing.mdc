@@ -1,0 +1,64 @@
+---
+description: 使用者向「說明／小幫手」Dialog 的文案、配色與版面（與估驗、日誌、PCCES 說明一致）
+globs: src/**/*.vue
+alwaysApply: false
+---
+
+# 說明／小幫手 Dialog（使用者向）
+
+新增或改版「頁面說明」「使用教學」「小幫手」等 **說明用 Dialog** 時，請與下列既有實作對齊，維持 **活潑、好讀、深淺色皆可** 的體驗。
+
+## 參考實作
+
+- `src/views/construction/ConstructionValuationsListView.vue`（估驗計價小幫手）
+- `src/views/construction/ConstructionDailyLogsListView.vue`（施工日誌小幫手）
+- `src/views/construction/PccesImportsListView.vue`（PCCES 匯入紀錄小幫手）
+
+## 文案對象與語氣
+
+- **寫給現場／業務使用者**，不要用工程師口吻；避免 API 錯誤碼、後端文件路徑、內部欄位名、Prisma／型別用語。
+- 重要限制或易誤解處可用 **紅色語意**（`text-destructive`、`font-bold`）與 **粗體** 強調。
+- 主按鈕文案建議：**「好，我懂了」**（`Button variant="default" size="sm"`），置於 footer 右側。
+
+## 配色與主題（必守 theme-support）
+
+- **一律使用語意 token**：`primary`、`destructive`、`muted`、`foreground`、`border`、`card`，以及 **`chart-1`～`chart-5`**（含 `/5`、`/10`、`/15`、`/20`、`/25`、`/30`、`/35` 等透明度）。
+- **禁止**以固定色 Tailwind（如 `gray-500`、`bg-white`）作為說明區塊主色，以免深淺色不一致。
+
+## 外殼與版面結構
+
+1. **`DialogContent`**：`flex max-h-[min(92vh,44rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0`；外框可用 `border-primary/20`；寬度 `sm:max-w-2xl` 與參考頁一致即可（若內容極簡可再議，但勿回到窄版預設而擠壓區塊）。
+2. **`DialogHeader`（標題列）**  
+   - 底線：`border-b border-primary/20`  
+   - 背景漸層：`bg-gradient-to-br from-primary/15 via-chart-4/10 to-chart-2/15`  
+   - 左側 **圖示容器**：`rounded-2xl bg-primary/20 text-primary shadow-sm ring-2 ring-primary/25`，內放與頁面語意相關的 lucide 圖示（參考頁用 `Sparkles`／`CloudSun`／`FileStack` 等，可替換但保持同一套容器樣式）。  
+   - **`DialogTitle`**：`text-xl font-bold tracking-tight text-foreground`；標題可用「〇〇小幫手」格式。  
+   - **`DialogDescription`**：一兩句話副標，`text-sm font-medium text-primary leading-relaxed`。
+3. **可捲動內文區**  
+   - 外層：`min-h-0 flex-1 overflow-y-auto bg-muted/20 px-6 py-4 text-sm space-y-4`  
+   - 各段落用 **圓角卡片** 分區：`rounded-2xl border p-4 shadow-sm`，依語意選底色與邊框（見下）。
+4. **`DialogFooter`**：`shrink-0 border-t border-border bg-muted/30 px-6 py-3 sm:justify-end`。
+
+## 內容區塊的「色票」用法（與現有說明一致）
+
+依段落用途選擇，可重複使用、順序可調，但 **語意要一致**：
+
+| 用途 | 建議 class 組合 |
+|------|-----------------|
+| 一般說明／導讀 | `border-chart-2/30 bg-card ring-1 ring-border/60`；標題 `font-bold text-chart-2`（可配小圖示） |
+| **重要警告、不可違反規則** | `border-destructive/35 bg-destructive/10`；標題與關鍵句 `font-bold text-destructive` |
+| 與主流程／品牌強調 | `border-primary/25 bg-primary/5`；標題 `font-bold text-primary` |
+| 中性列表／操作說明 | `border-border bg-card`；標題 `font-bold text-foreground` |
+| 次要提醒、常見原因（非緊急） | `border-chart-5/35 bg-chart-5/10`；標題 `font-bold text-chart-5` |
+| 雙欄路線、對照（如 A/B） | 兩張卡片可分別用 `chart-2`、`chart-4` 系的 border／淺底與 `text-chart-*` 標題，保持對比但仍為語意色 |
+
+內文長句用 `text-foreground`／`text-muted-foreground`、`leading-relaxed`；表格說明時，表格外層 `rounded-xl border border-border`，表頭 `bg-muted/60`，列背景可輪替 `bg-primary/5`、`bg-chart-4/5`、`bg-chart-2/5` 等與 KPI／卡片語意呼應。
+
+## 檢查清單
+
+- [ ] 文案使用者向，無錯誤碼與內部技術名詞  
+- [ ] 僅用語意色與 `chart-*`，深淺色切換可讀  
+- [ ] 標題列漸層 + 圖示容器 + 可捲內文 + footer「好，我懂了」結構完整  
+- [ ] 警告區塊明確使用 `destructive` 色系  
+
+若說明放在 **共用元件** 而非 view，仍應遵守本規則與 `theme-support.mdc`。

@@ -544,9 +544,10 @@ async function confirmBatchDelete() {
       <template v-if="hasSelection && durationPerm.canDelete">
         <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
         <ButtonGroup>
-          <Button variant="outline" @click="clearSelection"> 取消選取 </Button>
+          <Button variant="outline" size="sm" @click="clearSelection"> 取消選取 </Button>
           <Button
             variant="outline"
+            size="sm"
             class="text-destructive hover:text-destructive"
             @click="openBatchDelete"
           >

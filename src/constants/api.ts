@@ -139,6 +139,8 @@ export const API_PATH = {
     `${API_V1}/projects/${projectId}/construction-valuations`,
   PROJECT_CONSTRUCTION_VALUATION_PCCES_LINES: (projectId: string) =>
     `${API_V1}/projects/${projectId}/construction-valuations/pcces-lines`,
+  PROJECT_CONSTRUCTION_VALUATIONS_SUMMARY: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-valuations/summary`,
   PROJECT_CONSTRUCTION_VALUATION: (projectId: string, valuationId: string) =>
     `${API_V1}/projects/${projectId}/construction-valuations/${valuationId}`,
   /** 進度管理 */

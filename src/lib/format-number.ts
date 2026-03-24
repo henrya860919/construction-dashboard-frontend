@@ -82,6 +82,23 @@ export function formatMoneyFixed2(
   })
 }
 
+/** 介面顯示用新台幣前綴（輸入框仍請用純數字字串） */
+export const TW_DOLLAR_PREFIX = 'NT$'
+
+/**
+ * 新台幣金額顯示：`NT$` + 千分位，小數 0～2 位。
+ * 無法解析時回傳 `fallback`（預設「—」），不加符號。
+ */
+export function formatMoneyNtd(
+  value: string | number | bigint | null | undefined,
+  options?: Pick<FormatThousandsOptions, 'fallback'>
+): string {
+  const fallback = options?.fallback ?? '—'
+  const inner = formatMoney(value, { fallback })
+  if (inner === fallback) return fallback
+  return `${TW_DOLLAR_PREFIX}\u00A0${inner}`
+}
+
 /**
  * 與後端 `Decimal(18,4)` 對齊：單價、複價、數量等工程數值（最多四位小數）。
  */

@@ -366,7 +366,7 @@ const table = useVueTable({
         已選 {{ Object.keys(rowSelection).filter((k) => rowSelection[k]).length }} 項
       </span>
       <ButtonGroup v-if="Object.keys(rowSelection).length > 0">
-        <Button variant="outline" @click="rowSelection = {}"> 取消選取 </Button>
+        <Button variant="outline" size="sm" @click="rowSelection = {}"> 取消選取 </Button>
       </ButtonGroup>
     </div>
 

@@ -237,7 +237,7 @@ onMounted(() => {
         <template v-if="hasSelection">
           <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
           <ButtonGroup>
-            <Button variant="outline" @click="clearSelection">取消選取</Button>
+            <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
           </ButtonGroup>
         </template>
       </div>

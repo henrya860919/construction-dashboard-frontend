@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="TData">
 import type { Table } from '@tanstack/vue-table'
+import { Search } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import DataTableViewOptions from './DataTableViewOptions.vue'
 
@@ -21,13 +22,18 @@ withDefaults(defineProps<Props>(), {
 
 <template>
   <div class="flex items-center gap-4 py-4">
-    <Input
-      v-if="filterColumnId"
-      :model-value="(table.getColumn(filterColumnId)?.getFilterValue() as string) ?? ''"
-      :placeholder="filterPlaceholder"
-      class="max-w-sm"
-      @update:model-value="table.getColumn(filterColumnId)?.setFilterValue($event)"
-    />
+    <div v-if="filterColumnId" class="relative max-w-sm">
+      <Search
+        class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <Input
+        :model-value="(table.getColumn(filterColumnId)?.getFilterValue() as string) ?? ''"
+        :placeholder="filterPlaceholder"
+        class="w-full pl-9"
+        @update:model-value="table.getColumn(filterColumnId)?.setFilterValue($event)"
+      />
+    </div>
     <DataTableViewOptions v-if="showViewOptions" :table="table" />
   </div>
 </template>

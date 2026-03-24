@@ -435,10 +435,11 @@ watch(statusFilter, () => {
         <template v-if="hasSelection">
           <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
           <ButtonGroup>
-            <Button variant="outline" @click="clearSelection">取消選取</Button>
+            <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
             <Button
               v-if="repairRecordPerm.canDelete"
               variant="outline"
+              size="sm"
               class="text-destructive hover:text-destructive"
               @click="openBatchDelete"
             >

@@ -12,6 +12,16 @@ export interface ConstructionValuationListItemDto {
   updatedAt: string
 }
 
+/** 估驗列表頁 KPI（見後端 `getListSummary` 註解） */
+export interface ConstructionValuationListSummaryDto {
+  contractBillableCapTotal: string
+  billedAmountTotal: string
+  workDoneAtPriceTotal: string
+  unbilledAmount: string
+  /** 0–100；無核定 PCCES 或上限為 0 時為 null */
+  billingProgress: number | null
+}
+
 export interface ConstructionValuationLineDto {
   id: string
   pccesItemId: string | null
@@ -30,6 +40,8 @@ export interface ConstructionValuationLineDto {
   currentPeriodQty: string
   remark: string
   priorBilledQty: string
+  /** 他次估驗已請款金額加總（itemKey 跨版）；手填列為 "0"；舊版 API 可能缺省 */
+  priorBilledAmount?: string
   maxQty: string
   /** PCCES 列：施工日誌截至估驗日之累計完成；手填列為 null */
   logAccumulatedQtyToDate: string | null
@@ -92,6 +104,8 @@ export interface ConstructionValuationPccesPickerRow {
   unitPrice: string
   isStructuralLeaf: boolean
   priorBilledQty: string | null
+  /** 他次估驗已請款金額加總；非末層為 null */
+  priorBilledAmount: string | null
   maxQty: string | null
   logAccumulatedQtyToDate: string | null
   suggestedAvailableQty: string | null
@@ -127,6 +141,15 @@ export type ConstructionValuationUpsertPayload = {
     currentPeriodQty: string
     remark: string
   }[]
+}
+
+export async function getConstructionValuationListSummary(
+  projectId: string
+): Promise<ConstructionValuationListSummaryDto> {
+  const { data } = await apiClient.get<ApiResponse<ConstructionValuationListSummaryDto>>(
+    API_PATH.PROJECT_CONSTRUCTION_VALUATIONS_SUMMARY(projectId)
+  )
+  return data.data
 }
 
 export async function listConstructionValuations(

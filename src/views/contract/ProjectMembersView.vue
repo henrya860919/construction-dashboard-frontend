@@ -657,10 +657,11 @@ watch(
             <template v-if="hasSelection && (canUpdateMembers || canDeleteMembers)">
               <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
               <ButtonGroup>
-                <Button variant="outline" @click="clearSelection">取消選取</Button>
+                <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
                 <Button
                   v-if="canUpdateMembers"
                   variant="outline"
+                  size="sm"
                   :disabled="!selectedRows.some((r) => r.original.status === 'active')"
                   @click="openBatchSuspend"
                 >
@@ -669,6 +670,7 @@ watch(
                 <Button
                   v-if="canDeleteMembers"
                   variant="outline"
+                  size="sm"
                   class="text-destructive hover:text-destructive"
                   @click="openBatchRemove"
                 >

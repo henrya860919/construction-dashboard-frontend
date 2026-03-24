@@ -434,8 +434,13 @@ async function batchDownload() {
             <template v-if="hasSelection && (uploadPerm.canRead || uploadPerm.canDelete)">
               <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
               <ButtonGroup>
-                <Button variant="outline" @click="clearSelection">取消選取</Button>
-                <Button variant="outline" :disabled="batchDownloadLoading" @click="batchDownload">
+                <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="batchDownloadLoading"
+                  @click="batchDownload"
+                >
                   <Loader2 v-if="batchDownloadLoading" class="mr-1.5 size-4 animate-spin" />
                   <Download v-else class="mr-1.5 size-4" />
                   批次下載
@@ -443,6 +448,7 @@ async function batchDownload() {
                 <Button
                   v-if="uploadPerm.canDelete"
                   variant="outline"
+                  size="sm"
                   class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                   :disabled="!canBatchDelete"
                   @click="openBatchDelete"

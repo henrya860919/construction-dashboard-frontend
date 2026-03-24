@@ -366,14 +366,15 @@ async function confirmBatchDelete() {
             <template v-if="hasSelection && (uploadPerm.canRead || uploadPerm.canDelete)">
               <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
               <ButtonGroup>
-                <Button variant="outline" @click="clearSelection"> 取消選取 </Button>
-                <Button variant="outline" @click="batchDownload">
+                <Button variant="outline" size="sm" @click="clearSelection"> 取消選取 </Button>
+                <Button variant="outline" size="sm" @click="batchDownload">
                   <Download class="size-4" />
                   批次下載
                 </Button>
                 <Button
                   v-if="uploadPerm.canDelete"
                   variant="outline"
+                  size="sm"
                   class="text-destructive hover:text-destructive"
                   @click="openBatchDelete"
                 >

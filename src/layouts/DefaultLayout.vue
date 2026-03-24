@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useProjectRoutePermissionGuard } from '@/composables/useProjectRoutePermissionGuard'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
@@ -12,6 +13,8 @@ import { useIsMobile } from '@/composables'
 const route = useRoute()
 const sidebarStore = useSidebarStore()
 const isMobile = useIsMobile()
+
+useProjectRoutePermissionGuard()
 
 watch(
   () => route.path,
@@ -54,8 +57,10 @@ watch(
       <div class="border-b border-border bg-background px-4 py-2 md:px-6">
         <AppBreadcrumb />
       </div>
-      <main class="flex-1 overflow-auto p-4 md:p-6">
-        <RouterView />
+      <main class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
+        <div class="min-w-0">
+          <RouterView />
+        </div>
       </main>
     </div>
   </div>

@@ -39,6 +39,9 @@ import {
   BookOpen,
   DraftingCompass,
   TableProperties,
+  FileSpreadsheet,
+  Calculator,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -57,6 +60,8 @@ import { SIDEBAR_HEADER } from '@/constants/branding'
 import { buildProjectPath, ROUTE_PATH } from '@/constants/routes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
+import { useProjectPermissionsStore } from '@/stores/projectPermissions'
+import { useProjectPermission } from '@/composables/useProjectPermission'
 import { useTenantBrandingStore } from '@/stores/tenantBranding'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useTenantLogoUrl } from '@/composables/useTenantLogoUrl'
@@ -100,6 +105,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   BookOpen,
   DraftingCompass,
   TableProperties,
+  FileSpreadsheet,
+  Calculator,
+  TrendingUp,
 }
 
 withDefaults(
@@ -113,6 +121,7 @@ const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
 const authStore = useAuthStore()
+const permStore = useProjectPermissionsStore()
 const tenantBrandingStore = useTenantBrandingStore()
 const sidebarStore = useSidebarStore()
 
@@ -153,6 +162,31 @@ onMounted(() => {
 /** 是否在專案內（URL 為 /p/:projectId/...） */
 const projectId = computed(() => route.params.projectId as string | undefined)
 const isProjectScope = computed(() => !!projectId.value)
+
+const { canReadPath } = useProjectPermission(projectId)
+
+watch(
+  () =>
+    [projectId.value, authStore.isAuthenticated, authStore.user?.systemRole] as const,
+  ([id, authed, role]) => {
+    if (!id || !authed) return
+    if (role === 'platform_admin') return
+    void permStore.ensureLoaded(id)
+  },
+  { immediate: true }
+)
+
+function isProjectNavPathVisible(pathSuffix: string): boolean {
+  if (!projectId.value || !authStore.isAuthenticated) return true
+  if (authStore.isPlatformAdmin) return true
+  return canReadPath(pathSuffix)
+}
+
+const drillPanelHasVisibleItems = computed(() => ({
+  'project-mgmt': LAYER3_PROJECT_MGMT.some((c) => isProjectNavPathVisible(c.pathSuffix)),
+  construction: LAYER3_CONSTRUCTION.some((c) => isProjectNavPathVisible(c.pathSuffix)),
+  repair: LAYER3_REPAIR.some((c) => isProjectNavPathVisible(c.pathSuffix)),
+}))
 
 const isPlatformAdminScope = computed(() => route.path.startsWith('/platform-admin'))
 const isAdminScope = computed(() => route.path.startsWith('/admin'))
@@ -211,8 +245,27 @@ function projectChildPath(pathSuffix: string): string {
   return projectId.value ? buildProjectPath(projectId.value, pathSuffix) : '/projects'
 }
 
-function isProjectChildActive(pathSuffix: string): boolean {
-  return route.path === projectChildPath(pathSuffix)
+/** 在候選 pathSuffix 中選「最長」且符合目前 route 者，避免 /files 與 /files/forms 同時 active */
+function resolveActiveProjectPathSuffix(candidateSuffixes: string[]): string | null {
+  const sorted = [...candidateSuffixes].sort((a, b) => b.length - a.length)
+  for (const suffix of sorted) {
+    const full = projectChildPath(suffix)
+    if (route.path === full) return suffix
+    if (full !== '/' && route.path.startsWith(`${full}/`)) return suffix
+  }
+  return null
+}
+
+const layer2ActiveSuffix = computed(() => {
+  const suffixes = LAYER2_ITEMS.filter(
+    (i): i is Extract<(typeof LAYER2_ITEMS)[number], { type: 'link' }> =>
+      i.type === 'link' && isProjectNavPathVisible(i.pathSuffix)
+  ).map((i) => i.pathSuffix)
+  return resolveActiveProjectPathSuffix(suffixes)
+})
+
+function isLayer2NavActive(pathSuffix: string): boolean {
+  return layer2ActiveSuffix.value === pathSuffix
 }
 
 function goToProjectPath(pathSuffix: string) {
@@ -221,23 +274,44 @@ function goToProjectPath(pathSuffix: string) {
   }
 }
 
-/** Layer 3 目前列表（與 Layer 2 同結構，僅項目列表） */
+/** Layer 3 目前列表（依權限過濾 read） */
 const layer3Items = computed(() => {
   const panel = sidebarStore.currentPanel
-  if (panel === 'project-mgmt') return LAYER3_PROJECT_MGMT
-  if (panel === 'construction') return LAYER3_CONSTRUCTION
-  if (panel === 'repair') return LAYER3_REPAIR
-  return []
+  const raw =
+    panel === 'project-mgmt'
+      ? LAYER3_PROJECT_MGMT
+      : panel === 'construction'
+        ? LAYER3_CONSTRUCTION
+        : panel === 'repair'
+          ? LAYER3_REPAIR
+          : []
+  return raw.filter((c) => isProjectNavPathVisible(c.pathSuffix))
 })
 
-/** 各 Layer 3 模組的第一個頁面 pathSuffix，drill 進入時導向該頁 */
+const layer3ActiveSuffix = computed(() =>
+  resolveActiveProjectPathSuffix(layer3Items.value.map((c) => c.pathSuffix))
+)
+
+function isLayer3NavActive(pathSuffix: string): boolean {
+  return layer3ActiveSuffix.value === pathSuffix
+}
+
+/** 各 Layer 3 模組的第一個可見頁 pathSuffix，drill 進入時導向該頁 */
 function getFirstPathSuffixForPanel(panelId: 'project-mgmt' | 'construction' | 'repair'): string {
-  const first = {
-    'project-mgmt': LAYER3_PROJECT_MGMT[0]?.pathSuffix ?? '/management/overview',
-    construction: LAYER3_CONSTRUCTION[0]?.pathSuffix ?? '/monitoring/history',
-    repair: LAYER3_REPAIR[0]?.pathSuffix ?? '/repair/overview',
+  const list =
+    panelId === 'project-mgmt'
+      ? LAYER3_PROJECT_MGMT
+      : panelId === 'construction'
+        ? LAYER3_CONSTRUCTION
+        : LAYER3_REPAIR
+  const first = list.find((c) => isProjectNavPathVisible(c.pathSuffix))
+  if (first) return first.pathSuffix
+  const fallback = {
+    'project-mgmt': '/management/overview',
+    construction: '/monitoring/history',
+    repair: '/repair/overview',
   }
-  return first[panelId]
+  return fallback[panelId]
 }
 
 function handleDrillIn(panelId: 'project-mgmt' | 'construction' | 'repair') {
@@ -245,10 +319,13 @@ function handleDrillIn(panelId: 'project-mgmt' | 'construction' | 'repair') {
   goToProjectPath(getFirstPathSuffixForPanel(panelId))
 }
 
-/** Layer 2 第一個功能頁 pathSuffix，從 Layer 3 返回時導向該頁 */
+/** Layer 2 第一個可見功能頁 pathSuffix，從 Layer 3 返回時導向該頁 */
 function getFirstLayer2PathSuffix(): string {
-  const first = LAYER2_ITEMS.find((i) => i.type === 'link')
-  return first?.type === 'link' ? first.pathSuffix : '/dashboard'
+  const first = LAYER2_ITEMS.find(
+    (i): i is Extract<(typeof LAYER2_ITEMS)[number], { type: 'link' }> =>
+      i.type === 'link' && isProjectNavPathVisible(i.pathSuffix)
+  )
+  return first?.pathSuffix ?? '/dashboard'
 }
 
 function handleDrillOut() {
@@ -466,9 +543,9 @@ function handleDrillOut() {
                   >
                     {{ item.label }}
                   </div>
-                  <!-- 直接連結 -->
+                  <!-- 直接連結（依專案模組 read 隱藏） -->
                   <div
-                    v-else-if="item.type === 'link'"
+                    v-else-if="item.type === 'link' && isProjectNavPathVisible(item.pathSuffix)"
                     class="flex min-h-9 items-center rounded-md"
                     :class="collapsed ? 'justify-center' : 'pl-3'"
                   >
@@ -480,7 +557,7 @@ function handleDrillOut() {
                           :class="
                             cn(
                               'h-9 w-9 shrink-0 justify-center rounded-md',
-                              isProjectChildActive(item.pathSuffix) &&
+                              isLayer2NavActive(item.pathSuffix) &&
                                 'bg-accent text-accent-foreground'
                             )
                           "
@@ -500,7 +577,7 @@ function handleDrillOut() {
                       :class="
                         cn(
                           'h-9 w-full justify-start gap-3 rounded-md px-3',
-                          isProjectChildActive(item.pathSuffix) &&
+                          isLayer2NavActive(item.pathSuffix) &&
                             'bg-accent text-accent-foreground'
                         )
                       "
@@ -513,9 +590,9 @@ function handleDrillOut() {
                       <span class="truncate">{{ item.label }}</span>
                     </Button>
                   </div>
-                  <!-- Drill 進 Layer 3（hover 時按鈕內顯示向右箭頭表示可再進入） -->
+                  <!-- Drill 進 Layer 3（子項皆無權限時隱藏） -->
                   <div
-                    v-else
+                    v-else-if="item.type === 'drill' && drillPanelHasVisibleItems[item.panelId]"
                     class="group flex min-h-9 items-center rounded-md"
                     :class="collapsed ? 'justify-center' : 'pl-3'"
                   >
@@ -595,7 +672,7 @@ function handleDrillOut() {
                         :class="
                           cn(
                             'h-9 w-9 shrink-0 justify-center rounded-md',
-                            isProjectChildActive(child.pathSuffix) &&
+                            isLayer3NavActive(child.pathSuffix) &&
                               'bg-accent text-accent-foreground'
                           )
                         "
@@ -615,7 +692,7 @@ function handleDrillOut() {
                     :class="
                       cn(
                         'h-9 w-full justify-start gap-3 rounded-md px-3',
-                        isProjectChildActive(child.pathSuffix) && 'bg-accent text-accent-foreground'
+                        isLayer3NavActive(child.pathSuffix) && 'bg-accent text-accent-foreground'
                       )
                     "
                     @click="goToProjectPath(child.pathSuffix)"

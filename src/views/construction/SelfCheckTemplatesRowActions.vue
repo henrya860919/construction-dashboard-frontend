@@ -8,11 +8,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal } from 'lucide-vue-next'
 
-const props = defineProps<{
-  onOpenRecords: () => void
-  canRemove: boolean
-  onRemove: () => void
-}>()
+withDefaults(
+  defineProps<{
+    onOpenRecords: () => void
+    /** 本專案此樣板尚無查驗紀錄（資料面可移除匯入） */
+    canRemove: boolean
+    onRemove: () => void
+    /** 有刪除權且資料允許時才顯示「移除匯入」 */
+    allowDeleteImport?: boolean
+  }>(),
+  { allowDeleteImport: true }
+)
 </script>
 
 <template>
@@ -23,13 +29,17 @@ const props = defineProps<{
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-52">
-      <DropdownMenuItem class="cursor-pointer" @select="props.onOpenRecords">
+      <DropdownMenuItem class="cursor-pointer" @select="onOpenRecords">
         查驗紀錄
       </DropdownMenuItem>
-      <DropdownMenuItem v-if="props.canRemove" class="cursor-pointer" @select="props.onRemove">
+      <DropdownMenuItem
+        v-if="canRemove && allowDeleteImport"
+        class="cursor-pointer"
+        @select="onRemove"
+      >
         移除匯入
       </DropdownMenuItem>
-      <DropdownMenuItem v-else disabled class="text-muted-foreground">
+      <DropdownMenuItem v-else-if="!canRemove" disabled class="text-muted-foreground">
         移除匯入（已有查驗紀錄）
       </DropdownMenuItem>
     </DropdownMenuContent>

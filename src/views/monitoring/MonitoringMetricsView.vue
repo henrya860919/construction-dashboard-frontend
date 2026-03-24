@@ -26,6 +26,7 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { useRoute, RouterLink } from 'vue-router'
 import { buildProjectPath } from '@/constants/routes'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 import {
   Thermometer,
   Droplets,
@@ -52,6 +53,8 @@ const METRICS = [
 defineProps<{ embedded?: boolean }>()
 
 const route = useRoute()
+const projectId = computed(() => (route.params.projectId as string) ?? '')
+const uploadPerm = useProjectModuleActions(projectId, 'construction.upload')
 const selectedKey = ref<string>(METRICS[0].key)
 const selectedYear = ref<string>('2025')
 const selectedMonth = ref<string>('3')
@@ -241,12 +244,13 @@ function downloadCurrentData() {
         </div>
       </div>
       <Button
+        v-if="uploadPerm.canCreate"
         variant="outline"
         size="sm"
         class="gap-2 shrink-0"
         as-child
       >
-        <RouterLink :to="buildProjectPath((route.params.projectId as string) ?? '', '/monitoring/upload')">
+        <RouterLink :to="buildProjectPath(projectId, '/monitoring/upload')">
           <Upload class="size-4" />
           上傳數據
         </RouterLink>

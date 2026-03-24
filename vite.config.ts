@@ -41,17 +41,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https?.*\/api\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 10,
-              expiration: { maxEntries: 200, maxAgeSeconds: 86400 },
-            },
-          },
-        ],
+        // 勿快取 API：後台／平台設定依 GET 即時讀取；NetworkFirst 曾導致 PUT 後仍顯示舊模組開通狀態
+        runtimeCaching: [],
       },
     }),
   ],

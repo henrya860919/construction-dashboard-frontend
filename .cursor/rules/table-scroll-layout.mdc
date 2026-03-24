@@ -1,0 +1,46 @@
+---
+description: 寬表格水平捲動—禁止整頁橫向捲動（Table、DataTable、Layout）
+globs: "**/*.vue"
+alwaysApply: false
+---
+
+# 表格與水平捲動（版面）
+
+## 目標
+
+- **垂直捲動**：由 **Layout 的 `<main>`**（或手機 `mobile-page-layer`）負責。
+- **寬表格的水平捲動**：發生在 **表格區塊內**（`Table` 外層或 `rounded-lg border bg-card` 等表格容器），**不得**讓內容把整個主內容區橫向撐開成「整頁橫向捲動」。
+
+## 已內建的約定（勿重複造輪）
+
+1. **`DefaultLayout` / `AdminLayout` / `PlatformAdminLayout`**
+   - `<main>` 使用 **`overflow-y-auto overflow-x-hidden`**，且 **`RouterView` 外層包一層 `div.min-w-0`**，避免 flex 子項 `min-width: auto` 被寬內容撐破。
+
+2. **`src/components/ui/table/Table.vue`**
+   - 預設 **`scrollContainer !== false`** 時：外層為 **`overflow-x-auto overflow-y-visible overscroll-x-contain`**（只做橫向捲動，不搶垂直捲動）。
+   - 外層一律帶 **`min-w-0 max-w-full w-full`**。
+
+3. **`DataTable.vue`**
+   - 表格外層 **`min-w-0 overflow-x-auto overscroll-x-contain rounded-md border`**，內層 **`Table :scroll-container="false"`**，由邊框容器統一橫捲。
+
+4. **手機 `MobileLayout`**
+   - `.mobile-page-layer` 已 **`overflow-x: hidden`** 並加 **`min-width: 0`**，與主應用一致。
+
+## 新頁面／新表格時你該怎麼做
+
+- **一般情況**：直接使用 `<Table>`（不必改 props），並確保頁面在 **flex／grid** 裡若當子項，必要時在**該 flex 子項**加 **`min-w-0`**（常見於並排版型）。
+- **列表區塊**（`rounded-lg border border-border bg-card p-4`）：若表格欄位多、與 **進度上傳紀錄／PCCES 匯入紀錄／WBS 清單（列表分頁）**類似，可在**該區塊**再加 **`min-w-0 overflow-x-auto overscroll-x-contain`**，並 **`Table :scroll-container="false"`**，讓橫向捲軸與卡片邊界對齊（視覺一致）。
+- **甘特／資源圖等**：已使用 **`Table :scroll-container="false"`** 者**維持**，由外層自管捲動；**不要**改回預設，否則會出現雙層捲動或對齊錯誤。
+
+## 禁止
+
+- 在 **`main`** 上使用 **`overflow-auto`**（未限制橫向）導致整頁可橫向拖曳。
+- 寬表格外不設 **`min-w-0`** 鏈，只靠 `w-full` 期望自動裁切（在 flex 佈局下常失效）。
+
+## 相關檔案
+
+- `src/layouts/DefaultLayout.vue`、`AdminLayout.vue`、`PlatformAdminLayout.vue`、`MobileLayout.vue`
+- `src/components/ui/table/Table.vue`
+- `src/components/common/data-table/DataTable.vue`
+
+詳見主規則 **`ui-ux-principles.mdc`** 表格一節。

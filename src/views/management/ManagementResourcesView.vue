@@ -44,6 +44,8 @@ import type { ProjectResourceItem, ProjectResourceType } from '@/types/resource'
 import { Plus, Loader2 } from 'lucide-vue-next'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import ManagementResourcesRowActions from '@/views/management/ManagementResourcesRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const TAB_VALUES = ['labor', 'equipment', 'material'] as const
 const TAB_LABELS: Record<(typeof TAB_VALUES)[number], string> = {
@@ -54,6 +56,7 @@ const TAB_LABELS: Record<(typeof TAB_VALUES)[number], string> = {
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
+const resourcePerm = useProjectModuleActions(projectId, 'project.resource')
 
 const activeTab = ref<ProjectResourceType>('labor')
 const list = ref<ProjectResourceItem[]>([])
@@ -98,6 +101,7 @@ async function loadList() {
 }
 
 function openCreateDialog() {
+  if (!ensureProjectPermission(resourcePerm.canCreate.value, 'create')) return
   formMode.value = 'create'
   editingItem.value = null
   formName.value = ''
@@ -112,6 +116,7 @@ function openCreateDialog() {
 }
 
 function openEditDialog(row: ProjectResourceItem) {
+  if (!resourcePerm.canUpdate.value) return
   formMode.value = 'edit'
   editingItem.value = row
   formName.value = row.name
@@ -131,6 +136,11 @@ function closeFormDialog() {
 }
 
 async function submitForm() {
+  if (formMode.value === 'create') {
+    if (!ensureProjectPermission(resourcePerm.canCreate.value, 'create')) return
+  } else if (formMode.value === 'edit') {
+    if (!ensureProjectPermission(resourcePerm.canUpdate.value, 'change')) return
+  }
   const name = formName.value.trim()
   if (!name) {
     formError.value = '請填寫名稱'
@@ -190,6 +200,7 @@ async function submitForm() {
 }
 
 function openRemoveDialog(row: ProjectResourceItem) {
+  if (!resourcePerm.canDelete.value) return
   removingItem.value = row
   removeDialogOpen.value = true
 }
@@ -200,6 +211,7 @@ function closeRemoveDialog() {
 }
 
 async function confirmRemove() {
+  if (!resourcePerm.canDelete.value) return
   const item = removingItem.value
   if (!item) return
   removing.value = true
@@ -216,8 +228,8 @@ async function confirmRemove() {
   }
 }
 
-const columns = computed<ColumnDef<ProjectResourceItem, unknown>[]>(() => [
-  {
+const columns = computed<ColumnDef<ProjectResourceItem, unknown>[]>(() => {
+  const selectColumn: ColumnDef<ProjectResourceItem, unknown> = {
     id: 'select',
     header: ({ table }) =>
       h(Checkbox, {
@@ -238,7 +250,15 @@ const columns = computed<ColumnDef<ProjectResourceItem, unknown>[]>(() => [
         'aria-label': '選取此列',
       }),
     enableSorting: false,
-  },
+  }
+
+  const cols: ColumnDef<ProjectResourceItem, unknown>[] = []
+
+  if (resourcePerm.canDelete.value) {
+    cols.push(selectColumn)
+  }
+
+  cols.push(
   {
     accessorKey: 'name',
     id: 'name',
@@ -305,12 +325,17 @@ const columns = computed<ColumnDef<ProjectResourceItem, unknown>[]>(() => [
     cell: ({ row }) =>
       h(ManagementResourcesRowActions, {
         row: row.original,
+        canEdit: resourcePerm.canUpdate.value,
+        canRemove: resourcePerm.canDelete.value,
         onEdit: openEditDialog,
         onRemove: openRemoveDialog,
       }),
     enableSorting: false,
   },
-])
+  )
+
+  return cols
+})
 
 const table = useVueTable({
   get data() {
@@ -355,6 +380,7 @@ function closeBatchDelete() {
 }
 
 async function confirmBatchDelete() {
+  if (!resourcePerm.canDelete.value) return
   const rows = selectedRows.value.map((r) => r.original)
   if (!rows.length) return
   batchDeleteLoading.value = true
@@ -406,7 +432,7 @@ watch(
 
       <TabsContent :value="activeTab" class="mt-4 space-y-4">
         <div class="flex flex-wrap items-center justify-end gap-3">
-          <template v-if="hasSelection">
+          <template v-if="hasSelection && resourcePerm.canDelete">
             <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
             <ButtonGroup>
               <Button variant="outline" @click="clearSelection">取消選取</Button>

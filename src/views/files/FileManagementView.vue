@@ -36,6 +36,8 @@ import { listProjectFiles, deleteFile, getFileBlob } from '@/api/files'
 import type { AttachmentItem } from '@/api/files'
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import FileManagementRowActions from '@/views/files/FileManagementRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 import { Upload, Loader2, Trash2, Download, FileIcon } from 'lucide-vue-next'
 
 /** 檔案管理專用 category，與契約分開 */
@@ -44,6 +46,7 @@ const FILE_MANAGEMENT_CATEGORY = 'general'
 const route = useRoute()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
 const { enqueueAndUpload } = useUploadQueue()
+const uploadPerm = useProjectModuleActions(projectId, 'construction.upload')
 
 const fileList = ref<AttachmentItem[]>([])
 const loading = ref(true)
@@ -93,27 +96,34 @@ function formatDate(iso: string): string {
 }
 
 const sorting = ref<SortingState>([])
-const columns = computed<ColumnDef<AttachmentItem, unknown>[]>(() => [
-  {
-    id: 'select',
-    header: ({ table }) =>
-      h(Checkbox, {
-        checked: table.getIsAllPageRowsSelected()
-          ? true
-          : table.getIsSomePageRowsSelected()
-            ? 'indeterminate'
-            : false,
-        'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
-        'aria-label': '全選',
-      }),
-    cell: ({ row }) =>
-      h(Checkbox, {
-        checked: row.getIsSelected(),
-        'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
-        'aria-label': '選取此列',
-      }),
-    enableSorting: false,
-  },
+
+const selectColumn: ColumnDef<AttachmentItem, unknown> = {
+  id: 'select',
+  header: ({ table }) =>
+    h(Checkbox, {
+      checked: table.getIsAllPageRowsSelected()
+        ? true
+        : table.getIsSomePageRowsSelected()
+          ? 'indeterminate'
+          : false,
+      'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
+      'aria-label': '全選',
+    }),
+  cell: ({ row }) =>
+    h(Checkbox, {
+      checked: row.getIsSelected(),
+      'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
+      'aria-label': '選取此列',
+    }),
+  enableSorting: false,
+}
+
+const columns = computed<ColumnDef<AttachmentItem, unknown>[]>(() => {
+  const cols: ColumnDef<AttachmentItem, unknown>[] = []
+  if (uploadPerm.canRead.value || uploadPerm.canDelete.value) {
+    cols.push(selectColumn)
+  }
+  cols.push(
   {
     accessorKey: 'fileName',
     header: '檔名',
@@ -145,13 +155,18 @@ const columns = computed<ColumnDef<AttachmentItem, unknown>[]>(() => [
       h('div', { class: 'flex justify-end' }, [
         h(FileManagementRowActions, {
           row: row.original,
+          canDelete: uploadPerm.canDelete.value,
           onDownload: handleDownload,
           onDelete: openDeleteDialog,
         }),
       ]),
     enableSorting: false,
-  },
-])
+  }
+  )
+  return cols
+})
+
+const columnCount = computed(() => columns.value.length)
 
 const table = useVueTable({
   get data() {
@@ -189,6 +204,7 @@ function clearSelection() {
 }
 
 function triggerAddFile() {
+  if (!ensureProjectPermission(uploadPerm.canCreate.value, 'create')) return
   fileInputRef.value?.click()
 }
 
@@ -216,6 +232,7 @@ async function onFileInputChange(e: Event) {
 }
 
 async function handleDownload(row: AttachmentItem) {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
   try {
     const { blob, fileName } = await getFileBlob(row.id, { download: true, fileName: row.fileName })
     const url = URL.createObjectURL(blob)
@@ -253,6 +270,7 @@ async function confirmDelete() {
 }
 
 async function batchDownload() {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
   const rows = selectedRows.value.map((r) => r.original)
   for (let i = 0; i < rows.length; i++) {
     try {
@@ -317,7 +335,7 @@ async function confirmBatchDelete() {
         multiple
         @change="onFileInputChange"
       />
-      <template v-if="hasSelection">
+      <template v-if="hasSelection && (uploadPerm.canRead || uploadPerm.canDelete)">
         <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
         <ButtonGroup>
           <Button variant="outline" @click="clearSelection">
@@ -327,7 +345,12 @@ async function confirmBatchDelete() {
             <Download class="size-4" />
             批次下載
           </Button>
-          <Button variant="outline" class="text-destructive hover:text-destructive" @click="openBatchDelete">
+          <Button
+            v-if="uploadPerm.canDelete"
+            variant="outline"
+            class="text-destructive hover:text-destructive"
+            @click="openBatchDelete"
+          >
             <Trash2 class="size-4" />
             批次刪除
           </Button>
@@ -376,7 +399,7 @@ async function confirmBatchDelete() {
             </template>
             <template v-else>
               <TableRow>
-                <TableCell :colspan="6" class="h-24 text-center text-muted-foreground">
+                <TableCell :colspan="columnCount" class="h-24 text-center text-muted-foreground">
                   尚無檔案，點擊「新增檔案」上傳
                 </TableCell>
               </TableRow>

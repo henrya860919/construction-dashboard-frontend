@@ -4,15 +4,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Eye, Trash2 } from 'lucide-vue-next'
 import type { RepairRequestItem } from '@/types/repair-request'
 
-defineProps<{
-  row: RepairRequestItem
-}>()
+withDefaults(
+  defineProps<{
+    row: RepairRequestItem
+    canRemove?: boolean
+  }>(),
+  { canRemove: true }
+)
 
 const emit = defineEmits<{
   view: [row: RepairRequestItem]
@@ -32,14 +36,16 @@ const emit = defineEmits<{
         <Eye class="size-4" />
         檢視
       </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        class="gap-2 cursor-pointer text-destructive focus:text-destructive"
-        @click="emit('remove', row)"
-      >
-        <Trash2 class="size-4" />
-        刪除
-      </DropdownMenuItem>
+      <template v-if="canRemove">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          class="gap-2 cursor-pointer text-destructive focus:text-destructive"
+          @click="emit('remove', row)"
+        >
+          <Trash2 class="size-4" />
+          刪除
+        </DropdownMenuItem>
+      </template>
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

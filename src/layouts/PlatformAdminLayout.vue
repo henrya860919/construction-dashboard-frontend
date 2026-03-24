@@ -46,8 +46,10 @@ const navItems = [
         </nav>
       </ScrollArea>
     </aside>
-    <main class="flex-1 overflow-auto p-6">
-      <RouterView />
+    <main class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
+      <div class="min-w-0">
+        <RouterView />
+      </div>
     </main>
   </div>
 </template>

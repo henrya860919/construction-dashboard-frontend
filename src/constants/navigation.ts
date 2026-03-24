@@ -46,6 +46,13 @@ export const LAYER2_ITEMS: NavLayer2Item[] = [
     pathSuffix: '/contract/management',
     icon: 'FileSignature',
   },
+  {
+    type: 'link',
+    id: 'project-members',
+    label: '專案成員',
+    pathSuffix: '/contract/members',
+    icon: 'Users',
+  },
   { type: 'link', id: 'files', label: '檔案管理', pathSuffix: '/files', icon: 'FolderOpen' },
   {
     type: 'link',
@@ -125,10 +132,28 @@ export const LAYER3_CONSTRUCTION: NavItemProject[] = [
     icon: 'ClipboardCheck',
   },
   {
+    id: 'construction-progress',
+    label: '進度管理',
+    pathSuffix: '/construction/progress',
+    icon: 'TrendingUp',
+  },
+  {
     id: 'construction-diary',
     label: '施工日誌',
     pathSuffix: '/construction/diary',
     icon: 'BookOpen',
+  },
+  {
+    id: 'construction-valuation',
+    label: '估驗計價',
+    pathSuffix: '/construction/diary/valuations',
+    icon: 'Calculator',
+  },
+  {
+    id: 'construction-pcces',
+    label: 'PCCES 工項',
+    pathSuffix: '/construction/diary/pcces/versions',
+    icon: 'FileSpreadsheet',
   },
   {
     id: 'construction-defects',
@@ -210,7 +235,7 @@ export const PROJECT_SIDEBAR_GROUPS: NavGroupProject[] = [
     children: [
       {
         id: 'contract-project-info',
-        label: '專案資訊',
+        label: '專案資料',
         pathSuffix: '/contract/project-info',
         icon: 'ClipboardList',
       },

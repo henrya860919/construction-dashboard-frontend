@@ -20,6 +20,8 @@ export const API_PATH = {
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,
   ADMIN_USERS: `${API_V1}/admin/users`,
   ADMIN_TENANT_INFO: `${API_V1}/admin/tenant-info`,
+  /** 本租戶模組開通狀態（唯讀）；platform_admin 須帶 query tenantId */
+  ADMIN_TENANT_MODULE_ENTITLEMENTS: `${API_V1}/admin/tenant/module-entitlements`,
   /** 公司設定：PATCH 名稱、POST logo、GET logo 用 /admin/tenant-logo */
   ADMIN_COMPANY_SETTINGS: `${API_V1}/admin/company-settings`,
   ADMIN_TENANT_LOGO: `${API_V1}/admin/tenant-logo`,
@@ -105,6 +107,60 @@ export const API_PATH = {
     `${API_V1}/projects/${projectId}/drawing-nodes/${nodeId}/move`,
   PROJECT_DRAWING_NODE_REVISIONS: (projectId: string, nodeId: string) =>
     `${API_V1}/projects/${projectId}/drawing-nodes/${nodeId}/revisions`,
+  /** PCCES／eTender XML 匯入 */
+  PROJECT_PCCES_IMPORTS: (projectId: string) => `${API_V1}/projects/${projectId}/pcces-imports`,
+  PROJECT_PCCES_IMPORT: (projectId: string, importId: string) =>
+    `${API_V1}/projects/${projectId}/pcces-imports/${importId}`,
+  PROJECT_PCCES_IMPORT_ITEMS: (projectId: string, importId: string) =>
+    `${API_V1}/projects/${projectId}/pcces-imports/${importId}/items`,
+  PROJECT_PCCES_IMPORT_APPROVE: (projectId: string, importId: string) =>
+    `${API_V1}/projects/${projectId}/pcces-imports/${importId}/approve`,
+  PROJECT_PCCES_IMPORT_EXCEL_APPLY: (projectId: string, importId: string) =>
+    `${API_V1}/projects/${projectId}/pcces-imports/${importId}/excel-apply`,
+  /** PCCES Excel 變更用工程變更清單樣板（construction_project_change_list.xlsx） */
+  PROJECT_PCCES_IMPORTS_CONSTRUCTION_PROJECT_CHANGE_LIST_EXCEL_TEMPLATE: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/pcces-imports/construction-project-change-list-excel-template`,
+
+  /** 公共工程施工日誌（依附表四） */
+  PROJECT_CONSTRUCTION_DAILY_LOGS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs`,
+  PROJECT_CONSTRUCTION_DAILY_LOG_DEFAULTS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs/defaults`,
+  PROJECT_CONSTRUCTION_DAILY_LOG_PROGRESS_PLAN_KNOTS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs/progress-plan-knots`,
+  PROJECT_CONSTRUCTION_DAILY_LOG_PCCES_WORK_ITEMS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs/pcces-work-items`,
+  PROJECT_CONSTRUCTION_DAILY_LOG_PREVIEW_PCCES_ACTUAL: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs/preview-pcces-actual-progress`,
+  PROJECT_CONSTRUCTION_DAILY_LOG: (projectId: string, logId: string) =>
+    `${API_V1}/projects/${projectId}/construction-daily-logs/${logId}`,
+  /** 估驗計價 */
+  PROJECT_CONSTRUCTION_VALUATIONS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-valuations`,
+  PROJECT_CONSTRUCTION_VALUATION_PCCES_LINES: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/construction-valuations/pcces-lines`,
+  PROJECT_CONSTRUCTION_VALUATION: (projectId: string, valuationId: string) =>
+    `${API_V1}/projects/${projectId}/construction-valuations/${valuationId}`,
+  /** 進度管理 */
+  PROJECT_PROGRESS_DASHBOARD: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/dashboard`,
+  PROJECT_PROGRESS_PLANS: (projectId: string) => `${API_V1}/projects/${projectId}/progress/plans`,
+  PROJECT_PROGRESS_PLAN: (projectId: string, planId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/${planId}`,
+  PROJECT_PROGRESS_PLAN_WITH_UPLOAD: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/with-upload`,
+  PROJECT_PROGRESS_PLAN_UPLOADS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plan-uploads`,
+  PROJECT_PROGRESS_PLAN_UPLOADS_EXCEL_TEMPLATE: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plan-uploads/excel-template`,
+  PROJECT_PROGRESS_PLAN_DUPLICATE: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/duplicate`,
+  PROJECT_PROGRESS_PLAN_ENTRIES: (projectId: string, planId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/${planId}/entries`,
+  PROJECT_PROGRESS_PLAN_EFFECTIVE: (projectId: string, planId: string) =>
+    `${API_V1}/projects/${projectId}/progress/plans/${planId}/effective`,
+  PROJECT_PROGRESS_ACTUALS: (projectId: string) =>
+    `${API_V1}/projects/${projectId}/progress/actuals`,
   /** WBS 工作分解結構（樹狀） */
   PROJECT_WBS: (projectId: string) => `${API_V1}/projects/${projectId}/wbs`,
   PROJECT_WBS_NODE: (projectId: string, nodeId: string) => `${API_V1}/projects/${projectId}/wbs/${nodeId}`,

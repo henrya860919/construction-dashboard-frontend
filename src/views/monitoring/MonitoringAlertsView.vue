@@ -35,11 +35,14 @@ import { Loader2 } from 'lucide-vue-next'
 import { fetchAlertHistory, type AlertHistoryItem } from '@/api/alerts'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import MonitoringAlertsRowActions from '@/views/monitoring/MonitoringAlertsRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 defineProps<{ embedded?: boolean }>()
 
 const route = useRoute()
-const projectId = route.params.projectId as string
+const projectId = computed(() => (route.params.projectId as string) ?? '')
+const monitorPerm = useProjectModuleActions(projectId, 'construction.monitor')
 
 const list = ref<AlertHistoryItem[]>([])
 const loading = ref(true)
@@ -67,7 +70,7 @@ async function load() {
   errorMessage.value = ''
   try {
     list.value = await fetchAlertHistory({
-      projectId,
+      projectId: projectId.value,
       startDate: startDate.value,
       endDate: endDate.value,
       limit: 200,
@@ -163,7 +166,10 @@ const columns = computed<ColumnDef<AlertHistoryItem, unknown>[]>(() => [
     cell: ({ row }) =>
       h(MonitoringAlertsRowActions, {
         row: row.original,
-        onView: (r) => openDetail(r),
+        onView: (r) => {
+          if (!ensureProjectPermission(monitorPerm.canRead.value, 'read')) return
+          openDetail(r)
+        },
       }),
     enableSorting: false,
   },

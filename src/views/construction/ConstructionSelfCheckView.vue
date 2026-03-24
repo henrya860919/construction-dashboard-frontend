@@ -38,10 +38,13 @@ import type {
 } from '@/api/project-self-inspections'
 import { ROUTE_NAME } from '@/constants/routes'
 import SelfCheckTemplatesRowActions from '@/views/construction/SelfCheckTemplatesRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
+const inspectionPerm = useProjectModuleActions(projectId, 'construction.inspection')
 
 const list = ref<ProjectSelfInspectionTemplateItem[]>([])
 const loading = ref(true)
@@ -99,6 +102,11 @@ function goTemplate(row: ProjectSelfInspectionTemplateItem) {
     name: ROUTE_NAME.PROJECT_CONSTRUCTION_SELF_CHECK_TEMPLATE,
     params: { projectId: projectId.value, templateId: row.id },
   })
+}
+
+function tryOpenImportDialog() {
+  if (!ensureProjectPermission(inspectionPerm.canCreate.value, 'create')) return
+  openImportDialog()
 }
 
 async function openImportDialog() {
@@ -279,7 +287,11 @@ const columns = computed<ColumnDef<ProjectSelfInspectionTemplateItem, unknown>[]
     cell: ({ row }) =>
       h(SelfCheckTemplatesRowActions, {
         canRemove: row.original.recordCount === 0,
-        onOpenRecords: () => goTemplate(row.original),
+        allowDeleteImport: inspectionPerm.canDelete.value,
+        onOpenRecords: () => {
+          if (!ensureProjectPermission(inspectionPerm.canRead.value, 'read')) return
+          goTemplate(row.original)
+        },
         onRemove: () => openRemoveDialog(row.original),
       }),
     enableSorting: false,
@@ -309,7 +321,7 @@ const table = useVueTable({
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <h1 class="text-xl font-semibold text-foreground">自主檢查</h1>
-      <Button class="gap-1.5" @click="openImportDialog">
+      <Button class="gap-1.5" @click="tryOpenImportDialog">
         <Plus class="size-4" />
         匯入樣板
       </Button>

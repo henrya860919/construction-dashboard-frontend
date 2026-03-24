@@ -38,6 +38,22 @@ alwaysApply: true
 - 取得當前專案：`route.params.projectId`，專案名稱用 `useProjectStore().currentProjectName`。
 - 新增專案內頁面時：在 `routes.ts` 加路徑與 name、在 `navigation.ts` 加側欄項、在 `breadcrumb.ts` 加路徑對應標籤。
 
+### 1.4 列表頁（標題區 + 表格上方工具列 + 表格）
+
+與 **檔案管理**、**報修紀錄**、**施工日誌／估驗／PCCES 匯入紀錄** 等單表列表對齊：
+
+- **頁面標題區（最上方）**
+  - 主標：`text-xl font-semibold tracking-tight text-foreground`（與檔案管理一致）。
+  - 說明：`mt-1 text-sm text-muted-foreground`。
+  - **勿**在標題區上方再放「新增／上傳」等主要按鈕；標題永遠先於工具列。
+- **表格上方工具列（緊貼表格區塊之上）**
+  - 外層：`flex flex-wrap items-center gap-3`；**無左側篩選時**用 `justify-end`，主要動作（**新增／上傳／建立**）放在**最右側**，與檔案管理「新增檔案」、報修「新增報修」同一邏輯。
+  - **有左側篩選時**：外層改 `justify-between`，左篩選、右側為「已選 + ButtonGroup + 新增」見 §四。
+- **表格區塊**
+  - 使用 `rounded-lg border border-border bg-card p-4` 包住表格（與 §三「表格區塊邊框」一致）；**不要**再用 Card 包一層標題+表（避免雙層 Card）。
+  - 載入中：區塊內 `flex items-center justify-center py-12 text-muted-foreground`，`Loader2` 建議 `size-8`（與檔案管理一致）。
+  - 分頁：在表格外層 `p-4` 容器內、表格下方，使用 `mt-4` + **DataTablePagination**（勿另包一層 Card）。
+
 ---
 
 ## 二、按鈕（Button）
@@ -56,6 +72,7 @@ alwaysApply: true
   - 必須有「**檔案大小**」欄位。
   - 檔名欄位需在名稱前加上**檔案類型 icon**（依副檔名或類型選擇圖示）。
 - **版面**：若頁面有**篩選列／工具列**在表格上方，則**工具列與表格都不要用 Card 包**；表格區塊使用自己的邊框與底色（如 `rounded-lg border border-border bg-card`），避免雙重 Card 包覆。
+- **寬表格與水平捲動**：**禁止**讓寬表格撐出「整頁橫向捲動」；水平捲動應發生在表格區塊或 `Table` 元件外層。Layout、`Table.vue`、`DataTable.vue` 已依此實作；新增或改版面時請遵守 **`table-scroll-layout.mdc`**（flex 子項必要時加 `min-w-0`、甘特等維持 `scroll-container=false`）。
 
 ---
 
@@ -99,10 +116,11 @@ alwaysApply: true
 
 開發新頁面或大幅修改既有頁面時，請確認：
 
+- [ ] **列表頁**：符合 **§1.4**（標題 `tracking-tight`、新增／上傳在表格上方右側、表格外層 `rounded-lg border bg-card p-4`）。
 - [ ] **路由**：路徑與 name 已加入 `constants/routes.ts`，並在 `router/index.ts` 註冊。
 - [ ] **導航**：若需出現在側欄，已在 `constants/navigation.ts` 對應群組加入項目；麵包屑已在 `constants/breadcrumb.ts` 對應。
 - [ ] **專案內路徑**：連結使用 `buildProjectPath(projectId, pathSuffix)` 或具名路由，不手動拼字串。
-- [ ] **表格**：第一欄為勾選、操作收合在「更多」、檔案類有檔案大小與檔名 icon；有篩選時不雙重 Card。
+- [ ] **表格**：第一欄為勾選、操作收合在「更多」、檔案類有檔案大小與檔名 icon；有篩選時不雙重 Card；寬表不出現整頁橫向捲動（見 **table-scroll-layout.mdc**）。
 - [ ] **多選**：多選工具列在表格外上方、用 ButtonGroup；篩選在左、已選+ButtonGroup+新增/上傳**全部在右**相鄰。
 - [ ] **按鈕**：未特別需求時不覆寫 size（預設 sm）；多選列使用 ButtonGroup。
 - [ ] **主題**：未使用硬編碼色、淺色／深色皆已檢查可讀性。

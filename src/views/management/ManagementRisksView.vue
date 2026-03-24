@@ -52,11 +52,15 @@ import { Plus, Loader2, ListTree, AlertCircle, Clock, AlertTriangle } from 'luci
 import StateCard from '@/components/common/StateCard.vue'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import ManagementRisksRowActions from '@/views/management/ManagementRisksRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
+const projectId = computed(() => (route.params.projectId as string) ?? '')
+const riskPerm = useProjectModuleActions(projectId, 'project.risk')
 
 function getProjectId(): string {
-  return (route.params.projectId as string) ?? ''
+  return projectId.value
 }
 
 const loading = ref(true)
@@ -88,8 +92,6 @@ const removing = ref(false)
 
 const batchDeleteOpen = ref(false)
 const batchDeleteLoading = ref(false)
-
-const projectId = computed(() => getProjectId())
 
 /** 統計：總數、待處理、處理中、高／緊急 */
 const stats = computed(() => {
@@ -165,6 +167,7 @@ async function loadMembers() {
 }
 
 function openCreateDialog() {
+  if (!ensureProjectPermission(riskPerm.canCreate.value, 'create')) return
   formMode.value = 'create'
   editingItem.value = null
   formDescription.value = ''
@@ -256,6 +259,11 @@ const formWbsDisplayText = computed(() => {
 })
 
 async function submitForm() {
+  if (formMode.value === 'create') {
+    if (!ensureProjectPermission(riskPerm.canCreate.value, 'create')) return
+  } else if (editingItem.value) {
+    if (!ensureProjectPermission(riskPerm.canUpdate.value, 'change')) return
+  }
   const desc = formDescription.value.trim()
   if (!desc) {
     formError.value = '請填寫議題說明'
@@ -387,6 +395,8 @@ const columns = computed<ColumnDef<IssueRiskItem, unknown>[]>(() => [
       h(ManagementRisksRowActions, {
         row: row.original,
         updatingId: null,
+        canEdit: riskPerm.canUpdate.value,
+        canRemove: riskPerm.canDelete.value,
         onEdit: openEditDialog,
         onRemove: openRemoveDialog,
       }),
@@ -512,6 +522,7 @@ watch(projectId, (id) => {
         <ButtonGroup>
           <Button variant="outline" @click="clearSelection">取消選取</Button>
           <Button
+            v-if="riskPerm.canDelete"
             variant="outline"
             class="text-destructive hover:text-destructive"
             @click="openBatchDelete"

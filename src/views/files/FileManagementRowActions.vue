@@ -5,26 +5,23 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Download, Trash2 } from 'lucide-vue-next'
 import type { AttachmentItem } from '@/api/files'
 
-defineProps<{
-  row: AttachmentItem
-}>()
+withDefaults(
+  defineProps<{
+    row: AttachmentItem
+    canDelete?: boolean
+  }>(),
+  { canDelete: true }
+)
 
 const emit = defineEmits<{
   download: [row: AttachmentItem]
   delete: [row: AttachmentItem]
 }>()
-
-function onDownload(row: AttachmentItem) {
-  emit('download', row)
-}
-
-function onDelete(row: AttachmentItem) {
-  emit('delete', row)
-}
 </script>
 
 <template>
@@ -35,17 +32,20 @@ function onDelete(row: AttachmentItem) {
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-[10rem]">
-      <DropdownMenuItem class="gap-2 cursor-pointer" @click="onDownload(row)">
+      <DropdownMenuItem class="gap-2 cursor-pointer" @click="emit('download', row)">
         <Download class="size-4" />
         下載
       </DropdownMenuItem>
-      <DropdownMenuItem
-        class="gap-2 cursor-pointer text-destructive focus:text-destructive"
-        @click="onDelete(row)"
-      >
-        <Trash2 class="size-4" />
-        刪除
-      </DropdownMenuItem>
+      <template v-if="canDelete">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          class="gap-2 cursor-pointer text-destructive focus:text-destructive"
+          @click="emit('delete', row)"
+        >
+          <Trash2 class="size-4" />
+          刪除
+        </DropdownMenuItem>
+      </template>
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

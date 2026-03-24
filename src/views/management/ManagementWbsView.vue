@@ -53,6 +53,8 @@ import WbsNetworkDiagram from '@/components/management/WbsNetworkDiagram.vue'
 import { isWbsLeaf, rollupWbsSchedule, rollupResourceLabels } from '@/lib/wbs-rollup'
 import { syncLeafStartDatesToFsConstraints, hasAnyTaskDependencies } from '@/lib/wbs-fs-schedule'
 import { wbsEndDateInclusive } from '@/lib/wbs-schedule-dates'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const STORAGE_KEY_WORK_PACKAGES = 'gantt-work-packages'
 const STORAGE_KEY_DEPS = 'gantt-dependencies'
@@ -142,6 +144,11 @@ const selectedIds = ref<Set<string>>(new Set())
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
+const wbsPerm = useProjectModuleActions(projectId, 'project.wbs')
+/** 模板 v-if / :disabled 須用頂層 ref，避免 wbsPerm.canX 巢狀 Computed 未解包 */
+const canCreateWbs = wbsPerm.canCreate
+const canUpdateWbs = wbsPerm.canUpdate
+const canDeleteWbs = wbsPerm.canDelete
 
 /** WBS 樹狀資料（由 API 取得） */
 const wbsTree = ref<WbsNode[]>([])
@@ -400,6 +407,7 @@ function getParentLevelStyle(item: WbsFlatItem): Record<string, string> | undefi
 const settingsOpen = ref(false)
 
 function setLevelColor(depth: number, value: string) {
+  if (!canUpdateWbs.value) return
   const next = { ...levelColors.value }
   if (value) {
     next[depth] = value
@@ -576,6 +584,7 @@ const createError = ref<string | null>(null)
 const projectResources = ref<ProjectResourceItem[]>([])
 
 function openCreateRoot() {
+  if (!ensureProjectPermission(canCreateWbs.value, 'create')) return
   createParentId.value = null
   createName.value = ''
   createStartDate.value = ''
@@ -587,6 +596,7 @@ function openCreateRoot() {
 }
 
 function openCreateChild(parentNode: WbsNode) {
+  if (!ensureProjectPermission(canCreateWbs.value, 'create')) return
   createParentId.value = parentNode.id
   createName.value = ''
   createStartDate.value = ''
@@ -617,6 +627,7 @@ const createEndDate = computed(() => {
 })
 
 async function submitCreate() {
+  if (!ensureProjectPermission(canCreateWbs.value, 'create')) return
   if (!projectId.value || !createName.value.trim()) return
   createSubmitting.value = true
   createError.value = null
@@ -875,7 +886,7 @@ watch(projectId, async (id) => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="min-w-0 space-y-6">
     <div>
       <h1 class="text-xl font-semibold tracking-tight text-foreground">WBS清單</h1>
       <p class="mt-1 text-sm text-muted-foreground">
@@ -896,11 +907,25 @@ watch(projectId, async (id) => {
         <Plus class="size-4" />
         新增根節點
       </Button>
-      <Button variant="outline" size="sm" @click="expandAll">全部展開</Button>
-      <Button variant="outline" size="sm" @click="collapseAll">全部收合</Button>
-      <Dialog v-model:open="settingsOpen">
+      <Button
+        variant="default"
+        size="sm"
+        :disabled="!projectId || loading"
+        @click="expandAll"
+      >
+        全部展開
+      </Button>
+      <Button
+        variant="default"
+        size="sm"
+        :disabled="!projectId || loading"
+        @click="collapseAll"
+      >
+        全部收合
+      </Button>
+      <Dialog v-if="canUpdateWbs" v-model:open="settingsOpen">
         <DialogTrigger as-child>
-          <Button variant="outline" size="sm" class="gap-1.5">
+          <Button variant="default" size="sm" class="gap-1.5">
             <Settings class="size-4" />
             設定
           </Button>
@@ -942,7 +967,7 @@ watch(projectId, async (id) => {
     </div>
 
     <!-- 列表 / 網路圖 分頁（切到網路圖時會重載前置關係，即時反映甘特圖變更） -->
-    <Tabs v-model="activeWbsTab" class="w-full">
+    <Tabs v-model="activeWbsTab" class="w-full min-w-0">
       <TabsList class="grid w-full max-w-[280px] grid-cols-2">
         <TabsTrigger value="list" class="gap-1.5">
           <List class="size-4" />
@@ -953,7 +978,7 @@ watch(projectId, async (id) => {
           網路圖
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="list" class="mt-4">
+      <TabsContent value="list" class="mt-4 min-w-0">
         <p class="mb-3 text-xs text-muted-foreground max-w-3xl">
           <strong class="text-foreground">點欄位可內嵌編輯</strong>（類試算表）：可改<strong
             class="text-foreground"
@@ -966,8 +991,10 @@ watch(projectId, async (id) => {
             >資源</strong
           >點欄位開啟編輯視窗。父層開始／工期／結束為子項彙總。
         </p>
-        <!-- 樹狀表格 -->
-        <div class="rounded-lg border border-border bg-card p-4">
+        <!-- 樹狀表格（寬欄位多時於卡片內橫向捲動，不撐開整頁） -->
+        <div
+          class="min-w-0 overflow-x-auto overscroll-x-contain rounded-lg border border-border bg-card p-4"
+        >
           <div
             v-if="loading"
             class="flex items-center justify-center gap-2 py-12 text-muted-foreground"
@@ -978,7 +1005,7 @@ watch(projectId, async (id) => {
           <p v-else-if="listError" class="py-4 text-center text-sm text-destructive">
             {{ listError }}
           </p>
-          <Table v-else>
+          <Table v-else :scroll-container="false">
             <TableHeader>
               <TableRow>
                 <TableHead class="w-8 px-1" aria-label="拖移" />
@@ -1030,7 +1057,7 @@ watch(projectId, async (id) => {
                 >
                   <TableCell class="w-8 p-1 align-middle">
                     <div
-                      v-if="!item.node.isProjectRoot"
+                      v-if="!item.node.isProjectRoot && canUpdateWbs"
                       role="button"
                       tabindex="0"
                       class="flex cursor-grab touch-none items-center justify-center rounded p-1 text-muted-foreground/60 hover:bg-muted/80 hover:text-foreground active:cursor-grabbing"
@@ -1041,7 +1068,8 @@ watch(projectId, async (id) => {
                     >
                       <GripVertical class="size-4" />
                     </div>
-                    <span v-else class="block size-8" aria-hidden="true" />
+                    <span v-else-if="item.node.isProjectRoot" class="block size-8" aria-hidden="true" />
+                    <span v-else class="block size-4" aria-hidden="true" />
                   </TableCell>
                   <TableCell class="w-10">
                     <Checkbox
@@ -1056,7 +1084,7 @@ watch(projectId, async (id) => {
                   </TableCell>
                   <TableCell class="w-16 text-center">
                     <Checkbox
-                      :disabled="item.hasChildren"
+                      :disabled="item.hasChildren || !canUpdateWbs"
                       :checked="workPackageIds.includes(item.node.id)"
                       :aria-label="`設為任務：${item.node.name}`"
                       :title="item.hasChildren ? '僅葉節點可設為任務' : undefined"
@@ -1246,7 +1274,12 @@ watch(projectId, async (id) => {
                     </template>
                   </TableCell>
                   <TableCell class="w-12 p-1">
-                    <DropdownMenu>
+                    <DropdownMenu
+                      v-if="
+                        canCreateWbs ||
+                        (!item.node.isProjectRoot && (canUpdateWbs || canDeleteWbs))
+                      "
+                    >
                       <DropdownMenuTrigger as-child>
                         <Button variant="ghost" size="icon" class="size-8" aria-label="操作">
                           <MoreHorizontal class="size-4" />
@@ -1258,11 +1291,12 @@ watch(projectId, async (id) => {
                           新增子節點
                         </DropdownMenuItem>
                         <template v-if="!item.node.isProjectRoot">
-                          <DropdownMenuItem @click="openEdit(item.node)">
+                          <DropdownMenuItem v-if="canUpdateWbs" @click="openEdit(item.node)">
                             <Pencil class="size-4" />
                             編輯
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            v-if="canDeleteWbs"
                             class="text-destructive focus:text-destructive"
                             @click="openDelete(item.node)"
                           >
@@ -1272,6 +1306,7 @@ watch(projectId, async (id) => {
                         </template>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    <span v-else class="text-xs text-muted-foreground">—</span>
                   </TableCell>
                 </TableRow>
               </template>

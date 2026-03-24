@@ -77,11 +77,28 @@ export const ROUTE_PATH = {
   PROJECT_MANAGEMENT_OVERVIEW: '/management/overview',
 
   /** 施工管理：自主檢查、施工日誌、缺失改善、圖說管理 */
+  /** 進度管理（S-curve、計畫／實際週期） */
+  PROJECT_CONSTRUCTION_PROGRESS: '/construction/progress',
+  /** 進度計畫 Excel 上傳紀錄 */
+  PROJECT_CONSTRUCTION_PROGRESS_UPLOADS: '/construction/progress/uploads',
   PROJECT_CONSTRUCTION_SELF_CHECK: '/construction/self-check',
   PROJECT_CONSTRUCTION_SELF_CHECK_TEMPLATE: '/construction/self-check/:templateId',
   PROJECT_CONSTRUCTION_SELF_CHECK_NEW: '/construction/self-check/:templateId/new',
   PROJECT_CONSTRUCTION_SELF_CHECK_RECORD: '/construction/self-check/:templateId/records/:recordId',
+  /** 施工日誌（表四）：列表、新增、編輯 */
   PROJECT_CONSTRUCTION_DIARY: '/construction/diary',
+  PROJECT_CONSTRUCTION_DIARY_LOG_NEW: '/construction/diary/new',
+  PROJECT_CONSTRUCTION_DIARY_LOG_DETAIL: '/construction/diary/:logId',
+  /** 估驗計價（列表、新增、編輯） */
+  PROJECT_CONSTRUCTION_DIARY_VALUATIONS: '/construction/diary/valuations',
+  PROJECT_CONSTRUCTION_DIARY_VALUATION_NEW: '/construction/diary/valuations/new',
+  PROJECT_CONSTRUCTION_DIARY_VALUATION_DETAIL: '/construction/diary/valuations/:valuationId',
+  /** PCCES XML：初次／再次匯入、匯入紀錄列表、單次匯入工項明細 */
+  PROJECT_CONSTRUCTION_PCCES_UPLOAD: '/construction/diary/pcces/upload',
+  /** 以指定匯入版為基底，上傳 Excel 變更清單（query: baseImportId） */
+  PROJECT_CONSTRUCTION_PCCES_EXCEL_CHANGE: '/construction/diary/pcces/excel-change',
+  PROJECT_CONSTRUCTION_PCCES_VERSIONS: '/construction/diary/pcces/versions',
+  PROJECT_CONSTRUCTION_PCCES_VERSION_DETAIL: '/construction/diary/pcces/versions/:importId',
   PROJECT_CONSTRUCTION_DRAWINGS: '/construction/drawings',
   PROJECT_CONSTRUCTION_DEFECTS: '/construction/defects',
   PROJECT_CONSTRUCTION_DEFECT_DETAIL: '/construction/defects/:defectId',
@@ -162,11 +179,22 @@ export const ROUTE_NAME = {
   PROJECT_MANAGEMENT_SCHEDULE: 'project-management-schedule',
   PROJECT_MANAGEMENT_GANTT: 'project-management-gantt',
   PROJECT_MANAGEMENT_OVERVIEW: 'project-management-overview',
+  PROJECT_CONSTRUCTION_PROGRESS: 'project-construction-progress',
+  PROJECT_CONSTRUCTION_PROGRESS_UPLOADS: 'project-construction-progress-uploads',
   PROJECT_CONSTRUCTION_SELF_CHECK: 'project-construction-self-check',
   PROJECT_CONSTRUCTION_SELF_CHECK_TEMPLATE: 'project-construction-self-check-template',
   PROJECT_CONSTRUCTION_SELF_CHECK_NEW: 'project-construction-self-check-new',
   PROJECT_CONSTRUCTION_SELF_CHECK_RECORD: 'project-construction-self-check-record',
   PROJECT_CONSTRUCTION_DIARY: 'project-construction-diary',
+  PROJECT_CONSTRUCTION_DIARY_LOG_NEW: 'project-construction-diary-log-new',
+  PROJECT_CONSTRUCTION_DIARY_LOG_DETAIL: 'project-construction-diary-log-detail',
+  PROJECT_CONSTRUCTION_DIARY_VALUATIONS: 'project-construction-diary-valuations',
+  PROJECT_CONSTRUCTION_DIARY_VALUATION_NEW: 'project-construction-diary-valuation-new',
+  PROJECT_CONSTRUCTION_DIARY_VALUATION_DETAIL: 'project-construction-diary-valuation-detail',
+  PROJECT_CONSTRUCTION_PCCES_UPLOAD: 'project-construction-pcces-upload',
+  PROJECT_CONSTRUCTION_PCCES_EXCEL_CHANGE: 'project-construction-pcces-excel-change',
+  PROJECT_CONSTRUCTION_PCCES_VERSIONS: 'project-construction-pcces-versions',
+  PROJECT_CONSTRUCTION_PCCES_VERSION_DETAIL: 'project-construction-pcces-version-detail',
   PROJECT_CONSTRUCTION_DRAWINGS: 'project-construction-drawings',
   PROJECT_CONSTRUCTION_DEFECTS: 'project-construction-defects',
   PROJECT_CONSTRUCTION_DEFECT_DETAIL: 'project-construction-defect-detail',

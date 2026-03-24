@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   getTenant,
@@ -7,9 +7,15 @@ import {
   fetchPlatformUsers,
   fetchPlatformProjects,
   resetUserPassword,
+  getTenantModuleEntitlements,
+  replaceTenantModuleEntitlements,
 } from '@/api/platform'
+import { PERMISSION_MODULES, PERMISSION_MODULE_LABELS } from '@/constants/permission-modules'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { useTenantStore } from '@/stores/tenant'
 import type { TenantItem, UpdateTenantPayload, PlatformUserItem, PlatformProjectItem } from '@/types'
+import type { TenantModuleEntitlementsDto } from '@/api/platform'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,6 +89,29 @@ const addAccountForm = ref({ email: '', password: '', name: '' })
 const addAccountSaving = ref(false)
 const addAccountError = ref('')
 
+const moduleEntitlementsLoading = ref(false)
+const moduleEntitlementsSaving = ref(false)
+const moduleEntError = ref('')
+/** 各模組是否開通；預先填滿鍵，與 Reka Switch 的 modelValue 雙向綁定才會寫回 */
+const moduleEnabled = reactive<Record<string, boolean>>(
+  Object.fromEntries(PERMISSION_MODULES.map((m) => [m, false])) as Record<string, boolean>
+)
+
+function applyModuleEntitlementsDto(dto: TenantModuleEntitlementsDto) {
+  const disabledList = dto.disabledModuleIds ?? []
+  const dis = new Set(disabledList)
+  if (dto.moduleEntitlementsGranted === false) {
+    for (const m of PERMISSION_MODULES) {
+      moduleEnabled[m] = false
+    }
+    return
+  }
+  // true 或未帶 granted（舊回應）：依 disable 表；空表 = 與後端一致「全部開通」
+  for (const m of PERMISSION_MODULES) {
+    moduleEnabled[m] = !dis.has(m)
+  }
+}
+
 const memberCount = computed(() => tenant.value?._count?.users ?? 0)
 const projectCount = computed(() => tenant.value?._count?.projects ?? 0)
 const storageDisplay = computed(() => '—')
@@ -149,12 +178,57 @@ onMounted(() => {
 })
 watch(() => route.params.tenantId, () => {
   loadTenant()
+  void loadModuleEntitlements()
 })
+
+async function loadModuleEntitlements() {
+  const id = getTenantId()
+  if (!id) return
+  moduleEntitlementsLoading.value = true
+  moduleEntError.value = ''
+  try {
+    const dto = await getTenantModuleEntitlements(id)
+    applyModuleEntitlementsDto(dto)
+  } catch {
+    moduleEntError.value = '無法載入模組開通狀態'
+    // 與畫面「關閉」一致，且避免 moduleEnabled[m] 為 undefined 時誤傳 []（後端會解讀成全部開通）
+    for (const m of PERMISSION_MODULES) {
+      moduleEnabled[m] = false
+    }
+  } finally {
+    moduleEntitlementsLoading.value = false
+  }
+}
+
+async function saveModuleEntitlements() {
+  const id = getTenantId()
+  if (!id) return
+  moduleEntitlementsSaving.value = true
+  moduleEntError.value = ''
+  // 僅明確 true 視為開通；undefined／false 皆列入關閉（避免關閉時誤傳空陣列）
+  const disabledModuleIds = PERMISSION_MODULES.filter((m) => moduleEnabled[m] !== true)
+  try {
+    const saved = await replaceTenantModuleEntitlements(id, disabledModuleIds)
+    // 以 PUT 回應立即更新 UI，避免 SW／瀏覽器快取 GET 仍回舊資料
+    applyModuleEntitlementsDto({
+      disabledModuleIds: saved.disabledModuleIds ?? [],
+      moduleEntitlementsGranted: saved.moduleEntitlementsGranted ?? true,
+    })
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err
+      ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+      : null
+    moduleEntError.value = res?.message ?? '儲存失敗'
+  } finally {
+    moduleEntitlementsSaving.value = false
+  }
+}
 
 function onTabChange(value: string | number) {
   const v = String(value)
   if (v === 'members') loadMembers()
   if (v === 'projects') loadProjects()
+  if (v === 'modules') void loadModuleEntitlements()
 }
 
 async function saveSettings() {
@@ -299,6 +373,10 @@ function formatDate(iso: string | null | undefined): string {
         <p class="mt-1 text-sm text-muted-foreground">
           檢視與管理此租戶的基本設定、成員與專案
         </p>
+        <p v-if="tenant" class="mt-1 text-sm text-muted-foreground">
+          <span class="text-foreground/80">租戶管理員 Email</span>
+          {{ tenant.primaryAdminEmail ? ` ${tenant.primaryAdminEmail}` : ' —' }}
+        </p>
       </div>
     </div>
 
@@ -340,6 +418,7 @@ function formatDate(iso: string | null | undefined): string {
           <Tabs default-value="settings" @update:model-value="onTabChange" class="flex min-h-0 flex-1 flex-col">
             <TabsList class="mb-4 shrink-0 bg-muted/50">
               <TabsTrigger value="settings">基本設定</TabsTrigger>
+              <TabsTrigger value="modules">模組開通</TabsTrigger>
               <TabsTrigger value="members">成員列表</TabsTrigger>
               <TabsTrigger value="projects">專案列表</TabsTrigger>
             </TabsList>
@@ -421,6 +500,48 @@ function formatDate(iso: string | null | undefined): string {
                   </div>
                   <p v-if="settingsError" class="mt-4 text-sm text-destructive">{{ settingsError }}</p>
                 </form>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="modules" class="mt-0 min-h-0 flex-1 overflow-auto">
+              <div class="flex flex-col gap-4">
+                <p class="text-sm text-muted-foreground">
+                  新租戶須在此儲存過至少一次且<strong class="text-foreground">至少開通一項</strong>模組後，租戶端才可新增專案與設定成員權限。關閉後該租戶內所有人（含租戶管理員）無法使用該模組；平台管理員不在此限。
+                </p>
+                <div v-if="moduleEntitlementsLoading" class="flex justify-center py-8">
+                  <Loader2 class="size-6 animate-spin text-muted-foreground" />
+                </div>
+                <template v-else>
+                  <div class="space-y-2 rounded-lg border border-border bg-card p-3">
+                    <div
+                      v-for="m in PERMISSION_MODULES"
+                      :key="m"
+                      class="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/50 px-3 py-2"
+                    >
+                      <Label :for="`mod-${m}`" class="cursor-pointer text-sm font-medium text-foreground">
+                        {{ PERMISSION_MODULE_LABELS[m] }}
+                      </Label>
+                      <div class="flex shrink-0 items-center gap-2">
+                        <span class="text-xs tabular-nums text-muted-foreground">
+                          {{ moduleEnabled[m] ? '開通' : '關閉' }}
+                        </span>
+                        <!-- Reka Switch 用 modelValue／update:modelValue；勿用 checked（不會寫回） -->
+                        <Switch
+                          :id="`mod-${m}`"
+                          :model-value="moduleEnabled[m]"
+                          @update:model-value="(v: boolean) => { moduleEnabled[m] = v }"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Button type="button" :disabled="moduleEntitlementsSaving" @click="saveModuleEntitlements">
+                      <Loader2 v-if="moduleEntitlementsSaving" class="mr-2 size-4 animate-spin" />
+                      {{ moduleEntitlementsSaving ? '儲存中…' : '儲存模組設定' }}
+                    </Button>
+                  </div>
+                  <p v-if="moduleEntError" class="text-sm text-destructive">{{ moduleEntError }}</p>
+                </template>
               </div>
             </TabsContent>
 

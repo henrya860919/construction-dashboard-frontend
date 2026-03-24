@@ -39,18 +39,51 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  getProject,
   getProjectMembers,
   getProjectMembersAvailable,
   addProjectMember,
   setProjectMemberStatus,
   removeProjectMember,
 } from '@/api/project'
+import { getAdminTenantModuleEntitlements } from '@/api/admin'
+import { effectivePlatformDisabledModuleIds, type PermissionModuleId } from '@/constants/permission-modules'
 import type { ProjectMemberItem, ProjectMemberAvailableItem } from '@/types'
 import { Plus, Loader2 } from 'lucide-vue-next'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import ProjectMembersRowActions from '@/views/contract/ProjectMembersRowActions.vue'
+import PermissionMatrixForm from '@/components/common/PermissionMatrixForm.vue'
+import {
+  fetchProjectMemberPermissionOverrides,
+  replaceProjectMemberPermissionOverrides,
+  resetProjectMemberPermissionOverrides,
+  toFullModulesPayload,
+  type ModulesMap,
+} from '@/api/project-permissions'
+import { permissionModulesDifferingFromBaseline } from '@/lib/permission-module-diff'
+import { useAuthStore } from '@/stores/auth'
+import { useProjectPermissionsStore } from '@/stores/projectPermissions'
+import { useProjectPermission } from '@/composables/useProjectPermission'
 
 const route = useRoute()
+const authStore = useAuthStore()
+const projectPermissionsStore = useProjectPermissionsStore()
+
+const projectId = computed(() => (route.params.projectId as string) ?? '')
+const { can } = useProjectPermission(projectId)
+
+/** 與後端 project.members 模組對齊：read 看列表、create 新增／可加入名單、update 狀態與覆寫矩陣、delete 移出 */
+const canReadMembers = computed(() => can('project.members', 'read'))
+const canCreateMembers = computed(() => can('project.members', 'create'))
+const canUpdateMembers = computed(() => can('project.members', 'update'))
+const canDeleteMembers = computed(() => can('project.members', 'delete'))
+
+const canShowMemberToolbar = computed(
+  () => canCreateMembers.value || canUpdateMembers.value || canDeleteMembers.value
+)
+
+/** 專案內「成員模組權限覆寫」僅租戶／平台管理員（與後端 assertProjectMemberPermissionOverridesManage 一致） */
+const canManageMemberPermissionMatrix = computed(() => authStore.canAccessAdmin)
 
 function getProjectId(): string {
   return (route.params.projectId as string) ?? ''
@@ -71,8 +104,6 @@ const removingMember = ref<ProjectMemberItem | null>(null)
 const removing = ref(false)
 
 const togglingStatusId = ref<string | null>(null)
-
-const projectId = computed(() => getProjectId())
 
 const sorting = ref<SortingState>([])
 const rowSelection = ref<Record<string, boolean>>({})
@@ -192,82 +223,195 @@ async function confirmRemove() {
   }
 }
 
-const columns = computed<ColumnDef<ProjectMemberItem, unknown>[]>(() => [
-  {
-    id: 'select',
-    header: ({ table }) =>
-      h(Checkbox, {
-        checked: table.getIsAllPageRowsSelected()
-          ? true
-          : table.getIsSomePageRowsSelected()
-            ? 'indeterminate'
-            : false,
-        'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
-        'aria-label': '全選',
-      }),
-    cell: ({ row }) =>
-      h(Checkbox, {
-        checked: row.getIsSelected(),
-        'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
-        'aria-label': '選取此列',
-      }),
-    enableSorting: false,
-  },
-  {
-    accessorKey: 'user.name',
-    id: 'name',
-    header: () => '姓名',
-    cell: ({ row }) =>
-      h('div', { class: 'font-medium text-foreground' }, row.original.user.name || '—'),
-  },
-  {
-    accessorKey: 'user.email',
-    id: 'email',
-    header: () => 'Email',
-    cell: ({ row }) =>
-      h('div', { class: 'text-muted-foreground' }, row.original.user.email),
-  },
-  {
-    accessorKey: 'user.systemRole',
-    id: 'systemRole',
-    header: () => '系統角色',
-    cell: ({ row }) =>
-      h('div', { class: 'text-foreground' }, systemRoleLabel(row.original.user.systemRole)),
-  },
-  {
-    accessorKey: 'user.memberType',
-    id: 'memberType',
-    header: () => '成員類型',
-    cell: ({ row }) =>
-      h('div', { class: 'text-foreground' }, memberTypeLabel(row.original.user.memberType)),
-  },
-  {
-    accessorKey: 'user.status',
-    id: 'accountStatus',
-    header: () => '帳號狀態',
-    cell: ({ row }) =>
-      h('div', { class: 'text-foreground' }, statusLabel(row.original.user.status)),
-  },
-  {
-    accessorKey: 'status',
-    id: 'projectStatus',
-    header: () => '專案狀態',
-    cell: ({ row }) =>
-      h('div', { class: 'text-foreground' }, projectStatusLabel(row.original.status)),
-  },
-  {
-    id: 'actions',
-    header: () => h('div', { class: 'w-[4rem]' }),
-    cell: ({ row }) =>
-      h(ProjectMembersRowActions, {
-        row: row.original,
-        togglingStatusId: togglingStatusId.value,
-        onToggleStatus: (r) => toggleMemberStatus(r),
-        onRemove: (r) => openRemoveDialog(r),
-      }),
-    enableSorting: false,
-  },
-])
+const projectPermDialogOpen = ref(false)
+const projectPermMember = ref<ProjectMemberItem | null>(null)
+const projectPermModules = ref<ModulesMap>({})
+/** 與「重設為租戶範本」一致的基準矩陣，用於標示專案客製列 */
+const projectPermBaseline = ref<ModulesMap>({})
+const projectPermLoading = ref(false)
+const projectPermSaving = ref(false)
+const projectPermResetting = ref(false)
+const projectPermError = ref('')
+
+const projectPermHighlightModuleIds = computed(() =>
+  permissionModulesDifferingFromBaseline(projectPermModules.value, projectPermBaseline.value)
+)
+
+async function openProjectPermDialog(member: ProjectMemberItem) {
+  const pid = getProjectId()
+  if (!pid) return
+  projectPermMember.value = member
+  projectPermError.value = ''
+  projectPermDialogOpen.value = true
+  projectPermLoading.value = true
+  try {
+    const res = await fetchProjectMemberPermissionOverrides(pid, member.userId)
+    projectPermModules.value = res.modules
+    projectPermBaseline.value = res.baselineModules
+  } catch {
+    projectPermError.value = '無法載入專案權限'
+    projectPermModules.value = {}
+    projectPermBaseline.value = {}
+  } finally {
+    projectPermLoading.value = false
+  }
+}
+
+function closeProjectPermDialog() {
+  projectPermDialogOpen.value = false
+  projectPermMember.value = null
+  projectPermError.value = ''
+  projectPermModules.value = {}
+  projectPermBaseline.value = {}
+}
+
+async function saveProjectPermOverrides() {
+  const member = projectPermMember.value
+  const pid = getProjectId()
+  if (!member || !pid) return
+  projectPermSaving.value = true
+  projectPermError.value = ''
+  try {
+    const payload = toFullModulesPayload(projectPermModules.value)
+    const res = await replaceProjectMemberPermissionOverrides(pid, member.userId, payload)
+    projectPermModules.value = res.modules
+    projectPermBaseline.value = res.baselineModules
+    if (authStore.user?.id === member.userId) {
+      projectPermissionsStore.invalidateProject(pid)
+    }
+    closeProjectPermDialog()
+  } catch (e: unknown) {
+    const res =
+      e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+        : null
+    projectPermError.value = res?.message ?? '儲存失敗'
+  } finally {
+    projectPermSaving.value = false
+  }
+}
+
+async function resetProjectPermOverrides() {
+  const member = projectPermMember.value
+  const pid = getProjectId()
+  if (!member || !pid) return
+  projectPermResetting.value = true
+  projectPermError.value = ''
+  try {
+    const res = await resetProjectMemberPermissionOverrides(pid, member.userId)
+    projectPermModules.value = res.modules
+    projectPermBaseline.value = res.baselineModules
+    if (authStore.user?.id === member.userId) {
+      projectPermissionsStore.invalidateProject(pid)
+    }
+  } catch (e: unknown) {
+    const res =
+      e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+        : null
+    projectPermError.value = res?.message ?? '重設失敗'
+  } finally {
+    projectPermResetting.value = false
+  }
+}
+
+const selectColumn: ColumnDef<ProjectMemberItem, unknown> = {
+  id: 'select',
+  header: ({ table }) =>
+    h(Checkbox, {
+      checked: table.getIsAllPageRowsSelected()
+        ? true
+        : table.getIsSomePageRowsSelected()
+          ? 'indeterminate'
+          : false,
+      'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
+      'aria-label': '全選',
+    }),
+  cell: ({ row }) =>
+    h(Checkbox, {
+      checked: row.getIsSelected(),
+      'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
+      'aria-label': '選取此列',
+    }),
+  enableSorting: false,
+}
+
+const columns = computed<ColumnDef<ProjectMemberItem, unknown>[]>(() => {
+  const dataCols: ColumnDef<ProjectMemberItem, unknown>[] = [
+    {
+      accessorKey: 'user.name',
+      id: 'name',
+      header: () => '姓名',
+      cell: ({ row }) =>
+        h('div', { class: 'font-medium text-foreground' }, row.original.user.name || '—'),
+    },
+    {
+      accessorKey: 'user.email',
+      id: 'email',
+      header: () => 'Email',
+      cell: ({ row }) =>
+        h('div', { class: 'text-muted-foreground' }, row.original.user.email),
+    },
+    {
+      accessorKey: 'user.systemRole',
+      id: 'systemRole',
+      header: () => '系統角色',
+      cell: ({ row }) =>
+        h('div', { class: 'text-foreground' }, systemRoleLabel(row.original.user.systemRole)),
+    },
+    {
+      accessorKey: 'user.memberType',
+      id: 'memberType',
+      header: () => '成員類型',
+      cell: ({ row }) =>
+        h('div', { class: 'text-foreground' }, memberTypeLabel(row.original.user.memberType)),
+    },
+    {
+      accessorKey: 'user.status',
+      id: 'accountStatus',
+      header: () => '帳號狀態',
+      cell: ({ row }) =>
+        h('div', { class: 'text-foreground' }, statusLabel(row.original.user.status)),
+    },
+    {
+      accessorKey: 'status',
+      id: 'projectStatus',
+      header: () => '專案狀態',
+      cell: ({ row }) =>
+        h('div', { class: 'text-foreground' }, projectStatusLabel(row.original.status)),
+    },
+    {
+      id: 'actions',
+      header: () => h('div', { class: 'w-[4rem]' }),
+      cell: ({ row }) => {
+        const showPermMatrix =
+          canManageMemberPermissionMatrix.value &&
+          row.original.user.systemRole !== 'platform_admin'
+        const anyRowAction =
+          canUpdateMembers.value || canDeleteMembers.value || showPermMatrix
+        if (!anyRowAction) {
+          return h('span', { class: 'text-xs text-muted-foreground' }, '—')
+        }
+        return h(ProjectMembersRowActions, {
+          row: row.original,
+          togglingStatusId: togglingStatusId.value,
+          canUpdateMembership: canUpdateMembers.value,
+          canRemoveMember: canDeleteMembers.value,
+          canEditPermissions: showPermMatrix,
+          onToggleStatus: (r: ProjectMemberItem) => toggleMemberStatus(r),
+          onRemove: (r: ProjectMemberItem) => openRemoveDialog(r),
+          onEditPermissions: (r: ProjectMemberItem) => openProjectPermDialog(r),
+        })
+      },
+      enableSorting: false,
+    },
+  ]
+  const withSelect =
+    canUpdateMembers.value || canDeleteMembers.value ? [selectColumn, ...dataCols] : dataCols
+  return withSelect
+})
+
+const columnCount = computed(() => columns.value.length)
 
 const table = useVueTable({
   get data() {
@@ -347,6 +491,42 @@ function closeBatchRemove() {
   batchRemoveOpen.value = false
 }
 
+/** 平台關閉之模組（與租戶資訊／後台權限範本一致） */
+const platformDisabledModuleIds = ref<PermissionModuleId[]>([])
+
+async function loadPlatformModuleEntitlements() {
+  const pid = getProjectId()
+  if (!pid) {
+    platformDisabledModuleIds.value = []
+    return
+  }
+  let tenantId: string | undefined = authStore.user?.tenantId ?? undefined
+  if (authStore.isPlatformAdmin) {
+    try {
+      const p = await getProject(pid)
+      tenantId = p?.tenantId ?? undefined
+    } catch {
+      platformDisabledModuleIds.value = []
+      return
+    }
+  }
+  if (!tenantId) {
+    platformDisabledModuleIds.value = []
+    return
+  }
+  try {
+    const mod = await getAdminTenantModuleEntitlements(
+      authStore.isPlatformAdmin ? tenantId : undefined
+    )
+    platformDisabledModuleIds.value = effectivePlatformDisabledModuleIds(
+      mod.moduleEntitlementsGranted,
+      mod.disabledModuleIds
+    )
+  } catch {
+    platformDisabledModuleIds.value = []
+  }
+}
+
 async function confirmBatchRemove() {
   const ids = selectedRows.value.map((r) => r.original)
   if (!ids.length) return
@@ -367,23 +547,35 @@ async function confirmBatchRemove() {
 }
 
 watch(projectId, (id) => {
-  if (id) loadMembers()
+  if (id) {
+    void loadMembers()
+    void loadPlatformModuleEntitlements()
+  }
 }, { immediate: true })
 </script>
 
 <template>
   <div class="space-y-4">
     <p class="text-sm text-muted-foreground">
-      專案成員來自租戶成員，可將同租戶的成員加入此專案；一成員可參與多個專案。僅租戶管理員或平台管理員可新增／移除成員。
+      專案成員來自租戶成員，可將同租戶的成員加入此專案；一成員可參與多個專案。
+      <template v-if="canShowMemberToolbar">
+        成員名單與新增／停用／移除依「專案成員」模組權限；租戶／平台管理員不受細粒度限制。
+        「專案權限」矩陣覆寫僅租戶管理員或平台管理員可編輯。
+      </template>
+      <template v-else-if="canReadMembers">您目前僅能檢視名單。</template>
     </p>
 
     <!-- 工具列：已選 + ButtonGroup + 新增成員在右 -->
-    <div class="flex flex-wrap items-center justify-end gap-3">
-      <template v-if="hasSelection">
+    <div
+      v-if="canShowMemberToolbar"
+      class="flex flex-wrap items-center justify-end gap-3"
+    >
+      <template v-if="hasSelection && (canUpdateMembers || canDeleteMembers)">
         <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
         <ButtonGroup>
           <Button variant="outline" @click="clearSelection">取消選取</Button>
           <Button
+            v-if="canUpdateMembers"
             variant="outline"
             :disabled="!selectedRows.some((r) => r.original.status === 'active')"
             @click="openBatchSuspend"
@@ -391,6 +583,7 @@ watch(projectId, (id) => {
             批次停用
           </Button>
           <Button
+            v-if="canDeleteMembers"
             variant="outline"
             class="text-destructive hover:text-destructive"
             @click="openBatchRemove"
@@ -399,7 +592,7 @@ watch(projectId, (id) => {
           </Button>
         </ButtonGroup>
       </template>
-      <Button variant="default" @click="openAddDialog">
+      <Button v-if="canCreateMembers" variant="default" @click="openAddDialog">
         <Plus class="mr-2 size-4" />
         新增成員
       </Button>
@@ -438,7 +631,7 @@ watch(projectId, (id) => {
             </template>
             <template v-else>
               <TableRow>
-                <TableCell :colspan="8" class="h-24 text-center text-muted-foreground">
+                <TableCell :colspan="columnCount" class="h-24 text-center text-muted-foreground">
                   尚無專案成員
                 </TableCell>
               </TableRow>
@@ -453,7 +646,7 @@ watch(projectId, (id) => {
           class="flex flex-col items-center justify-center py-16 text-muted-foreground"
         >
           <p class="text-sm">尚無專案成員</p>
-          <p class="mt-1 text-xs">請從「新增成員」加入同租戶的成員</p>
+          <p v-if="canCreateMembers" class="mt-1 text-xs">請從「新增成員」加入同租戶的成員</p>
         </div>
       </template>
     </div>
@@ -577,6 +770,68 @@ watch(projectId, (id) => {
             移除
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 專案成員模組權限覆寫 -->
+    <Dialog :open="projectPermDialogOpen" @update:open="(v: boolean) => !v && closeProjectPermDialog()">
+      <DialogContent
+        class="flex max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col gap-4 overflow-hidden sm:max-w-7xl sm:w-full"
+      >
+        <DialogHeader class="shrink-0">
+          <DialogTitle>
+            專案權限 — {{ projectPermMember?.user.name || projectPermMember?.user.email || '成員' }}
+          </DialogTitle>
+          <DialogDescription>
+            僅影響此成員在本專案的模組權限。「重設為租戶範本」會依該成員目前的租戶權限範本重新寫入本專案，不影響其他專案。表頭勾選可全選／取消該欄；「專案成員」列之新增／更新／刪除不可調整，僅「讀取」有效。
+            標示「平台未開通」之列與租戶後台「租戶資訊」之模組開通一致，無法勾選。
+            <span
+              v-if="projectPermHighlightModuleIds.length > 0 && !projectPermLoading"
+              class="mt-2 block text-foreground"
+            >
+              目前有 {{ projectPermHighlightModuleIds.length }} 個模組與租戶範本／角色預設不同，列上以「專案客製」標籤與底色標示；編輯勾選後會即時更新標示。
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+        <div v-if="projectPermLoading" class="flex shrink-0 justify-center py-12">
+          <Loader2 class="size-8 animate-spin text-muted-foreground" />
+        </div>
+        <template v-else>
+          <div class="flex min-h-0 flex-1 flex-col gap-4">
+            <div class="min-h-0 flex-1 overflow-hidden">
+              <PermissionMatrixForm
+                v-model="projectPermModules"
+                class="min-h-[200px]"
+                :highlight-module-ids="projectPermHighlightModuleIds"
+                :platform-disabled-module-ids="platformDisabledModuleIds"
+              />
+            </div>
+            <p v-if="projectPermError" class="shrink-0 text-sm text-destructive">{{ projectPermError }}</p>
+            <DialogFooter
+              class="shrink-0 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end"
+            >
+              <Button
+                variant="outline"
+                :disabled="projectPermSaving || projectPermResetting"
+                @click="closeProjectPermDialog"
+              >
+                取消
+              </Button>
+              <Button
+                variant="outline"
+                :disabled="projectPermSaving || projectPermResetting"
+                @click="resetProjectPermOverrides"
+              >
+                <Loader2 v-if="projectPermResetting" class="mr-2 size-4 animate-spin" />
+                重設為租戶範本
+              </Button>
+              <Button :disabled="projectPermSaving || projectPermResetting" @click="saveProjectPermOverrides">
+                <Loader2 v-if="projectPermSaving" class="mr-2 size-4 animate-spin" />
+                儲存
+              </Button>
+            </DialogFooter>
+          </div>
+        </template>
       </DialogContent>
     </Dialog>
   </div>

@@ -1,0 +1,41 @@
+---
+description: PCCES path 解析序、估驗帶入區段與父列顯示（須與 backend 同名規則同步）
+globs:
+  - "**/pcces-path-sort.ts"
+  - "**/ConstructionValuationFormView.vue"
+  - "**/construction-valuations.ts"
+alwaysApply: false
+---
+
+# PCCES path 排序與估驗區段輸出（前端）
+
+變更 **`src/lib/pcces-path-sort.ts`**、**估驗表單自 PCCES 帶入**、或 **`ConstructionValuationLineGroupDto`** 時必須遵守；**與後端 `src/modules/pcces-import/pcces-path-sort.ts` 行為須一致**。
+
+## Path 格式與逐段比較
+
+- `path` 以 **` > `** 分段；使用 **`comparePccesDisplayPathOrder`** 比序，**不可**整條字串排序。
+- 每段項次支援：阿拉伯（含全形）、複合中文（`十`～`九十九`）、對照表單字；**黏接**（`一工程費`）只剝第一字為項次。詳見後端同名規則與實作註解。
+
+## 估測桶順序：`orderPccesValuationBucketEmits`
+
+- 以 **`data.rows` 全樹**（`itemKey`、`parentItemKey`、`path`）對 **`parentItemKey` 桶**做 **DFS 前序**：子節點依 path 序 → 遞迴有桶的子樹 → 最後輸出**本節點直屬葉桶**。
+- **頂層章節**（目前為 **`path` 分段數 === 1**）若同時有「更深子樹桶」與「直屬葉桶」：先 **`chapterBanner`**（父列 + 0 明細），再子樹，再直屬葉；直屬葉 section 設 **`hideParentRow`**，對應 **`showSectionParentRow: false`**，避免重複「壹」列。
+- **`minPccesDisplayPath`** 僅用於桶內代表 path 等場景；**跨桶**主順序以本函式為準，勿只用父 path 或最短 path 排序。
+
+## UI：`ConstructionValuationFormView`
+
+- **`GroupSection`**：`showSectionParentRow` 預設視為 `true`；`false` 時 **`valuationTableRows` 不畫該段父列**。
+- 載入後端明細時：`draftFromDto` 將 **`lineGroups[].showParentRow`** 對應到 **`showSectionParentRow`**（`showParentRow === false` → 不顯示父列）。
+- **`parentItemKey === null` 的葉**：排在樹狀 emits 之後、`parent: null` 區塊。
+
+## API 型別
+
+- **`ConstructionValuationLineGroupDto.showParentRow`**：可選；`false` 表示不重複顯示與前段同章節之父列。
+
+## 後端對應
+
+- 後端規則檔：**`construction-dashboard-backend/.cursor/rules/pcces-valuation-path-ordering.mdc`**（`buildOrderedLinesAndGroups`、`lineGroups`）。
+
+## 調整章節判斷時
+
+- 若改為以 **`parentItemKey == null`** 等判斷章節列，须**與後端 `pcces-path-sort.ts` 同步**並跑兩邊 build。

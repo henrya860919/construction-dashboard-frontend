@@ -282,9 +282,93 @@ const router = createRouter({
           component: () => import('@/views/construction/ConstructionSelfCheckView.vue'),
         },
         {
+          path: 'p/:projectId/construction/progress/uploads',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_PROGRESS_UPLOADS,
+          redirect: (to) => ({
+            name: ROUTE_NAME.PROJECT_CONSTRUCTION_PROGRESS,
+            params: { projectId: to.params.projectId as string },
+            query: { ...to.query, tab: 'history' },
+          }),
+        },
+        {
+          path: 'p/:projectId/construction/progress',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_PROGRESS,
+          component: () => import('@/views/construction/ProgressManagementView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/valuations/new',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_VALUATION_NEW,
+          component: () => import('@/views/construction/ConstructionValuationFormView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/valuations/:valuationId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_VALUATION_DETAIL,
+          component: () => import('@/views/construction/ConstructionValuationFormView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/valuations',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_VALUATIONS,
+          component: () => import('@/views/construction/ConstructionValuationsListView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/pcces/versions/:importId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_PCCES_VERSION_DETAIL,
+          component: () => import('@/views/construction/PccesImportDetailView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/pcces/versions',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_PCCES_VERSIONS,
+          component: () => import('@/views/construction/PccesImportsListView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/pcces/excel-change',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_PCCES_EXCEL_CHANGE,
+          component: () => import('@/views/construction/PccesExcelChangeView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/pcces/upload',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_PCCES_UPLOAD,
+          component: () => import('@/views/construction/PccesImportUploadView.vue'),
+        },
+        /** 舊書籤／外連專用 redirect（須在 `diary/:logId` 之前，否則 `logs` 會被當成 logId） */
+        {
+          path: 'p/:projectId/construction/diary/logs/:logId',
+          redirect: (to) => ({
+            name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_LOG_DETAIL,
+            params: {
+              projectId: to.params.projectId as string,
+              logId: to.params.logId as string,
+            },
+          }),
+        },
+        {
+          path: 'p/:projectId/construction/diary/logs/new',
+          redirect: (to) => ({
+            name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_LOG_NEW,
+            params: { projectId: to.params.projectId as string },
+          }),
+        },
+        {
+          path: 'p/:projectId/construction/diary/logs',
+          redirect: (to) => ({
+            name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY,
+            params: { projectId: to.params.projectId as string },
+          }),
+        },
+        {
+          path: 'p/:projectId/construction/diary/new',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_LOG_NEW,
+          component: () => import('@/views/construction/ConstructionDailyLogFormView.vue'),
+        },
+        {
+          path: 'p/:projectId/construction/diary/:logId',
+          name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY_LOG_DETAIL,
+          component: () => import('@/views/construction/ConstructionDailyLogFormView.vue'),
+        },
+        {
           path: 'p/:projectId/construction/diary',
           name: ROUTE_NAME.PROJECT_CONSTRUCTION_DIARY,
-          component: () => import('@/views/construction/ConstructionDiaryView.vue'),
+          component: () => import('@/views/construction/ConstructionDailyLogsListView.vue'),
         },
         {
           path: 'p/:projectId/construction/drawings',

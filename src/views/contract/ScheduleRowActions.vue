@@ -10,27 +10,20 @@ import {
 import type { ScheduleRowItem } from '@/types'
 import { MoreHorizontal, Pencil, Eye, Trash2 } from 'lucide-vue-next'
 
-defineProps<{
-  row: ScheduleRowItem
-}>()
+withDefaults(
+  defineProps<{
+    row: ScheduleRowItem
+    canEdit?: boolean
+    canDelete?: boolean
+  }>(),
+  { canEdit: true, canDelete: true }
+)
 
 const emit = defineEmits<{
   edit: [row: ScheduleRowItem]
   view: [row: ScheduleRowItem]
   delete: [row: ScheduleRowItem]
 }>()
-
-function onEdit(row: ScheduleRowItem) {
-  emit('edit', row)
-}
-
-function onView(row: ScheduleRowItem) {
-  emit('view', row)
-}
-
-function onDelete(row: ScheduleRowItem) {
-  emit('delete', row)
-}
 </script>
 
 <template>
@@ -46,22 +39,27 @@ function onDelete(row: ScheduleRowItem) {
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" class="w-[10rem]">
-      <DropdownMenuItem class="gap-2 cursor-pointer" @click="onEdit(row)">
-        <Pencil class="size-4" />
-        編輯
-      </DropdownMenuItem>
-      <DropdownMenuItem class="gap-2 cursor-pointer" @click="onView(row)">
+      <DropdownMenuItem class="gap-2 cursor-pointer" @click="emit('view', row)">
         <Eye class="size-4" />
         查看
       </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        class="gap-2 cursor-pointer text-destructive focus:text-destructive"
-        @click="onDelete(row)"
-      >
-        <Trash2 class="size-4" />
-        刪除
-      </DropdownMenuItem>
+      <template v-if="canEdit">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem class="gap-2 cursor-pointer" @click="emit('edit', row)">
+          <Pencil class="size-4" />
+          編輯
+        </DropdownMenuItem>
+      </template>
+      <template v-if="canDelete">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          class="gap-2 cursor-pointer text-destructive focus:text-destructive"
+          @click="emit('delete', row)"
+        >
+          <Trash2 class="size-4" />
+          刪除
+        </DropdownMenuItem>
+      </template>
     </DropdownMenuContent>
   </DropdownMenu>
 </template>

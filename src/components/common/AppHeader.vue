@@ -11,10 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectStore } from '@/stores/project'
+import { useDevice } from '@/composables/useDevice'
+import { useAppPreferenceStore } from '@/stores/appPreference'
+import { ROUTE_PATH } from '@/constants/routes'
 import { useUploadQueueStore } from '@/stores/uploadQueue'
 import { useAuth } from '@/composables/useAuth'
 import UploadQueuePanel from '@/components/common/UploadQueuePanel.vue'
@@ -23,8 +26,11 @@ import PersonalSettingsModal from '@/components/common/PersonalSettingsModal.vue
 import { useAnnouncementStore } from '@/stores/announcements'
 
 const route = useRoute()
+const router = useRouter()
 const personalSettingsOpen = ref(false)
 const sidebarStore = useSidebarStore()
+const { isMobileApp } = useDevice()
+const appPreference = useAppPreferenceStore()
 const projectStore = useProjectStore()
 const authStore = useAuthStore()
 const uploadQueueStore = useUploadQueueStore()
@@ -55,6 +61,11 @@ function handleMenuClick() {
   } else {
     sidebarStore.toggleCollapsed()
   }
+}
+
+function switchToMobile() {
+  appPreference.setPreferDesktopOnMobile(false)
+  router.push(ROUTE_PATH.MOBILE)
 }
 </script>
 
@@ -133,6 +144,13 @@ function handleMenuClick() {
         <DropdownMenuContent align="end" class="w-48">
           <DropdownMenuLabel>{{ authStore.user?.name || authStore.user?.email }}</DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            v-if="isMobileApp && appPreference.preferDesktopOnMobile"
+            class="cursor-pointer"
+            @click="switchToMobile"
+          >
+            切回手機版
+          </DropdownMenuItem>
           <DropdownMenuItem class="cursor-pointer" @click="personalSettingsOpen = true">
             個人設定
           </DropdownMenuItem>

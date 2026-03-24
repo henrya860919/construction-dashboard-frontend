@@ -1,0 +1,48 @@
+---
+description: 列表頁資料表—TanStack ColumnDef meta、三區工具列、useClientDataTable 與 DataTableFeature 元件
+globs:
+  - "**/views/**/*.vue"
+  - "**/data-table/**/*.vue"
+  - "**/useClientDataTable.ts"
+  - "**/types/data-table.ts"
+alwaysApply: false
+---
+
+# 列表頁資料表（Client-side）
+
+詳細說明與檢查清單見 **`docs/data-table-list-views.md`**。摘要：
+
+## 必遵守
+
+- **單一真相**：欄位以 **`ColumnDef[]`** 定義；搜尋／分面篩選／欄位標籤由 **`columnDef.meta`**（`label`、`filter`、`searchable` 提示）與 `id` 驅動，禁止與欄位無關的孤兒篩選 UI。
+- **標準組合**：`useClientDataTable` + **`DataTableFeatureToolbar`** + **邊框表格外殼**（見下）內僅 **`DataTableFeatureSection`**（表頭＋表身＋橫向捲動）+ **表格外** **`DataTablePagination`**。
+- **邊框表格外殼**（與 **`src/views/files/FileManagementView.vue`** 一致）：
+  - **一層** `rounded-lg border border-border bg-card`；**勿**加 **`p-4`**（內容貼邊；載入／空列仍用表內或既有 `py-*`）。
+  - **載入完成後**一律渲染 **`DataTableFeatureSection`**（或手動 **`Table`**）：**無列表資料**時仍顯示表頭，表身以**單列 colspan** 顯示 **`emptyText`**（或頁面計算之說明），**禁止**用整塊插圖／大段文案**取代**表格。
+  - **`DataTablePagination`**：**僅在列表確有資料時**渲染（例 **`!loading && list.length > 0`**，以該頁之 `ref`／資料為準）；放在**上述邊框 `</div>` 關閉之後**的兄弟節點，**`class="mt-4"`**，**不得**包在邊框表格外殼內。
+  - 無勾選欄時在 **`DataTablePagination`** 設 **`hide-selection-info`**（勿傳給 `DataTableFeatureSection`）。
+- **三區開關**：`TableListFeatures` — `search`、`filtersAndSort`、`columnVisibility`；型別見 **`src/types/data-table.ts`**。
+- **分面篩選**：`meta.filter.type === 'faceted'` 時欄位需 **`filterFn: 'arrIncludesSome'`**（或等價）；**日期區間**用 `dateRange` + 自訂 `filterFn`。
+- **表頭排序**：可排序資料欄使用 **`DataTableColumnHeader`**；勾選與操作欄 **`enableSorting: false`**、**`enableHiding: false`**。
+- **版面**：對齊 **`ui-ux-principles.mdc`**、**`table-scroll-layout.mdc`**；**`DataTableFeatureToolbar` 在邊框表格外殼外**；**勿**再套更大一層把說明＋工具列＋表整包；`DataTableFeatureSection` 內不重複與殼層重疊的邊框。
+- **新增／上傳／建立（每個 table 列表幾乎都有）**：
+  - **位置**：一律放在 **`DataTableFeatureToolbar` 的 `#actions`** slot，由 **`DataTableToolbarShell`** 排在 **重設 → 多欄排序 → 欄位顯示** 之後，成為該列 **最右側**；勿塞進 `#filters`、勿手動插在排序／欄位顯示元件之前。
+  - **尺寸**：該主要按鈕使用 **`size="sm"`**，與工具列搜尋框等 **`h-8`** 控制項視覺對齊。
+  - **有列勾選時**：`DataTableFeatureToolbar` 預設 **`collapseWhenRowSelection: true`** — 隱藏搜尋／篩選／多欄排序／欄位顯示；**「重設」**僅給篩選用（`useClientDataTable` 的 **`hasActiveFilters`** 不含 `rowSelection`）；頁面側 **無選取時** 才顯示「新增」、**有選取時** 只顯示「已選 + ButtonGroup」等批次區（見 **`ProjectMembersView`**）。
+- **主題**：**`theme-support.mdc`**，禁止硬編碼背景／邊框色作為主結構色。
+- **工具列左側視覺**（與 **`ui-ux-principles.mdc`** §1.4 一致）：**搜尋最左**；其餘篩選用 **`DataTableFilterPill`**（單選）、**`DataTableFacetedFilter`**（多選）、**`DataTableDateRangeFilter`**／**`DataTableServerDateRangePill`**（日期），勿混用未對齊的裸 `Select`。
+- **`DataTableFilterPill`（單選）— 與設計稿一致，禁止自造另一套**：
+  - **觸發鈕**：`Button variant="outline" size="sm"`、**`h-8`**、**`border-dashed`**、**`bg-background`**、前綴 **`PlusCircle`**；已選時 **`Separator`** 直線 + **`text-muted-foreground`** 摘要。
+  - **下拉內容**（`PopoverContent` **`w-[260px] p-0`**）：**`Command` + `CommandInput`**（placeholder 預設等於 **`title`**，可傳 **`searchPlaceholder`** 覆寫）→ **`CommandSeparator`** → **`CommandList`**。
+  - **選項列**：左側 **單選圓點**（外圈 `rounded-full border`，選中時 **`border-primary`** + 內 **`size-2 rounded-full bg-primary`**），**禁止**用勾選方塊或與 **`DataTableFacetedFilter`** 相同的多選方塊樣式。
+  - **右側筆數**：選項型別可含 **`count?: number`**；有傳則以 **`font-mono text-xs tabular-nums text-muted-foreground`** 顯示在列尾。**僅在**目前記憶體中的列表能代表該維度完整母體時傳入（例：全量載入的專案／用量列）；若列表已因 **API 分頁**或**他欄伺服器篩選**而為切片，**勿傳 `count`**，以免誤導。
+  - **清除**：當 `modelValue !== allValue` 時，清單底部加 **`CommandSeparator`** + **「清除此篩選」**（設回 **`allValue`** 並關閉 Popover），與分面篩選的清除列對齊。
+
+## 參考實作
+
+- **`src/views/files/FileManagementView.vue`**（邊框殼無 `p-4`、表內空列、分頁僅有資料且在外層）。
+- **`src/views/contract/ProjectMembersView.vue`**（正式頁面、三區全开）。
+- **`src/views/files/FileFormsView.vue`**、**`src/views/construction/ConstructionValuationsListView.vue`**、**`src/views/construction/PccesImportsListView.vue`**、**`src/views/construction/ConstructionDrawingsView.vue`**（樹狀表身自訂；輕量 `useClientDataTable` 僅綁 **`globalFilter`** + **`filteredFlattenedList`**；**僅全文搜尋**：`search: true`，`filtersAndSort`／`columnVisibility` 為 `false`）。
+- **`src/views/construction/ConstructionDailyLogsListView.vue`**（**搜尋 + 填表日期區間**：`search: true`、`filtersAndSort: true`、`columnVisibility: false`；`logDate` 欄 `meta.filter.type === 'dateRange'`）。
+- **`src/views/construction/ConstructionDefectsView.vue`**（**搜尋 + 分面 + 日期區間**：`search: true`、`filtersAndSort: true`、`columnVisibility: false`；`status`／`priority` 為 `faceted`，`updatedAt` 為 `dateRange`；列勾選與批次刪除）。
+- **`src/views/repair/ProductRepairDataTableTemplateView.vue`**（示範；新頁優先採 meta 驅動之 Feature 工具列）。

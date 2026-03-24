@@ -1,29 +1,10 @@
 <script setup lang="ts">
-import type { ColumnDef } from '@tanstack/vue-table'
-import {
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useVueTable,
-} from '@tanstack/vue-table'
-import { FlexRender } from '@tanstack/vue-table'
-import type { SortingState } from '@tanstack/vue-table'
+import type { ColumnDef, FilterFn } from '@tanstack/vue-table'
 import { ref, computed, watch, onMounted, h } from 'vue'
 import { useRoute } from 'vue-router'
-import { valueUpdater } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import {
   Dialog,
   DialogContent,
@@ -36,7 +17,14 @@ import { listProjectFiles, deleteFile, getFileBlob } from '@/api/files'
 import type { AttachmentItem } from '@/api/files'
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import FileManagementRowActions from '@/views/files/FileManagementRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 import { Upload, Loader2, Trash2, Download, FileIcon } from 'lucide-vue-next'
+import DataTableFeatureSection from '@/components/common/data-table/DataTableFeatureSection.vue'
+import DataTableFeatureToolbar from '@/components/common/data-table/DataTableFeatureToolbar.vue'
+import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
+import { useClientDataTable } from '@/composables/useClientDataTable'
+import type { TableListFeatures } from '@/types/data-table'
 
 /** 檔案管理專用 category，與契約分開 */
 const FILE_MANAGEMENT_CATEGORY = 'general'
@@ -44,16 +32,42 @@ const FILE_MANAGEMENT_CATEGORY = 'general'
 const route = useRoute()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
 const { enqueueAndUpload } = useUploadQueue()
+const uploadPerm = useProjectModuleActions(projectId, 'construction.upload')
 
 const fileList = ref<AttachmentItem[]>([])
 const loading = ref(true)
-const rowSelection = ref<Record<string, boolean>>({})
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadInProgress = ref(false)
 const deleteDialogOpen = ref(false)
 const fileToDelete = ref<AttachmentItem | null>(null)
 const deleteLoading = ref(false)
+
+/** 僅全文搜尋，無分面／多欄排序／欄位顯示 */
+const TABLE_FEATURES: TableListFeatures = {
+  search: true,
+  filtersAndSort: false,
+  columnVisibility: false,
+}
+
+const COLUMN_LABELS: Record<string, string> = {
+  fileName: '檔名',
+  fileSize: '檔案大小',
+  uploaderName: '上傳者',
+  createdAt: '上傳時間',
+}
+
+const filesGlobalFilterFn: FilterFn<AttachmentItem> = (row, _columnId, filterValue) => {
+  const q = String(filterValue ?? '')
+    .trim()
+    .toLowerCase()
+  if (!q) return true
+  const r = row.original
+  const name = (r.fileName ?? '').toLowerCase()
+  const uploader = (r.uploaderName ?? '').toLowerCase()
+  const mime = (r.mimeType ?? '').toLowerCase()
+  return name.includes(q) || uploader.includes(q) || mime.includes(q)
+}
 
 async function fetchList() {
   if (!projectId.value) return
@@ -92,103 +106,138 @@ function formatDate(iso: string): string {
   })
 }
 
-const sorting = ref<SortingState>([])
-const columns = computed<ColumnDef<AttachmentItem, unknown>[]>(() => [
-  {
-    id: 'select',
-    header: ({ table }) =>
-      h(Checkbox, {
-        checked: table.getIsAllPageRowsSelected()
-          ? true
-          : table.getIsSomePageRowsSelected()
-            ? 'indeterminate'
-            : false,
-        'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
-        'aria-label': '全選',
-      }),
-    cell: ({ row }) =>
-      h(Checkbox, {
-        checked: row.getIsSelected(),
-        'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
-        'aria-label': '選取此列',
-      }),
-    enableSorting: false,
-  },
-  {
-    accessorKey: 'fileName',
-    header: '檔名',
-    cell: ({ row }) =>
-      h('div', { class: 'flex items-center gap-2 font-medium' }, [
-        h(FileIcon, { class: 'size-4 shrink-0 text-muted-foreground' }),
-        h('span', { class: 'truncate', title: row.original.fileName }, row.original.fileName),
-      ]),
-  },
-  {
-    accessorKey: 'fileSize',
-    header: '檔案大小',
-    cell: ({ row }) => h('div', { class: 'text-muted-foreground' }, formatSize(row.original.fileSize)),
-  },
-  {
-    accessorKey: 'uploaderName',
-    header: '上傳者',
-    cell: ({ row }) => h('div', { class: 'text-muted-foreground' }, row.original.uploaderName ?? '—'),
-  },
-  {
-    accessorKey: 'createdAt',
-    header: '上傳時間',
-    cell: ({ row }) => h('div', { class: 'text-muted-foreground' }, formatDate(row.original.createdAt)),
-  },
-  {
-    id: 'actions',
-    header: () => h('div', { class: 'w-[80px]' }),
-    cell: ({ row }) =>
-      h('div', { class: 'flex justify-end' }, [
-        h(FileManagementRowActions, {
-          row: row.original,
-          onDownload: handleDownload,
-          onDelete: openDeleteDialog,
-        }),
-      ]),
-    enableSorting: false,
-  },
-])
+const hasSelectColumn = computed(() => uploadPerm.canRead.value || uploadPerm.canDelete.value)
 
-const table = useVueTable({
-  get data() {
-    return fileList.value
-  },
-  get columns() {
-    return columns.value
-  },
-  getCoreRowModel: getCoreRowModel(),
-  getPaginationRowModel: getPaginationRowModel(),
-  getSortedRowModel: getSortedRowModel(),
-  getFilteredRowModel: getFilteredRowModel(),
-  onSortingChange: (updater) => valueUpdater(updater, sorting),
-  onRowSelectionChange: (updater) => valueUpdater(updater, rowSelection),
-  state: {
-    get sorting() {
-      return sorting.value
+async function handleDownload(row: AttachmentItem) {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
+  try {
+    const { blob, fileName } = await getFileBlob(row.id, { download: true, fileName: row.fileName })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    // 錯誤由 api client 或使用者處理
+  }
+}
+
+function openDeleteDialog(row: AttachmentItem) {
+  fileToDelete.value = row
+  deleteDialogOpen.value = true
+}
+
+const selectColumn: ColumnDef<AttachmentItem, unknown> = {
+  id: 'select',
+  header: ({ table }) =>
+    h(Checkbox, {
+      checked: table.getIsAllPageRowsSelected()
+        ? true
+        : table.getIsSomePageRowsSelected()
+          ? 'indeterminate'
+          : false,
+      'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
+      'aria-label': '全選',
+    }),
+  cell: ({ row }) =>
+    h(Checkbox, {
+      checked: row.getIsSelected(),
+      'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
+      'aria-label': '選取此列',
+    }),
+  enableSorting: false,
+  enableHiding: false,
+}
+
+const columns = computed<ColumnDef<AttachmentItem, unknown>[]>(() => {
+  const cols: ColumnDef<AttachmentItem, unknown>[] = []
+  if (hasSelectColumn.value) {
+    cols.push(selectColumn)
+  }
+  cols.push(
+    {
+      accessorKey: 'fileName',
+      header: '檔名',
+      cell: ({ row }) =>
+        h('div', { class: 'flex items-center gap-2 font-medium' }, [
+          h(FileIcon, { class: 'size-4 shrink-0 text-muted-foreground' }),
+          h('span', { class: 'truncate', title: row.original.fileName }, row.original.fileName),
+        ]),
+      enableSorting: false,
+      enableHiding: false,
     },
-    get rowSelection() {
-      return rowSelection.value
+    {
+      accessorKey: 'fileSize',
+      header: '檔案大小',
+      cell: ({ row }) =>
+        h('div', { class: 'text-muted-foreground' }, formatSize(row.original.fileSize)),
+      enableSorting: false,
+      enableHiding: false,
     },
-  },
+    {
+      accessorKey: 'uploaderName',
+      header: '上傳者',
+      cell: ({ row }) =>
+        h('div', { class: 'text-muted-foreground' }, row.original.uploaderName ?? '—'),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: 'createdAt',
+      header: '上傳時間',
+      cell: ({ row }) =>
+        h('div', { class: 'text-muted-foreground' }, formatDate(row.original.createdAt)),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      id: 'actions',
+      header: () => h('div', { class: 'w-[80px]' }),
+      cell: ({ row }) =>
+        h('div', { class: 'flex justify-end' }, [
+          h(FileManagementRowActions, {
+            row: row.original,
+            canDelete: uploadPerm.canDelete.value,
+            onDownload: handleDownload,
+            onDelete: openDeleteDialog,
+          }),
+        ]),
+      enableSorting: false,
+      enableHiding: false,
+    }
+  )
+  return cols
+})
+
+const { table, globalFilter, hasActiveFilters, resetTableState } = useClientDataTable({
+  data: fileList,
+  columns,
+  features: TABLE_FEATURES,
   getRowId: (row) => row.id,
-  initialState: {
-    pagination: { pageSize: 20 },
-  },
+  globalFilterFn: filesGlobalFilterFn,
+  enableRowSelection: hasSelectColumn,
+  initialPageSize: 20,
 })
 
 const selectedRows = computed(() => table.getSelectedRowModel().rows)
 const hasSelection = computed(() => selectedRows.value.length > 0)
 const selectedCount = computed(() => selectedRows.value.length)
 
+const filesEmptyText = computed(() => {
+  const q = globalFilter.value.trim()
+  if (fileList.value.length === 0) {
+    return q ? '沒有符合條件的資料' : '尚無檔案，點擊「新增檔案」上傳'
+  }
+  return '沒有符合條件的資料'
+})
+
 function clearSelection() {
-  rowSelection.value = {}
+  table.setRowSelection({})
 }
 
 function triggerAddFile() {
+  if (!ensureProjectPermission(uploadPerm.canCreate.value, 'create')) return
   fileInputRef.value?.click()
 }
 
@@ -215,25 +264,6 @@ async function onFileInputChange(e: Event) {
   }
 }
 
-async function handleDownload(row: AttachmentItem) {
-  try {
-    const { blob, fileName } = await getFileBlob(row.id, { download: true, fileName: row.fileName })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch {
-    // 錯誤由 api client 或使用者處理
-  }
-}
-
-function openDeleteDialog(row: AttachmentItem) {
-  fileToDelete.value = row
-  deleteDialogOpen.value = true
-}
-
 function closeDeleteDialog() {
   deleteDialogOpen.value = false
   fileToDelete.value = null
@@ -253,11 +283,15 @@ async function confirmDelete() {
 }
 
 async function batchDownload() {
+  if (!ensureProjectPermission(uploadPerm.canRead.value, 'read')) return
   const rows = selectedRows.value.map((r) => r.original)
   for (let i = 0; i < rows.length; i++) {
     try {
       const row = rows[i]
-      const { blob, fileName } = await getFileBlob(row.id, { download: true, fileName: row.fileName })
+      const { blob, fileName } = await getFileBlob(row.id, {
+        download: true,
+        fileName: row.fileName,
+      })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -291,7 +325,7 @@ async function confirmBatchDelete() {
       await deleteFile(row.id)
     }
     closeBatchDelete()
-    rowSelection.value = {}
+    table.setRowSelection({})
     await fetchList()
   } finally {
     batchDeleteLoading.value = false
@@ -300,7 +334,7 @@ async function confirmBatchDelete() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-4">
     <div>
       <h1 class="text-xl font-semibold tracking-tight text-foreground">檔案管理</h1>
       <p class="mt-1 text-sm text-muted-foreground">
@@ -308,84 +342,79 @@ async function confirmBatchDelete() {
       </p>
     </div>
 
-    <!-- 工具列：已選 + ButtonGroup + 新增在右 -->
-    <div class="flex flex-wrap items-center justify-end gap-3">
-      <input
-        ref="fileInputRef"
-        type="file"
-        class="hidden"
-        multiple
-        @change="onFileInputChange"
-      />
-      <template v-if="hasSelection">
-        <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
-        <ButtonGroup>
-          <Button variant="outline" @click="clearSelection">
-            取消選取
-          </Button>
-          <Button variant="outline" @click="batchDownload">
-            <Download class="size-4" />
-            批次下載
-          </Button>
-          <Button variant="outline" class="text-destructive hover:text-destructive" @click="openBatchDelete">
-            <Trash2 class="size-4" />
-            批次刪除
-          </Button>
-        </ButtonGroup>
-      </template>
-      <Button
-        :disabled="uploadInProgress || !projectId"
-        class="gap-2"
-        @click="triggerAddFile"
+    <p v-if="!loading && !projectId" class="text-sm text-destructive">缺少專案 ID</p>
+    <template v-else>
+      <DataTableFeatureToolbar
+        v-if="!loading"
+        :table="table"
+        :features="TABLE_FEATURES"
+        :column-labels="COLUMN_LABELS"
+        :has-active-filters="hasActiveFilters"
+        :global-filter="globalFilter"
+        search-placeholder="搜尋檔名、上傳者或類型…"
+        @reset="resetTableState"
       >
-        <Loader2 v-if="uploadInProgress" class="size-4 animate-spin" />
-        <Upload v-else class="size-4" />
-        新增檔案
-      </Button>
-    </div>
+        <template #actions>
+          <div class="flex flex-wrap items-center gap-3">
+            <input
+              ref="fileInputRef"
+              type="file"
+              class="hidden"
+              multiple
+              @change="onFileInputChange"
+            />
+            <template v-if="hasSelection && (uploadPerm.canRead || uploadPerm.canDelete)">
+              <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
+              <ButtonGroup>
+                <Button variant="outline" size="sm" @click="clearSelection"> 取消選取 </Button>
+                <Button variant="outline" size="sm" @click="batchDownload">
+                  <Download class="size-4" />
+                  批次下載
+                </Button>
+                <Button
+                  v-if="uploadPerm.canDelete"
+                  variant="outline"
+                  size="sm"
+                  class="text-destructive hover:text-destructive"
+                  @click="openBatchDelete"
+                >
+                  <Trash2 class="size-4" />
+                  批次刪除
+                </Button>
+              </ButtonGroup>
+            </template>
+            <Button
+              v-if="uploadPerm.canCreate && !hasSelection"
+              size="sm"
+              variant="default"
+              class="gap-2"
+              :disabled="uploadInProgress || !projectId"
+              @click="triggerAddFile"
+            >
+              <Loader2 v-if="uploadInProgress" class="size-4 animate-spin" />
+              <Upload v-else class="size-4" />
+              新增檔案
+            </Button>
+          </div>
+        </template>
+      </DataTableFeatureToolbar>
 
-    <!-- 表格區塊（格式同工期調整） -->
-    <div class="rounded-lg border border-border bg-card p-4">
-      <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
-        <Loader2 class="size-8 animate-spin" />
+      <div class="rounded-lg border border-border bg-card">
+        <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
+          <Loader2 class="size-8 animate-spin" />
+        </div>
+        <DataTableFeatureSection v-else :table="table" :empty-text="filesEmptyText" />
       </div>
-      <template v-else>
-        <Table>
-          <TableHeader>
-            <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-              <TableHead v-for="header in headerGroup.headers" :key="header.id">
-                <FlexRender
-                  v-if="!header.isPlaceholder"
-                  :render="header.column.columnDef.header"
-                  :props="header.getContext()"
-                />
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <template v-if="table.getRowModel().rows?.length">
-              <TableRow
-                v-for="row in table.getRowModel().rows"
-                :key="row.id"
-                :data-state="row.getIsSelected() ? 'selected' : undefined"
-              >
-                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
-                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
-                </TableCell>
-              </TableRow>
-            </template>
-            <template v-else>
-              <TableRow>
-                <TableCell :colspan="6" class="h-24 text-center text-muted-foreground">
-                  尚無檔案，點擊「新增檔案」上傳
-                </TableCell>
-              </TableRow>
-            </template>
-          </TableBody>
-        </Table>
-        <DataTablePagination :table="table" />
-      </template>
-    </div>
+      <div
+        v-if="!loading && fileList.length > 0"
+        class="mt-4"
+      >
+        <DataTablePagination
+          :table="table"
+          :hide-selection-info="!hasSelectColumn"
+        />
+      </div>
+    </template>
 
     <Dialog :open="deleteDialogOpen" @update:open="(v) => !v && closeDeleteDialog()">
       <DialogContent>

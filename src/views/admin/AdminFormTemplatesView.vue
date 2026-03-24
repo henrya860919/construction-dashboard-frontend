@@ -1,29 +1,11 @@
 <script setup lang="ts">
-import type { ColumnDef } from '@tanstack/vue-table'
-import {
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useVueTable,
-} from '@tanstack/vue-table'
-import { FlexRender } from '@tanstack/vue-table'
-import type { SortingState } from '@tanstack/vue-table'
-import { ref, onMounted, computed, h } from 'vue'
+import type { ColumnDef, FilterFn } from '@tanstack/vue-table'
+import { ref, onMounted, computed, h, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { valueUpdater } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -32,7 +14,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import DataTableColumnHeader from '@/components/common/data-table/DataTableColumnHeader.vue'
+import DataTableFeatureSection from '@/components/common/data-table/DataTableFeatureSection.vue'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
+import DataTableFeatureToolbar from '@/components/common/data-table/DataTableFeatureToolbar.vue'
+import { useClientDataTable } from '@/composables/useClientDataTable'
+import type { TableListFeatures } from '@/types/data-table'
 import AdminFormTemplatesRowActions from '@/views/admin/AdminFormTemplatesRowActions.vue'
 import {
   listDefaultFormTemplates,
@@ -49,7 +36,21 @@ const tenantId = computed(() => authStore.user?.tenantId ?? null)
 
 const list = ref<FormTemplateItem[]>([])
 const loading = ref(true)
-const rowSelection = ref<Record<string, boolean>>({})
+
+const TABLE_FEATURES: TableListFeatures = {
+  search: true,
+  filtersAndSort: true,
+  columnVisibility: false,
+}
+
+const COLUMN_LABELS: Record<string, string> = {
+  name: '名稱',
+  description: '描述',
+  fileSize: '檔案大小',
+  fileName: '檔名',
+  updatedAt: '更新時間',
+}
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -93,6 +94,29 @@ function formatDate(iso: string) {
   })
 }
 
+const formTemplatesGlobalFilterFn: FilterFn<FormTemplateItem> = (row, _columnId, filterValue) => {
+  const q = String(filterValue ?? '').trim().toLowerCase()
+  if (!q) return true
+  const t = row.original
+  const sizeStr = formatSize(t.fileSize ?? 0).toLowerCase()
+  const dateStr = formatDate(t.updatedAt).toLowerCase()
+  const createdStr = formatDate(t.createdAt).toLowerCase()
+  const parts = [
+    t.name,
+    t.description ?? '',
+    t.fileName,
+    String(t.fileSize ?? ''),
+    sizeStr,
+    t.mimeType ?? '',
+    t.uploaderName ?? '',
+    t.createdAt?.toLowerCase() ?? '',
+    t.updatedAt?.toLowerCase() ?? '',
+    dateStr,
+    createdStr,
+  ].map((s) => String(s).toLowerCase())
+  return parts.some((x) => x.includes(q))
+}
+
 function openAdd() {
   addForm.value = { name: '', description: '', file: null }
   addError.value = ''
@@ -104,32 +128,6 @@ function onAddFileChange(e: Event) {
   const file = input.files?.[0]
   if (file) addForm.value.file = file
   input.value = ''
-}
-
-async function submitAdd() {
-  if (!addForm.value.file || !tenantId.value) {
-    addError.value = '請選擇檔案'
-    return
-  }
-  addLoading.value = true
-  addError.value = ''
-  try {
-    await createDefaultFormTemplate({
-      file: addForm.value.file,
-      name: addForm.value.name.trim() || addForm.value.file.name,
-      description: addForm.value.description.trim() || undefined,
-      tenantId: tenantId.value,
-    })
-    addDialogOpen.value = false
-    await fetchList()
-  } catch (err: unknown) {
-    const msg = err && typeof err === 'object' && 'response' in err
-      ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-      : '新增失敗'
-    addError.value = msg ?? '新增失敗'
-  } finally {
-    addLoading.value = false
-  }
 }
 
 function openEdit(row: FormTemplateItem) {
@@ -192,67 +190,111 @@ function openBatchDelete() {
 function closeBatchDelete() {
   if (!batchDeleteLoading.value) batchDeleteOpen.value = false
 }
-const sorting = ref<SortingState>([])
+
+const selectColumn: ColumnDef<FormTemplateItem, unknown> = {
+  id: 'select',
+  header: ({ table }) =>
+    h(Checkbox, {
+      checked: table.getIsAllPageRowsSelected()
+        ? true
+        : table.getIsSomePageRowsSelected()
+          ? 'indeterminate'
+          : false,
+      'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
+      'aria-label': '全選',
+    }),
+  cell: ({ row }) =>
+    h(Checkbox, {
+      checked: row.getIsSelected(),
+      'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
+      'aria-label': '選取此列',
+    }),
+  enableSorting: false,
+  enableHiding: false,
+}
+
 const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => [
-  {
-    id: 'select',
-    header: ({ table }) =>
-      h(Checkbox, {
-        checked: table.getIsAllPageRowsSelected()
-          ? true
-          : table.getIsSomePageRowsSelected()
-            ? 'indeterminate'
-            : false,
-        'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
-        'aria-label': '全選',
-      }),
-    cell: ({ row }) =>
-      h(Checkbox, {
-        checked: row.getIsSelected(),
-        'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
-        'aria-label': '選取此列',
-      }),
-    enableSorting: false,
-  },
+  selectColumn,
   {
     accessorKey: 'name',
-    header: '名稱',
+    id: 'name',
+    meta: { label: COLUMN_LABELS.name },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, { column, title: COLUMN_LABELS.name, class: 'text-foreground' }),
     cell: ({ row }) =>
-      h('div', { class: 'flex items-center gap-2 font-medium' }, [
+      h('div', { class: 'flex items-center gap-2 font-medium text-foreground' }, [
         h(FileText, { class: 'size-4 shrink-0 text-muted-foreground' }),
         h('span', { class: 'truncate', title: row.original.name }, row.original.name),
       ]),
+    enableHiding: false,
   },
   {
     accessorKey: 'description',
-    header: '描述',
+    id: 'description',
+    meta: { label: COLUMN_LABELS.description },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.description,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) =>
-      h('div', {
-        class: 'text-muted-foreground max-w-[200px] truncate',
-        title: row.original.description ?? '',
-      }, row.original.description || '—'),
+      h(
+        'div',
+        {
+          class: 'max-w-[200px] truncate text-muted-foreground',
+          title: row.original.description ?? '',
+        },
+        row.original.description || '—'
+      ),
+    enableHiding: false,
   },
   {
     accessorKey: 'fileSize',
-    header: '檔案大小',
+    id: 'fileSize',
+    meta: { label: COLUMN_LABELS.fileSize },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.fileSize,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) =>
-      h('div', { class: 'text-muted-foreground text-sm' }, formatSize(row.original.fileSize ?? 0)),
+      h('div', { class: 'text-sm text-muted-foreground' }, formatSize(row.original.fileSize ?? 0)),
+    enableHiding: false,
   },
   {
     accessorKey: 'fileName',
-    header: '檔名',
+    id: 'fileName',
+    meta: { label: COLUMN_LABELS.fileName },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.fileName,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) =>
-      h('div', { class: 'text-muted-foreground text-sm' }, row.original.fileName),
+      h('div', { class: 'text-sm text-muted-foreground' }, row.original.fileName),
+    enableHiding: false,
   },
   {
     accessorKey: 'updatedAt',
-    header: '更新時間',
+    id: 'updatedAt',
+    meta: { label: COLUMN_LABELS.updatedAt },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.updatedAt,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) =>
-      h('div', { class: 'text-muted-foreground text-sm' }, formatDate(row.original.updatedAt)),
+      h('div', { class: 'text-sm text-muted-foreground' }, formatDate(row.original.updatedAt)),
+    sortingFn: 'alphanumeric',
+    enableHiding: false,
   },
   {
     id: 'actions',
-    header: () => h('div', { class: 'w-[80px]' }),
+    header: () => '',
     cell: ({ row }) =>
       h('div', { class: 'flex justify-end' }, [
         h(AdminFormTemplatesRowActions, {
@@ -263,42 +305,67 @@ const columns = computed<ColumnDef<FormTemplateItem, unknown>[]>(() => [
         }),
       ]),
     enableSorting: false,
+    enableHiding: false,
   },
 ])
 
-const table = useVueTable({
-  get data() {
-    return list.value
-  },
-  get columns() {
-    return columns.value
-  },
-  getCoreRowModel: getCoreRowModel(),
-  getPaginationRowModel: getPaginationRowModel(),
-  getSortedRowModel: getSortedRowModel(),
-  getFilteredRowModel: getFilteredRowModel(),
-  onSortingChange: (updater) => valueUpdater(updater, sorting),
-  onRowSelectionChange: (updater) => valueUpdater(updater, rowSelection),
-  state: {
-    get sorting() {
-      return sorting.value
-    },
-    get rowSelection() {
-      return rowSelection.value
-    },
-  },
+const { table, globalFilter, hasActiveFilters, resetTableState } = useClientDataTable({
+  data: list,
+  columns,
+  features: TABLE_FEATURES,
   getRowId: (row) => row.id,
-  initialState: {
-    pagination: { pageSize: 10 },
-  },
+  globalFilterFn: formTemplatesGlobalFilterFn,
+  initialPageSize: 10,
+})
+
+watch(tenantId, () => {
+  resetTableState()
+  void fetchList()
 })
 
 const selectedRows = computed(() => table.getSelectedRowModel().rows)
 const hasSelection = computed(() => selectedRows.value.length > 0)
 const selectedCount = computed(() => selectedRows.value.length)
 
+const templatesEmptyText = computed(() => {
+  if (list.value.length === 0) {
+    if (globalFilter.value.trim()) return '沒有符合條件的資料'
+    return '尚無預設樣板，點「新增預設樣板」上傳第一筆。'
+  }
+  return '沒有符合條件的資料'
+})
+
 function clearSelection() {
-  rowSelection.value = {}
+  table.setRowSelection({})
+}
+
+async function submitAdd() {
+  if (!addForm.value.file || !tenantId.value) {
+    addError.value = '請選擇檔案'
+    return
+  }
+  addLoading.value = true
+  addError.value = ''
+  try {
+    await createDefaultFormTemplate({
+      file: addForm.value.file,
+      name: addForm.value.name.trim() || addForm.value.file.name,
+      description: addForm.value.description.trim() || undefined,
+      tenantId: tenantId.value,
+    })
+    addDialogOpen.value = false
+    table.setRowSelection({})
+    await fetchList()
+  } catch (err: unknown) {
+    const msg =
+      err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+            ?.message
+        : '新增失敗'
+    addError.value = msg ?? '新增失敗'
+  } finally {
+    addLoading.value = false
+  }
 }
 
 async function confirmBatchDelete() {
@@ -310,7 +377,7 @@ async function confirmBatchDelete() {
       await deleteFormTemplate(id)
     }
     closeBatchDelete()
-    rowSelection.value = {}
+    table.setRowSelection({})
     await fetchList()
   } finally {
     batchDeleteLoading.value = false
@@ -319,78 +386,59 @@ async function confirmBatchDelete() {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div>
-      <h1 class="text-xl font-semibold text-foreground">表單樣板</h1>
-      <p class="mt-1 text-sm text-muted-foreground">
-        在此新增的樣板會成為「預設樣板」，專案內「相關表單」頁面可看到並下載；專案也可自行新增樣板。
+  <div class="space-y-4">
+    <div class="flex flex-col gap-1">
+      <h1 class="text-xl font-semibold tracking-tight text-foreground">表單樣板</h1>
+      <p class="text-sm text-muted-foreground">
+        在此新增的樣板會成為「預設樣板」，專案內「相關表單」頁面可看到並下載；專案也可自行新增樣板。可搜尋名稱、描述、檔名、檔案大小與更新時間。
       </p>
     </div>
 
-    <!-- 工具列：已選 + ButtonGroup + 新增 全部靠右（表格上方） -->
-    <div class="flex flex-wrap items-center justify-end gap-3">
-      <template v-if="hasSelection">
-        <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
-        <ButtonGroup>
-          <Button variant="outline" @click="clearSelection">
-            取消選取
-          </Button>
-          <Button
-            variant="outline"
-            class="text-destructive hover:text-destructive"
-            @click="openBatchDelete"
-          >
-            <Trash2 class="size-4" />
-            批次刪除
-          </Button>
-        </ButtonGroup>
-      </template>
-      <Button :disabled="!tenantId" @click="openAdd">
-        <Upload class="mr-2 size-4" />
-        新增預設樣板
-      </Button>
+    <div class="min-w-0 flex-1">
+      <DataTableFeatureToolbar
+        v-if="!loading && tenantId"
+        :table="table"
+        :features="TABLE_FEATURES"
+        :column-labels="COLUMN_LABELS"
+        :has-active-filters="hasActiveFilters"
+        :global-filter="globalFilter"
+        search-placeholder="搜尋名稱、描述、檔名、檔案大小、更新時間…"
+        @reset="resetTableState"
+      >
+        <template #actions>
+          <div class="flex flex-wrap items-center justify-end gap-3">
+            <template v-if="hasSelection">
+              <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
+              <ButtonGroup>
+                <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="text-destructive hover:text-destructive"
+                  @click="openBatchDelete"
+                >
+                  <Trash2 class="size-4" />
+                  批次刪除
+                </Button>
+              </ButtonGroup>
+            </template>
+            <Button size="sm" :disabled="!tenantId" class="gap-2" @click="openAdd">
+              <Upload class="size-4" />
+              新增預設樣板
+            </Button>
+          </div>
+        </template>
+      </DataTableFeatureToolbar>
     </div>
 
-    <div class="rounded-lg border border-border bg-card p-4">
+    <div class="rounded-lg border border-border bg-card">
       <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
         <Loader2 class="size-8 animate-spin" />
       </div>
-      <template v-else>
-        <Table>
-          <TableHeader>
-            <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-              <TableHead v-for="header in headerGroup.headers" :key="header.id">
-                <FlexRender
-                  v-if="!header.isPlaceholder"
-                  :render="header.column.columnDef.header"
-                  :props="header.getContext()"
-                />
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <template v-if="table.getRowModel().rows?.length">
-              <TableRow
-                v-for="row in table.getRowModel().rows"
-                :key="row.id"
-                :data-state="row.getIsSelected() ? 'selected' : undefined"
-              >
-                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
-                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
-                </TableCell>
-              </TableRow>
-            </template>
-            <template v-else>
-              <TableRow>
-                <TableCell :colspan="7" class="h-24 text-center text-muted-foreground">
-                  尚無預設樣板，點擊「新增預設樣板」上傳
-                </TableCell>
-              </TableRow>
-            </template>
-          </TableBody>
-        </Table>
-        <DataTablePagination :table="table" />
-      </template>
+      <DataTableFeatureSection v-else :table="table" :empty-text="templatesEmptyText" />
+    </div>
+    <div v-if="!loading && list.length > 0" class="mt-4">
+      <DataTablePagination :table="table" />
     </div>
 
     <!-- 新增 Dialog -->
@@ -405,7 +453,9 @@ async function confirmBatchDelete() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>新增預設樣板</DialogTitle>
-          <DialogDescription>上傳檔案並填寫名稱與描述，專案內「相關表單」會顯示此樣板</DialogDescription>
+          <DialogDescription
+            >上傳檔案並填寫名稱與描述，專案內「相關表單」會顯示此樣板</DialogDescription
+          >
         </DialogHeader>
         <form class="grid gap-4 py-2" @submit.prevent="submitAdd">
           <div class="grid gap-2">
@@ -416,11 +466,7 @@ async function confirmBatchDelete() {
           </div>
           <div class="grid gap-2">
             <label class="text-sm font-medium text-foreground">名稱</label>
-            <Input
-              v-model="addForm.name"
-              placeholder="例：工程變更申請表"
-              class="bg-background"
-            />
+            <Input v-model="addForm.name" placeholder="例：工程變更申請表" class="bg-background" />
           </div>
           <div class="grid gap-2">
             <label class="text-sm font-medium text-foreground">描述</label>
@@ -479,7 +525,9 @@ async function confirmBatchDelete() {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" :disabled="deleteLoading" @click="deleteDialogOpen = false">取消</Button>
+          <Button variant="outline" :disabled="deleteLoading" @click="deleteDialogOpen = false"
+            >取消</Button
+          >
           <Button variant="destructive" :disabled="deleteLoading" @click="confirmDelete">
             <Loader2 v-if="deleteLoading" class="mr-2 size-4 animate-spin" />
             刪除
@@ -498,7 +546,9 @@ async function confirmBatchDelete() {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete">取消</Button>
+          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete"
+            >取消</Button
+          >
           <Button variant="destructive" :disabled="batchDeleteLoading" @click="confirmBatchDelete">
             <Loader2 v-if="batchDeleteLoading" class="mr-2 size-4 animate-spin" />
             刪除

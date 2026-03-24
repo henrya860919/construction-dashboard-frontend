@@ -15,12 +15,13 @@ import {
   FileText,
   CalendarRange,
   User,
-  Eye,
   Pencil,
   Loader2,
 } from 'lucide-vue-next'
 import { getProject, updateProject } from '@/api/project'
 import type { ProjectDetail } from '@/types'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 const route = useRoute()
 
@@ -28,11 +29,16 @@ function getProjectId(): string {
   return (route.params.projectId as string) ?? ''
 }
 
+const projectId = computed(() => getProjectId())
+const overviewPerm = useProjectModuleActions(projectId, 'project.overview')
+/** 頂層給模板用，v-if 才會正確解包；勿寫 v-if="overviewPerm.canUpdate"（巢狀 Computed 可能恆為真） */
+const canUpdateOverview = overviewPerm.canUpdate
+
 const loading = ref(true)
 const saving = ref(false)
 const errorMessage = ref('')
 
-/** 是否為編輯模式 */
+/** 預設唯讀；按「編輯」進入表單，按「儲存」送出後回到唯讀 */
 const isEditMode = ref(false)
 
 /** 表單資料（預定完工 = 開工+工期，預定竣工 = 開工+工期+調整天數，由 API 回傳） */
@@ -123,9 +129,12 @@ async function loadProject() {
   errorMessage.value = ''
   try {
     const project = await getProject(id)
-    if (project) fillForm(project)
+    if (project) {
+      fillForm(project)
+      isEditMode.value = false
+    }
   } catch {
-    errorMessage.value = '無法載入專案資訊'
+    errorMessage.value = '無法載入專案資料'
   } finally {
     loading.value = false
   }
@@ -134,7 +143,25 @@ async function loadProject() {
 onMounted(loadProject)
 watch(() => route.params.projectId, () => loadProject())
 
+watch(
+  () => canUpdateOverview.value,
+  (can) => {
+    if (!can) isEditMode.value = false
+  }
+)
+
+function enterEditMode() {
+  if (!ensureProjectPermission(canUpdateOverview.value, 'change')) return
+  isEditMode.value = true
+}
+
+function onPrimaryAction() {
+  if (isEditMode.value) void save()
+  else enterEditMode()
+}
+
 async function save() {
+  if (!ensureProjectPermission(canUpdateOverview.value, 'change')) return
   const id = getProjectId()
   if (!id) return
   if (!form.value.projectName.trim()) {
@@ -173,38 +200,27 @@ async function save() {
 
 <template>
   <div class="space-y-6">
-    <!-- 頁首：標題 + 模式切換 -->
+    <!-- 頁首：標題 + 編輯／儲存單鍵切換 -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 class="text-xl font-semibold tracking-tight text-foreground">
-          專案資訊
+          專案資料
         </h1>
         <p class="mt-1 text-sm text-muted-foreground">
           契約專案之基本資料、工期與聯絡資訊
         </p>
       </div>
-      <div class="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card p-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          class="gap-2"
-          :class="{ 'bg-background shadow-sm': !isEditMode }"
-          @click="isEditMode = false"
-        >
-          <Eye class="size-4" />
-          查看
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="gap-2"
-          :class="{ 'bg-background shadow-sm': isEditMode }"
-          @click="isEditMode = true"
-        >
-          <Pencil class="size-4" />
-          編輯
-        </Button>
-      </div>
+      <Button
+        v-if="canUpdateOverview"
+        variant="default"
+        class="shrink-0 gap-2"
+        :disabled="saving"
+        @click="onPrimaryAction"
+      >
+        <Loader2 v-if="saving" class="size-4 animate-spin" />
+        <Pencil v-else-if="!isEditMode" class="size-4" />
+        {{ saving ? '儲存中…' : isEditMode ? '儲存' : '編輯' }}
+      </Button>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-16">
@@ -213,6 +229,7 @@ async function save() {
     <p v-else-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
 
     <template v-else>
+    <p v-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
     <!-- 基本資訊 -->
     <Card class="overflow-hidden border-border">
       <CardHeader class="border-b border-border/50 bg-muted/20 pb-4">
@@ -227,7 +244,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="grid gap-6 pt-6 sm:grid-cols-2">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !canUpdateOverview">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工程名稱</p>
             <p class="text-sm font-medium text-foreground">{{ displayValue(form.projectName) }}</p>
@@ -280,7 +297,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="space-y-6 pt-6">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !canUpdateOverview">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工程概要</p>
             <p class="text-sm leading-relaxed text-foreground whitespace-pre-line">{{ displayValue(form.summary) }}</p>
@@ -327,7 +344,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="grid gap-6 pt-6 sm:grid-cols-2">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !canUpdateOverview">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">開工日期</p>
             <p class="text-sm font-medium text-foreground">{{ displayValue(form.startDate) }}</p>
@@ -382,7 +399,7 @@ async function save() {
         </div>
       </CardHeader>
       <CardContent class="grid gap-6 pt-6 sm:grid-cols-2">
-        <template v-if="!isEditMode">
+        <template v-if="!isEditMode || !canUpdateOverview">
           <div class="space-y-1">
             <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">工地負責人</p>
             <p class="text-sm font-medium text-foreground">{{ displayValue(form.siteManager) }}</p>
@@ -418,20 +435,6 @@ async function save() {
       </CardContent>
     </Card>
 
-    <!-- 編輯模式：底部操作列 -->
-    <div
-      v-if="isEditMode"
-      class="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-6"
-    >
-      <p v-if="errorMessage" class="w-full text-sm text-destructive">{{ errorMessage }}</p>
-      <Button variant="outline" :disabled="saving" @click="isEditMode = false">
-        取消
-      </Button>
-      <Button :disabled="saving" @click="save">
-        <Loader2 v-if="saving" class="size-4 animate-spin" />
-        {{ saving ? '儲存中…' : '儲存' }}
-      </Button>
-    </div>
     </template>
   </div>
 </template>

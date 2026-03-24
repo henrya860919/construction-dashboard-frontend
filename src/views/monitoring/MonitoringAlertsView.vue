@@ -24,22 +24,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Loader2 } from 'lucide-vue-next'
 import { fetchAlertHistory, type AlertHistoryItem } from '@/api/alerts'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
 import MonitoringAlertsRowActions from '@/views/monitoring/MonitoringAlertsRowActions.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 
 defineProps<{ embedded?: boolean }>()
 
 const route = useRoute()
-const projectId = route.params.projectId as string
+const projectId = computed(() => (route.params.projectId as string) ?? '')
+const monitorPerm = useProjectModuleActions(projectId, 'construction.monitor')
 
 const list = ref<AlertHistoryItem[]>([])
 const loading = ref(true)
@@ -67,7 +65,7 @@ async function load() {
   errorMessage.value = ''
   try {
     list.value = await fetchAlertHistory({
-      projectId,
+      projectId: projectId.value,
       startDate: startDate.value,
       endDate: endDate.value,
       limit: 200,
@@ -133,8 +131,7 @@ const columns = computed<ColumnDef<AlertHistoryItem, unknown>[]>(() => [
     accessorKey: 'title',
     id: 'title',
     header: () => '類型',
-    cell: ({ row }) =>
-      h('div', { class: 'font-medium text-foreground' }, row.original.title),
+    cell: ({ row }) => h('div', { class: 'font-medium text-foreground' }, row.original.title),
   },
   {
     accessorKey: 'level',
@@ -155,7 +152,11 @@ const columns = computed<ColumnDef<AlertHistoryItem, unknown>[]>(() => [
     id: 'createdAt',
     header: () => '時間',
     cell: ({ row }) =>
-      h('div', { class: 'tabular-nums text-muted-foreground' }, formatDateTime(row.original.createdAt)),
+      h(
+        'div',
+        { class: 'tabular-nums text-muted-foreground' },
+        formatDateTime(row.original.createdAt)
+      ),
   },
   {
     id: 'actions',
@@ -163,7 +164,10 @@ const columns = computed<ColumnDef<AlertHistoryItem, unknown>[]>(() => [
     cell: ({ row }) =>
       h(MonitoringAlertsRowActions, {
         row: row.original,
-        onView: (r) => openDetail(r),
+        onView: (r) => {
+          if (!ensureProjectPermission(monitorPerm.canRead.value, 'read')) return
+          openDetail(r)
+        },
       }),
     enableSorting: false,
   },
@@ -221,17 +225,9 @@ onMounted(() => {
     <!-- 工具列：篩選在左、已選+ButtonGroup 在右 -->
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex flex-wrap items-center gap-2">
-        <Input
-          v-model="startDate"
-          type="date"
-          class="w-[10rem]"
-        />
+        <Input v-model="startDate" type="date" class="w-[10rem]" />
         <span class="text-muted-foreground">～</span>
-        <Input
-          v-model="endDate"
-          type="date"
-          class="w-[10rem]"
-        />
+        <Input v-model="endDate" type="date" class="w-[10rem]" />
         <Button variant="outline" :disabled="loading" @click="load">
           <Loader2 v-if="loading" class="mr-2 size-4 animate-spin" />
           查詢
@@ -241,26 +237,19 @@ onMounted(() => {
         <template v-if="hasSelection">
           <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
           <ButtonGroup>
-            <Button variant="outline" @click="clearSelection">取消選取</Button>
+            <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
           </ButtonGroup>
         </template>
       </div>
     </div>
 
-    <!-- 表格區塊（依規範 rounded-lg border border-border bg-card p-4） -->
-    <div class="rounded-lg border border-border bg-card p-4">
-      <p v-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
+    <div class="rounded-lg border border-border bg-card">
+      <p v-if="errorMessage" class="mb-3 px-4 pt-4 text-sm text-destructive">{{ errorMessage }}</p>
       <div v-else-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
         <Loader2 class="size-8 animate-spin" />
       </div>
       <template v-else>
-        <div
-          v-if="list.length === 0"
-          class="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center"
-        >
-          <p class="text-sm text-muted-foreground">此區間無警報紀錄</p>
-        </div>
-        <template v-else>
+        <div class="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
@@ -274,20 +263,38 @@ onMounted(() => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow
-                v-for="row in table.getRowModel().rows"
-                :key="row.id"
-                :data-state="row.getIsSelected() ? 'selected' : undefined"
-              >
-                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
-                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
-                </TableCell>
-              </TableRow>
+              <template v-if="list.length === 0">
+                <TableRow>
+                  <TableCell :colspan="6" class="h-24 text-center text-muted-foreground">
+                    此區間無警報紀錄
+                  </TableCell>
+                </TableRow>
+              </template>
+              <template v-else-if="table.getRowModel().rows.length">
+                <TableRow
+                  v-for="row in table.getRowModel().rows"
+                  :key="row.id"
+                  :data-state="row.getIsSelected() ? 'selected' : undefined"
+                >
+                  <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
+                    <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
+                  </TableCell>
+                </TableRow>
+              </template>
+              <template v-else>
+                <TableRow>
+                  <TableCell :colspan="6" class="h-24 text-center text-muted-foreground">
+                    此頁無資料
+                  </TableCell>
+                </TableRow>
+              </template>
             </TableBody>
           </Table>
-          <DataTablePagination :table="table" />
-        </template>
+        </div>
       </template>
+    </div>
+    <div v-if="!loading && !errorMessage && list.length > 0" class="mt-4">
+      <DataTablePagination :table="table" />
     </div>
 
     <Dialog v-model:open="detailOpen">
@@ -318,7 +325,9 @@ onMounted(() => {
           </div>
           <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">時間</span>
-            <span class="tabular-nums text-foreground">{{ formatDateTime(selectedAlert.createdAt) }}</span>
+            <span class="tabular-nums text-foreground">{{
+              formatDateTime(selectedAlert.createdAt)
+            }}</span>
           </div>
         </div>
       </DialogContent>

@@ -88,7 +88,7 @@ const table = useVueTable({
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="min-w-0 space-y-4">
     <!-- Toolbar: 搜尋（可選）+ 欄位切換（可選） -->
     <DataTableToolbar
       v-if="filterColumnId || showViewOptions"
@@ -98,9 +98,9 @@ const table = useVueTable({
       :show-view-options="showViewOptions"
     />
 
-    <!-- 表格 -->
-    <div class="rounded-md border">
-      <Table>
+    <!-- 表格：外層橫向捲動，避免撐開版面主區 -->
+    <div class="min-w-0 overflow-x-auto overscroll-x-contain rounded-md border">
+      <Table :scroll-container="false">
         <TableHeader>
           <TableRow
             v-for="headerGroup in table.getHeaderGroups()"
@@ -150,7 +150,7 @@ const table = useVueTable({
       </Table>
     </div>
 
-    <!-- 分頁 -->
+    <!-- 分頁（已在橫向捲動容器外；父層 space-y-4 與表格區隔） -->
     <DataTablePagination :table="table" />
   </div>
 </template>

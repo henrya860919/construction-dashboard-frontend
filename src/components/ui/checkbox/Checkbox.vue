@@ -21,7 +21,7 @@ const emit = defineEmits<{
 
 const delegatedProps = reactiveOmit(props, "class", "checked")
 
-const forwarded = useForwardPropsEmits(delegatedProps, emit as any)
+const forwarded = useForwardPropsEmits(delegatedProps, emit as (name: string, ...args: unknown[]) => void)
 
 const modelValue = computed({
   get: () => props.checked ?? false,

@@ -33,15 +33,18 @@ import {
   type CameraItem,
   type CreateCameraPayload,
 } from '@/api/cameras'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => route.params.projectId as string)
+const equipmentPerm = useProjectModuleActions(projectId, 'construction.equipment')
 
 const cameras = ref<CameraItem[]>([])
 const loading = ref(true)
 const listError = ref<string | null>(null)
 
+/** 新增攝影機／安裝精靈：僅 canCreate 顯示入口，不採常駐＋toast（見 docs/project-module-frontend-ui-gating.md） */
 const addDialogOpen = ref(false)
 const addForm = ref<CreateCameraPayload>({ name: '', sourceUrl: '' })
 const addSubmitting = ref(false)
@@ -327,7 +330,7 @@ async function handleClearOverride(cam: CameraItem) {
           <h2 class="text-base font-medium text-foreground">CCTV 監控</h2>
         </div>
         <div class="flex items-center gap-2">
-          <DropdownMenu>
+          <DropdownMenu v-if="equipmentPerm.canRead">
             <DropdownMenuTrigger as-child>
               <Button
                 variant="outline"
@@ -357,6 +360,7 @@ async function handleClearOverride(cam: CameraItem) {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
+            v-if="equipmentPerm.canCreate"
             size="sm"
             class="gap-2"
             @click="openAddDialog"
@@ -368,7 +372,13 @@ async function handleClearOverride(cam: CameraItem) {
       </div>
 
       <p class="text-sm text-muted-foreground">
-        攝影機需在工地現場安裝 go2rtc 並設定推流後，方可在此收看即時畫面。請先「新增攝影機」，再依本區「更多」下載<strong>專案安裝包</strong>（內含本專案所有攝影機設定）。解壓後：Windows 雙擊 <code class="rounded bg-muted px-1">run.bat</code>；Mac 雙擊 <code class="rounded bg-muted px-1">run.command</code>（若被系統阻擋，請打開壓縮檔內的 <strong>Mac安裝說明.txt</strong> 依終端機步驟執行）。
+        攝影機需在工地現場安裝 go2rtc 並設定推流後，方可在此收看即時畫面。
+        <template v-if="equipmentPerm.canCreate">請先「新增攝影機」，</template>
+        <template v-else>請由具建立權限者新增攝影機後，</template>
+        再依本區「更多」下載<strong>專案安裝包</strong>（內含本專案所有攝影機設定）。解壓後：Windows 雙擊
+        <code class="rounded bg-muted px-1">run.bat</code>；Mac 雙擊
+        <code class="rounded bg-muted px-1">run.command</code>（若被系統阻擋，請打開壓縮檔內的
+        <strong>Mac安裝說明.txt</strong> 依終端機步驟執行）。
       </p>
 
       <div
@@ -389,7 +399,8 @@ async function handleClearOverride(cam: CameraItem) {
         v-else-if="cameras.length === 0"
         class="rounded-lg border border-dashed border-border bg-muted/30 py-12 text-center text-sm text-muted-foreground"
       >
-        尚無攝影機，請點「新增攝影機」並依精靈完成現場安裝。
+        <template v-if="equipmentPerm.canCreate">尚無攝影機，請點「新增攝影機」並依精靈完成現場安裝。</template>
+        <template v-else>尚無攝影機。</template>
       </div>
       <div
         v-else
@@ -425,7 +436,7 @@ async function handleClearOverride(cam: CameraItem) {
                     />
                     {{ connectionStatusLabel(cam.connectionStatus) }}
                   </span>
-                  <DropdownMenu>
+                  <DropdownMenu v-if="equipmentPerm.canUpdate || equipmentPerm.canDelete">
                     <DropdownMenuTrigger
                       as-child
                       @click.stop
@@ -445,7 +456,7 @@ async function handleClearOverride(cam: CameraItem) {
                       @click.stop
                     >
                       <DropdownMenuItem
-                        v-if="cam.connectionStatusOverride === 'offline'"
+                        v-if="equipmentPerm.canUpdate && cam.connectionStatusOverride === 'offline'"
                         class="cursor-pointer"
                         :disabled="overrideLoadingId === cam.id"
                         @click.stop="handleClearOverride(cam)"
@@ -453,7 +464,7 @@ async function handleClearOverride(cam: CameraItem) {
                         清除離線標示
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        v-else
+                        v-else-if="equipmentPerm.canUpdate"
                         class="cursor-pointer"
                         :disabled="overrideLoadingId === cam.id"
                         @click.stop="handleSetOverrideOffline(cam)"
@@ -461,6 +472,7 @@ async function handleClearOverride(cam: CameraItem) {
                         標示為離線
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        v-if="equipmentPerm.canDelete"
                         class="cursor-pointer text-destructive focus:text-destructive"
                         @click.stop="openDeleteConfirm(cam)"
                       >

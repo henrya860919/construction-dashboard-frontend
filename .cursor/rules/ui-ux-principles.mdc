@@ -38,11 +38,34 @@ alwaysApply: true
 - 取得當前專案：`route.params.projectId`，專案名稱用 `useProjectStore().currentProjectName`。
 - 新增專案內頁面時：在 `routes.ts` 加路徑與 name、在 `navigation.ts` 加側欄項、在 `breadcrumb.ts` 加路徑對應標籤。
 
+### 1.4 列表頁（標題區 + 表格上方工具列 + 表格）
+
+與 **檔案管理**、**報修紀錄**、**施工日誌／估驗／PCCES 匯入紀錄** 等單表列表對齊：
+
+- **頁面標題區（最上方）**
+  - 主標：`text-xl font-semibold tracking-tight text-foreground`（與檔案管理一致）。
+  - 說明：`mt-1 text-sm text-muted-foreground`。
+  - **勿**在標題區上方再放「新增／上傳」等主要按鈕；標題永遠先於工具列。
+- **表格上方工具列（緊貼表格區塊之上）**
+  - 外層：`flex flex-wrap items-center gap-3`；**無左側篩選時**用 `justify-end`，主要動作（**新增／上傳／建立**）放在**最右側**，與檔案管理「新增檔案」、報修「新增報修」同一邏輯。
+  - **有左側篩選時**：外層改 `justify-between`，左篩選、右側為「已選 + ButtonGroup + 新增」見 §四。
+  - **TanStack 標準工具列**（**`DataTableFeatureToolbar`**／**`DataTableToolbarShell`**）：主要 CTA 一律放 **`#actions`**；shell 內建順序為 **…多欄排序 → 欄位顯示 → `#actions`**，故 **新增／上傳／建立** 在整列 **最右**（詳見 **`data-table-list-views.mdc`** 與 **`docs/data-table-list-views.md`**）。該按鈕請設 **`size="sm"`** 與列上 `h-8` 控制項對齊。
+- **搜尋與篩選鈕（列表工具列左側）**
+  - **全文搜尋**（`Input type="search"` 或 `DataTableFeatureToolbar` 內建搜尋）：一律放在該列 **最左側**（`DataTableFeatureToolbar` 已固定為 **搜尋 → `#prepend-filters` → 分面／日期**）。若頁面僅用 **`DataTableToolbarShell`**，請在 **`#filters`** 內 **先放搜尋、再放篩選**，外層可用 **`flex flex-wrap items-center gap-2`**，搜尋區塊建議 **`min-w-0 flex-1 basis-full sm:basis-auto`** + **`sm:max-w-sm`**，避免擠壓右側篩選。
+  - **非搜尋的單選篩選**（狀態、租戶、角色等）：**禁止**使用裸 **`SelectTrigger`** 作為工具列主篩選；請使用 **`DataTableFilterPill`**：虛線膠囊觸發鈕與 **`DataTableFacetedFilter`** 同語言；**下拉內**必須有 **`CommandInput`**（搜尋選項標籤）、**`CommandSeparator`**、選項左側 **單選圓點**（非勾選方塊）、可選右側 **`count`**、非「全部」時底部 **「清除此篩選」**。細節見 **`data-table-list-views.mdc`**。
+  - **後端時間區間**（非欄位 `dateRange` meta）：使用 **`DataTableServerDateRangePill`**（**`CalendarIcon`** + 虛線鈕 + Popover 內起迄日 + 套用／清除），勿在工具列平鋪兩個裸 `type="date"`（除非產品另有理由並於 PR 註明）。
+- **表格區塊**（與 **`data-table-list-views.mdc`**、**`FileManagementView`** 一致）
+  - 使用 **`rounded-lg border border-border bg-card`** 包住表格（**勿**加 **`p-4`**）；**不要**再用 Card 包一層標題+表（避免雙層 Card）。
+  - 載入中：區塊內 `flex items-center justify-center py-12 text-muted-foreground`，`Loader2` 建議 `size-8`。
+  - 載入完成後**一律**保留表格外殼：無資料時以表身**單列**顯示說明（**`DataTableFeatureSection` 的 `emptyText`** 或手動 colspan 列），**勿**用整塊空狀態取代表格。
+  - **DataTablePagination**：僅在**列表確有資料**時顯示（例 `list.length > 0`）；放在**邊框表格外殼關閉後**的下一層，**`mt-4`**，**勿**放在該邊框容器內。
+
 ---
 
 ## 二、按鈕（Button）
 
-- **預設尺寸**：全站 Button 預設為 `size="sm"`（已在 `src/components/ui/button/index.ts` 的 `defaultVariants` 設定）。不需在每個按鈕重複寫 `size="sm"`，除非要使用 `size="icon"` 或 `size="lg"`。
+- **預設尺寸**：依 **`src/components/ui/button/index.ts`** 的 `defaultVariants`；一般頁面不需為了「變小」而到處覆寫。
+- **列表頁表格上方工具列（DataTableFeatureToolbar 列）**：**新增／上傳／建立** 等主要按鈕請**明確**設 **`size="sm"`**，與該列搜尋框、重設鈕等 **`h-8`** 高度一致（見 **`data-table-list-views.mdc`**）。
 - **多選工具列按鈕**：使用 **ButtonGroup** 元件包住多個按鈕（例如「取消選取」「批次刪除」），勿自訂外層 `div` 加 border 或額外 class；按鈕用 `variant="outline"` 即可，ButtonGroup 會處理視覺群組。
   - 引用：`import { ButtonGroup } from '@/components/ui/button-group'`
 
@@ -56,6 +79,7 @@ alwaysApply: true
   - 必須有「**檔案大小**」欄位。
   - 檔名欄位需在名稱前加上**檔案類型 icon**（依副檔名或類型選擇圖示）。
 - **版面**：若頁面有**篩選列／工具列**在表格上方，則**工具列與表格都不要用 Card 包**；表格區塊使用自己的邊框與底色（如 `rounded-lg border border-border bg-card`），避免雙重 Card 包覆。
+- **寬表格與水平捲動**：**禁止**讓寬表格撐出「整頁橫向捲動」；水平捲動應發生在表格區塊或 `Table` 元件外層。Layout、`Table.vue`、`DataTable.vue` 已依此實作；新增或改版面時請遵守 **`table-scroll-layout.mdc`**（flex 子項必要時加 `min-w-0`、甘特等維持 `scroll-container=false`）。
 
 ---
 
@@ -99,12 +123,13 @@ alwaysApply: true
 
 開發新頁面或大幅修改既有頁面時，請確認：
 
+- [ ] **列表頁**：符合 **§1.4**（標題 `tracking-tight`、新增／上傳在表格上方右側、表格外層 `rounded-lg border bg-card p-4`）。
 - [ ] **路由**：路徑與 name 已加入 `constants/routes.ts`，並在 `router/index.ts` 註冊。
 - [ ] **導航**：若需出現在側欄，已在 `constants/navigation.ts` 對應群組加入項目；麵包屑已在 `constants/breadcrumb.ts` 對應。
 - [ ] **專案內路徑**：連結使用 `buildProjectPath(projectId, pathSuffix)` 或具名路由，不手動拼字串。
-- [ ] **表格**：第一欄為勾選、操作收合在「更多」、檔案類有檔案大小與檔名 icon；有篩選時不雙重 Card。
+- [ ] **表格**：第一欄為勾選、操作收合在「更多」、檔案類有檔案大小與檔名 icon；有篩選時不雙重 Card；寬表不出現整頁橫向捲動（見 **table-scroll-layout.mdc**）。
 - [ ] **多選**：多選工具列在表格外上方、用 ButtonGroup；篩選在左、已選+ButtonGroup+新增/上傳**全部在右**相鄰。
-- [ ] **按鈕**：未特別需求時不覆寫 size（預設 sm）；多選列使用 ButtonGroup。
+- [ ] **按鈕**：多選列使用 ButtonGroup；使用 **DataTableFeatureToolbar** 時，**新增／上傳** 設 **`size="sm"`** 且放在 **`#actions`**（最右）。
 - [ ] **主題**：未使用硬編碼色、淺色／深色皆已檢查可讀性。
 - [ ] **API**：使用專案內 API client、錯誤依 api-contract 處理（如 401 導向登入）。
 - [ ] **元件**：有對應共用元件時一律使用（如分頁用 DataTablePagination、統計卡用 StateCard），未在頁面內重做相同 UI。

@@ -1,10 +1,5 @@
 <script setup lang="ts">
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 </script>
 
 <template>
@@ -15,9 +10,7 @@ import {
         <CardTitle>大事記</CardTitle>
       </CardHeader>
       <CardContent>
-        <p class="text-sm text-muted-foreground">
-          專案重要事件與時序紀錄，此頁面待實作。
-        </p>
+        <p class="text-sm text-muted-foreground">專案重要事件與時序紀錄，此頁面待實作。</p>
       </CardContent>
     </Card>
   </div>

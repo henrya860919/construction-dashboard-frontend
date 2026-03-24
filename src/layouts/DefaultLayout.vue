@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useProjectRoutePermissionGuard } from '@/composables/useProjectRoutePermissionGuard'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
@@ -12,6 +13,8 @@ import { useIsMobile } from '@/composables'
 const route = useRoute()
 const sidebarStore = useSidebarStore()
 const isMobile = useIsMobile()
+
+useProjectRoutePermissionGuard()
 
 watch(
   () => route.path,
@@ -30,7 +33,7 @@ watch(
       :open="sidebarStore.mobileOpen"
       @update:open="(v: boolean) => sidebarStore.setMobileOpen(v)"
     >
-      <SheetContent side="left" class="w-64 p-0">
+      <SheetContent side="left" class="w-[210px] p-0">
         <div class="flex h-full flex-col pt-6">
           <AppSidebar :collapsed="false" />
         </div>
@@ -40,7 +43,7 @@ watch(
     <!-- 桌面：左側固定側欄 -->
     <aside
       class="hidden border-r border-border bg-card md:block md:shrink-0 md:transition-[width]"
-      :class="sidebarStore.collapsed ? 'md:w-14' : 'md:w-56'"
+      :class="sidebarStore.collapsed ? 'md:w-14' : 'md:w-[210px]'"
     >
       <div class="flex h-full w-full flex-col">
         <AppSidebar :collapsed="sidebarStore.collapsed" />
@@ -54,8 +57,10 @@ watch(
       <div class="border-b border-border bg-background px-4 py-2 md:px-6">
         <AppBreadcrumb />
       </div>
-      <main class="flex-1 overflow-auto p-4 md:p-6">
-        <RouterView />
+      <main class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
+        <div class="min-w-0">
+          <RouterView />
+        </div>
       </main>
     </div>
   </div>

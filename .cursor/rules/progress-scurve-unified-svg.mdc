@@ -1,0 +1,52 @@
+---
+description: 進度管理 S 曲線與週期表 — 單一 SVG + D3 對齊與圖層規範
+globs:
+  - "**/ProgressUnifiedScurve.vue"
+  - "**/ProgressManagementView.vue"
+  - "**/progress-scurve-layout.ts"
+  - "**/project-progress*.ts"
+---
+
+# 進度 S 曲線（單一 SVG）
+
+## 原則
+
+- **日期列、圖表區、底表數值與格線**必須畫在**同一張 `<svg>`** 內，共用 `src/lib/progress-scurve-layout.ts` 的 `lineX(i)`／`ptX(i)`，不得另用 HTML `<table>` 與 SVG 並列對齊週期欄。
+- **可編輯儲存格**使用 `<foreignObject>` 嵌入 XHTML + 專案既有 `Input`；其 `x`／`width` 須符合 `lineX(i)+4`、寬 `CELL_W-8`（與規格一致）。
+- **重繪**：狀態變更時對 D3 根節點 `selectAll('*').remove()` 後依序重畫；不做 `.enter()/.exit()` 資料綁定（週期數少、維護優先）。
+- **主題**：線色優先自 CSS 變數（`--chart-*`、`--muted-foreground`、`--border` 等）解析；面積用 `fill` + `fill-opacity`，避免硬編碼 hex 導致深色模式失效。
+
+## 幾何常數（與 layout 模組一致）
+
+- `LABEL_W = 56`、`SUB_W = 52`、`MIN_CELL_W = 48`、`RIGHT_PAD = 0`（總寬與最後格線對齊，不留尾欄視覺）
+- `PAD_L = CELL_W / 2`
+- 格線左緣：`lineX(i) = LABEL_W + SUB_W + i * CELL_W`
+- 欄中心（日期、底表置中）：`ptX(i) = LABEL_W + SUB_W + PAD_L + i * CELL_W`
+- **S 曲線折線／面積 x**：起點累計 0% 在 `curveOriginX()`＝`lineX(0)`；第 `i` 期（0-based）期末在 `curvePeriodEndX(i)`＝`lineX(i+1)`（兩欄之間格線）
+- 垂直區塊高度（由上而下）：**`LEGEND_H`（圖例列）** → `DATE_H`（日期列）→ `CHART_H` → 底表 4×`ROW_H`；總高見 `totalSvgHeight()`。圖表內 **`CHART_PAD_TOP`／`CHART_PAD_BOTTOM`** 為繪圖內距。垂直格線自 **`dateRowTopY()`** 起向下延伸，避免切過圖例列。
+
+## 圖層 append 順序（底→頂）
+
+1. 外框、今日欄底色、追加週期（`isExtended`）欄底色  
+2. 日期列背景、全高垂直格線、日期文字（`ptX`）  
+3. 圖表區 Y 向水平虛線格線與左側 % 刻度  
+4. 各版本面積：非 active（目前版本）先、active 後；`fill-opacity` 約 0.04／0.08  
+5. 各版本折線：非 active 先、active 後；baseline（v0）`stroke-dasharray` 5,3；線寬與透明度依 active／比較／其他  
+6. 版本圓點（含原點 0%、各期末在 `curvePeriodEndX`）  
+7. 變更生效垂直虛線 + 標籤（x 對齊該期期末格線）  
+8. 實際進度面積 + 線 + 原點小圓 + 三角點（期末）  
+9. 今日垂直虛線 +「今日」標籤  
+10. 圖表與底表分隔線  
+11. 底表列背景、列標、累計與唯讀文字（`ptX` 置中）  
+12. 圖例已移至**日期列上方**（`y < dateRowTopY()`），與日期列共用頂部底色區，兩者以橫線分隔。  
+13. **最後**（Vue 模板）：`foreignObject` 內本期預定、本期實際、累計實際輸入框（權限允許時）
+
+## 資料
+
+- 後端儀表板須帶 `planCurves[]`（各版對齊 primary 時間軸之 `cumulativePlanned`），前端以**目前版本**列套入草稿累計預覽。
+- **圖表顯示範圍**：`ProgressManagementView` 只將「目前版本」與「比較顯示」選中之 `planId` 篩入 `chartPlanCurves`／`chartCurveYValues`／`chartCurveStrokes` 再傳入本元件；圖例與折線僅含這些版本（變更虛線仍可保留全部版本標記）。
+
+## 修改前檢查
+
+- 變更 layout 常數或圖層順序時，同步更新本規則與 `docs/progress-scurve-d3-spec-review-and-roadmap.md`（若仍存在對照說明）。
+- 完成後執行 `npm run build`（前端）與後端 `npm run build`。

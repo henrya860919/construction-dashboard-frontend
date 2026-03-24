@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { withDefaults } from 'vue'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -6,16 +7,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Eye, PauseCircle, PlayCircle } from 'lucide-vue-next'
+import { MoreHorizontal, Eye, PauseCircle, PlayCircle, Shield } from 'lucide-vue-next'
 import type { AdminUserItem } from '@/types'
 
-defineProps<{
-  row: AdminUserItem
-}>()
+const props = withDefaults(
+  defineProps<{
+    row: AdminUserItem
+    /** 可編輯「加入專案時複製的權限範本」（不適用於平台管理員帳號） */
+    showPermissionTemplate?: boolean
+  }>(),
+  { showPermissionTemplate: false }
+)
 
 const emit = defineEmits<{
   view: [row: AdminUserItem]
   toggleStatus: [row: AdminUserItem]
+  permissionTemplate: [row: AdminUserItem]
 }>()
 </script>
 
@@ -26,10 +33,18 @@ const emit = defineEmits<{
         <MoreHorizontal class="size-4" />
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" class="w-[10rem]">
+    <DropdownMenuContent align="end" class="w-[11rem]">
       <DropdownMenuItem class="gap-2 cursor-pointer" @click="emit('view', row)">
         <Eye class="size-4" />
         檢視
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        v-if="props.showPermissionTemplate"
+        class="gap-2 cursor-pointer"
+        @click="emit('permissionTemplate', row)"
+      >
+        <Shield class="size-4" />
+        權限範本
       </DropdownMenuItem>
       <DropdownMenuItem
         v-if="(row.status ?? 'active') === 'suspended'"

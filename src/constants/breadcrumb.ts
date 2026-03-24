@@ -10,6 +10,7 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   '/admin/projects': '專案管理',
   '/admin/members': '成員管理',
   '/admin/form-templates': '表單樣板',
+  '/admin/self-inspection-templates': '自主檢查樣板',
   '/admin/settings': '公司設定',
   '/platform-admin': '平台管理',
   '/platform-admin/tenants': '租戶管理',
@@ -33,11 +34,45 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/monitoring/devices': '設備',
   '/monitoring/reports': '報表',
   '/monitoring/upload': '數據上傳',
-  '/contract/project-info': '專案資訊',
+  '/contract/project-info': '專案資料',
   '/contract/schedule': '工期調整',
   '/contract/management': '契約管理',
   '/contract/members': '專案成員',
   '/files': '檔案管理',
   '/files/forms': '相關表單',
   '/files/photos': '照片管理',
+  '/management/wbs': 'WBS清單',
+  '/management/resources': '資源庫',
+  '/management/risks': '風險與議題',
+  '/management/schedule': '排班表',
+  '/management/gantt': '甘特圖',
+  '/management/overview': '總覽',
+  '/construction/progress': '進度管理',
+  '/construction/self-check': '自主檢查',
+  '/construction/diary': '每日日誌',
+  '/construction/diary/new': '新增日誌',
+  '/construction/diary/valuations': '估驗計價',
+  '/construction/diary/valuations/new': '新增估驗',
+  '/construction/diary/pcces/upload': 'PCCES／XML 匯入',
+  '/construction/diary/pcces/excel-change': 'PCCES Excel 變更',
+  '/construction/diary/pcces/versions': 'PCCES 匯入紀錄',
+  '/construction/drawings': '圖說管理',
+  '/construction/defects': '缺失改善',
+  '/repair/overview': '報修總覽',
+  '/repair/records': '報修紀錄表',
+  '/repair/product-repair-demo': '商品報修表範本',
+}
+
+/** 專案內 path 後綴屬於哪個「工作執行」模組（用於麵包屑：工作執行 › 模組名 › 頁名） */
+export function getBreadcrumbModuleForSuffix(suffix: string): string | null {
+  if (suffix.startsWith('/management/') || suffix === '/contract/schedule') return '專案管理'
+  if (
+    suffix.startsWith('/monitoring/') ||
+    suffix.startsWith('/construction/') ||
+    suffix === '/files/photos'
+  ) {
+    return '施工管理'
+  }
+  if (suffix.startsWith('/repair/')) return '報修管理'
+  return null
 }

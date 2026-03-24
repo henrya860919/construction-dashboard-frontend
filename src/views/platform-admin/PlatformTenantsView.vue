@@ -1,16 +1,6 @@
 <script setup lang="ts">
-import type { ColumnDef } from '@tanstack/vue-table'
-import {
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useVueTable,
-} from '@tanstack/vue-table'
-import { FlexRender } from '@tanstack/vue-table'
-import type { SortingState } from '@tanstack/vue-table'
-import { ref, computed, onMounted, h } from 'vue'
-import { valueUpdater } from '@/lib/utils'
+import type { ColumnDef, FilterFn } from '@tanstack/vue-table'
+import { ref, computed, onMounted, watch, h } from 'vue'
 import {
   fetchTenants,
   createTenant,
@@ -19,7 +9,6 @@ import {
   resetUserPassword,
   type TenantItem,
   type CreateTenantPayload,
-  type UpdateTenantPayload,
   type PlatformUserItem,
 } from '@/api/platform'
 import { apiClient } from '@/api/client'
@@ -29,14 +18,6 @@ import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -54,29 +35,57 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import DataTableColumnHeader from '@/components/common/data-table/DataTableColumnHeader.vue'
+import DataTableFeatureSection from '@/components/common/data-table/DataTableFeatureSection.vue'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
+import DataTableFeatureToolbar from '@/components/common/data-table/DataTableFeatureToolbar.vue'
+import DataTableFilterPill from '@/components/common/data-table/DataTableFilterPill.vue'
+import { useClientDataTable } from '@/composables/useClientDataTable'
+import type { TableListFeatures } from '@/types/data-table'
 import PlatformTenantsRowActions from '@/views/platform-admin/PlatformTenantsRowActions.vue'
 import { buildTenantManagePath } from '@/constants/routes'
 import { Plus, Loader2, Trash2 } from 'lucide-vue-next'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const list = ref<TenantItem[]>([])
-const rowSelection = ref<Record<string, boolean>>({})
 const loading = ref(true)
+
+const TABLE_FEATURES: TableListFeatures = {
+  search: true,
+  filtersAndSort: true,
+  columnVisibility: false,
+}
+
+const COLUMN_LABELS: Record<string, string> = {
+  name: '租戶名稱',
+  slug: 'Slug',
+  primaryAdminEmail: '租戶管理員 Email',
+  status: '狀態',
+  expiresAt: '到期日',
+  usersProjects: '人員 / 專案',
+  limits: '限制（預覽）',
+}
 const ALL_STATUS_VALUE = '__all__'
 const statusFilter = ref<string>(ALL_STATUS_VALUE)
+const TENANT_STATUS_FILTER_OPTIONS = [
+  { value: ALL_STATUS_VALUE, label: '全部狀態' },
+  { value: 'active', label: '使用中' },
+  { value: 'suspended', label: '已停用' },
+]
 const createDialogOpen = ref(false)
-const createForm = ref({ name: '', slug: '', status: 'active' as 'active' | 'suspended', expiresAt: '', userLimit: '' as string | number, fileSizeLimitMb: '', storageQuotaMb: '' })
+const createForm = ref({
+  name: '',
+  slug: '',
+  status: 'active' as 'active' | 'suspended',
+  expiresAt: '',
+  userLimit: '' as string | number,
+  fileSizeLimitMb: '',
+  storageQuotaMb: '',
+})
 const createSubmitting = ref(false)
 const createErrorMessage = ref('')
-
-const editDialogOpen = ref(false)
-const editingTenant = ref<TenantItem | null>(null)
-const editForm = ref<{ name: string; slug: string; status: 'active' | 'suspended'; expiresAt: string; userLimit: string; fileSizeLimitMb: string; storageQuotaMb: string }>({ name: '', slug: '', status: 'active', expiresAt: '', userLimit: '', fileSizeLimitMb: '', storageQuotaMb: '' })
-const editSubmitting = ref(false)
-const editErrorMessage = ref('')
-const editTenantUsers = ref<PlatformUserItem[]>([])
-const editTenantUsersLoading = ref(false)
 
 const addUserDialogOpen = ref(false)
 const selectedTenant = ref<TenantItem | null>(null)
@@ -104,11 +113,53 @@ function isExpired(iso: string | null | undefined): boolean {
   return new Date(iso) < new Date()
 }
 
+function tenantStatusLabel(status: string): string {
+  if (status === 'active') return '使用中'
+  if (status === 'suspended') return '已停用'
+  return status
+}
+
+function limitsPreview(t: TenantItem): string {
+  const parts: string[] = []
+  if (t.userLimit != null) parts.push(`人員 ${t.userLimit}`)
+  if (t.fileSizeLimitMb != null) parts.push(`單檔 ${t.fileSizeLimitMb} MB`)
+  if (t.storageQuotaMb != null) parts.push(`總量 ${t.storageQuotaMb} MB`)
+  return parts.length ? parts.join(' · ') : '—'
+}
+
+const tenantsGlobalFilterFn: FilterFn<TenantItem> = (row, _columnId, filterValue) => {
+  const q = String(filterValue ?? '').trim().toLowerCase()
+  if (!q) return true
+  const t = row.original
+  const expStr = formatDate(t.expiresAt).toLowerCase()
+  const lim = limitsPreview(t).toLowerCase()
+  const up = `${t._count?.users ?? '—'} / ${t._count?.projects ?? '—'}`.toLowerCase()
+  const parts = [
+    t.name,
+    t.slug ?? '',
+    t.primaryAdminEmail ?? '',
+    tenantStatusLabel(t.status).toLowerCase(),
+    t.status.toLowerCase(),
+    t.expiresAt?.toLowerCase() ?? '',
+    expStr,
+    String(t.userLimit ?? ''),
+    String(t.fileSizeLimitMb ?? ''),
+    String(t.storageQuotaMb ?? ''),
+    lim,
+    up,
+    t.createdAt?.toLowerCase() ?? '',
+    t.updatedAt?.toLowerCase() ?? '',
+    t.id.toLowerCase(),
+  ].map((s) => String(s).toLowerCase())
+  return parts.some((x) => x.includes(q))
+}
+
 async function loadTenants() {
   loading.value = true
   try {
     const params: { page?: number; limit?: number; status?: string } = { page: 1, limit: 100 }
-    if (statusFilter.value && statusFilter.value !== ALL_STATUS_VALUE) params.status = statusFilter.value
+    if (statusFilter.value && statusFilter.value !== ALL_STATUS_VALUE)
+      params.status = statusFilter.value
     const { list: items } = await fetchTenants(params)
     list.value = items ?? []
   } catch {
@@ -121,115 +172,20 @@ async function loadTenants() {
 onMounted(loadTenants)
 
 function resetCreateForm() {
-  createForm.value = { name: '', slug: '', status: 'active', expiresAt: '', userLimit: '', fileSizeLimitMb: '', storageQuotaMb: '' }
+  createForm.value = {
+    name: '',
+    slug: '',
+    status: 'active',
+    expiresAt: '',
+    userLimit: '',
+    fileSizeLimitMb: '',
+    storageQuotaMb: '',
+  }
   createErrorMessage.value = ''
 }
 
-async function submitCreate() {
-  const name = createForm.value.name?.trim()
-  if (!name) {
-    createErrorMessage.value = '請輸入租戶名稱'
-    return
-  }
-  createSubmitting.value = true
-  createErrorMessage.value = ''
-  try {
-    const payload: CreateTenantPayload = {
-      name,
-      slug: createForm.value.slug?.trim() || undefined,
-      status: createForm.value.status,
-    }
-    if (createForm.value.expiresAt) payload.expiresAt = createForm.value.expiresAt + 'T23:59:59.000Z'
-    const ul = createForm.value.userLimit
-    if (ul !== '' && ul !== undefined) payload.userLimit = typeof ul === 'string' ? (ul === '' ? null : parseInt(ul, 10)) : ul
-    const fl = createForm.value.fileSizeLimitMb
-    if (fl !== '' && fl !== undefined) payload.fileSizeLimitMb = typeof fl === 'string' ? (fl === '' ? null : parseInt(fl, 10)) : fl
-    const sq = createForm.value.storageQuotaMb
-    if (sq !== '' && sq !== undefined) payload.storageQuotaMb = typeof sq === 'string' ? (sq === '' ? null : parseInt(sq, 10)) : sq
-    await createTenant(payload)
-    createDialogOpen.value = false
-    resetCreateForm()
-    await loadTenants()
-  } catch (err: unknown) {
-    const msg =
-      err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-        : '新增失敗'
-    createErrorMessage.value = msg ?? '新增失敗'
-  } finally {
-    createSubmitting.value = false
-  }
-}
-
-async function openEditDialog(tenant: TenantItem) {
-  editingTenant.value = tenant
-  const exp = tenant.expiresAt ? tenant.expiresAt.slice(0, 10) : ''
-  editForm.value = {
-    name: tenant.name,
-    slug: tenant.slug ?? '',
-    status: tenant.status === 'suspended' ? 'suspended' : 'active',
-    expiresAt: exp,
-    userLimit: tenant.userLimit != null ? String(tenant.userLimit) : '',
-    fileSizeLimitMb: tenant.fileSizeLimitMb != null ? String(tenant.fileSizeLimitMb) : '',
-    storageQuotaMb: tenant.storageQuotaMb != null ? String(tenant.storageQuotaMb) : '',
-  }
-  editErrorMessage.value = ''
-  editTenantUsers.value = []
-  editDialogOpen.value = true
-  editTenantUsersLoading.value = true
-  try {
-    const { list: users } = await fetchPlatformUsers({
-      tenantId: tenant.id,
-      systemRole: 'tenant_admin',
-      limit: 50,
-    })
-    editTenantUsers.value = users ?? []
-  } catch {
-    editTenantUsers.value = []
-  } finally {
-    editTenantUsersLoading.value = false
-  }
-}
-
-function closeEditDialog() {
-  editDialogOpen.value = false
-  editingTenant.value = null
-  editTenantUsers.value = []
-  editErrorMessage.value = ''
-}
-
-async function submitEdit() {
-  const tenant = editingTenant.value
-  if (!tenant) return
-  const name = editForm.value.name?.trim()
-  if (!name) {
-    editErrorMessage.value = '請輸入租戶名稱'
-    return
-  }
-  editSubmitting.value = true
-  editErrorMessage.value = ''
-  try {
-    const payload: UpdateTenantPayload = {
-      name,
-      slug: editForm.value.slug?.trim() || null,
-      status: editForm.value.status,
-      expiresAt: editForm.value.expiresAt ? editForm.value.expiresAt + 'T23:59:59.000Z' : null,
-      userLimit: editForm.value.userLimit === '' ? null : Number(editForm.value.userLimit),
-      fileSizeLimitMb: editForm.value.fileSizeLimitMb === '' ? null : Number(editForm.value.fileSizeLimitMb),
-      storageQuotaMb: editForm.value.storageQuotaMb === '' ? null : Number(editForm.value.storageQuotaMb),
-    }
-    await updateTenant(tenant.id, payload)
-    closeEditDialog()
-    await loadTenants()
-  } catch (err: unknown) {
-    const res =
-      err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
-        : null
-    editErrorMessage.value = res?.message ?? '更新失敗'
-  } finally {
-    editSubmitting.value = false
-  }
+function goToTenantManage(tenant: TenantItem) {
+  void router.push(buildTenantManagePath(tenant.id))
 }
 
 function openAddUserDialog(tenant: TenantItem) {
@@ -244,42 +200,6 @@ function closeAddUserDialog() {
   selectedTenant.value = null
   userForm.value = { email: '', password: '', name: '' }
   userErrorMessage.value = ''
-}
-
-async function submitAddUser() {
-  const tenant = selectedTenant.value
-  if (!tenant) return
-  const email = userForm.value.email?.trim()
-  const password = userForm.value.password
-  if (!email || !password) {
-    userErrorMessage.value = '請輸入 Email 與密碼'
-    return
-  }
-  if (password.length < 6) {
-    userErrorMessage.value = '密碼至少 6 碼'
-    return
-  }
-  userSubmitting.value = true
-  userErrorMessage.value = ''
-  try {
-    await apiClient.post<ApiResponse<unknown>>(API_PATH.ADMIN_USERS, {
-      email,
-      password,
-      name: userForm.value.name?.trim() || undefined,
-      systemRole: 'tenant_admin',
-      tenantId: tenant.id,
-    })
-    closeAddUserDialog()
-    await loadTenants()
-  } catch (err: unknown) {
-    const res =
-      err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
-        : null
-    userErrorMessage.value = res?.message ?? '新增失敗'
-  } finally {
-    userSubmitting.value = false
-  }
 }
 
 async function toggleStatus(tenant: TenantItem) {
@@ -358,141 +278,305 @@ function closeBatchDelete() {
   batchDeleteOpen.value = false
   batchDeleteError.value = ''
 }
-const sorting = ref<SortingState>([])
-function limitsPreview(t: TenantItem): string {
-  const parts: string[] = []
-  if (t.userLimit != null) parts.push(`人員 ${t.userLimit}`)
-  if (t.fileSizeLimitMb != null) parts.push(`單檔 ${t.fileSizeLimitMb} MB`)
-  if (t.storageQuotaMb != null) parts.push(`總量 ${t.storageQuotaMb} MB`)
-  return parts.length ? parts.join(' · ') : '—'
+const selectColumn: ColumnDef<TenantItem, unknown> = {
+  id: 'select',
+  header: ({ table }) =>
+    h(Checkbox, {
+      checked: table.getIsAllPageRowsSelected()
+        ? true
+        : table.getIsSomePageRowsSelected()
+          ? 'indeterminate'
+          : false,
+      'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
+      'aria-label': '全選',
+    }),
+  cell: ({ row }) =>
+    h(Checkbox, {
+      checked: row.getIsSelected(),
+      'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
+      'aria-label': '選取此列',
+    }),
+  enableSorting: false,
+  enableHiding: false,
 }
 
 const columns = computed<ColumnDef<TenantItem, unknown>[]>(() => [
-  {
-    id: 'select',
-    header: ({ table }) =>
-      h(Checkbox, {
-        checked: table.getIsAllPageRowsSelected()
-          ? true
-          : table.getIsSomePageRowsSelected()
-            ? 'indeterminate'
-            : false,
-        'onUpdate:checked': (v: boolean | 'indeterminate') => table.toggleAllPageRowsSelected(!!v),
-        'aria-label': '全選',
-      }),
-    cell: ({ row }) =>
-      h(Checkbox, {
-        checked: row.getIsSelected(),
-        'onUpdate:checked': (v: boolean | 'indeterminate') => row.toggleSelected(!!v),
-        'aria-label': '選取此列',
-      }),
-    enableSorting: false,
-  },
+  selectColumn,
   {
     accessorKey: 'name',
-    header: '租戶名稱',
+    id: 'name',
+    meta: { label: COLUMN_LABELS.name },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.name,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) => {
       const t = row.original
-      return h(RouterLink, {
-        to: buildTenantManagePath(t.id),
-        class: 'font-medium text-primary underline-offset-4 hover:underline',
-      }, () => t.name)
+      return h(
+        RouterLink,
+        {
+          to: buildTenantManagePath(t.id),
+          class: 'font-medium text-primary underline-offset-4 hover:underline',
+        },
+        () => t.name
+      )
     },
+    enableHiding: false,
   },
   {
     accessorKey: 'slug',
-    header: 'Slug',
+    id: 'slug',
+    meta: { label: COLUMN_LABELS.slug },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.slug,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) => h('div', { class: 'text-muted-foreground' }, row.original.slug || '—'),
+    enableHiding: false,
   },
   {
-    id: 'account',
-    header: '帳號',
+    id: 'primaryAdminEmail',
+    accessorFn: (row) => row.primaryAdminEmail ?? '',
+    meta: { label: COLUMN_LABELS.primaryAdminEmail },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.primaryAdminEmail,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) => {
-      const n = row.original._count?.users ?? 0
-      return h(Badge, { variant: n > 0 ? 'default' : 'secondary', class: 'font-normal' }, () => n > 0 ? '已設定' : '未設定')
+      const email = row.original.primaryAdminEmail
+      return h(
+        'div',
+        {
+          class: email
+            ? 'max-w-[220px] truncate text-sm text-foreground'
+            : 'text-sm text-muted-foreground',
+          title: email ?? undefined,
+        },
+        email ?? '—'
+      )
     },
+    enableHiding: false,
   },
   {
     accessorKey: 'status',
-    header: '狀態',
+    id: 'status',
+    meta: { label: COLUMN_LABELS.status },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.status,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) =>
-      h(Badge, {
-        variant: row.original.status === 'active' ? 'default' : 'secondary',
-        class: 'font-normal',
-      }, () => row.original.status === 'active' ? '使用中' : '已停用'),
+      h(
+        Badge,
+        {
+          variant: row.original.status === 'active' ? 'default' : 'secondary',
+          class: 'font-normal',
+        },
+        () => tenantStatusLabel(row.original.status)
+      ),
+    enableHiding: false,
   },
   {
     accessorKey: 'expiresAt',
-    header: '到期日',
+    id: 'expiresAt',
+    meta: { label: COLUMN_LABELS.expiresAt },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.expiresAt,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) => {
       const t = row.original
-      return h('span', {
-        class: isExpired(t.expiresAt) ? 'text-destructive' : 'text-muted-foreground',
-      }, formatDate(t.expiresAt))
+      return h(
+        'span',
+        {
+          class: isExpired(t.expiresAt) ? 'text-destructive' : 'text-muted-foreground',
+        },
+        formatDate(t.expiresAt)
+      )
     },
+    sortingFn: 'alphanumeric',
+    enableHiding: false,
   },
   {
     id: 'usersProjects',
-    header: '人員 / 專案',
+    accessorFn: (row) =>
+      `${row._count?.users ?? '—'} / ${row._count?.projects ?? '—'}`,
+    meta: { label: COLUMN_LABELS.usersProjects },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.usersProjects,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) =>
-      h('div', { class: 'text-muted-foreground' }, `${row.original._count?.users ?? '—'} / ${row.original._count?.projects ?? '—'}`),
+      h(
+        'div',
+        { class: 'text-muted-foreground' },
+        `${row.original._count?.users ?? '—'} / ${row.original._count?.projects ?? '—'}`
+      ),
+    enableSorting: false,
+    enableHiding: false,
   },
   {
     id: 'limits',
-    header: '限制（預覽）',
+    accessorFn: (row) => limitsPreview(row),
+    meta: { label: COLUMN_LABELS.limits },
+    header: ({ column }) =>
+      h(DataTableColumnHeader, {
+        column,
+        title: COLUMN_LABELS.limits,
+        class: 'text-foreground',
+      }),
     cell: ({ row }) =>
-      h('div', { class: 'text-muted-foreground text-xs' }, limitsPreview(row.original)),
+      h('div', { class: 'text-xs text-muted-foreground' }, limitsPreview(row.original)),
+    enableSorting: false,
+    enableHiding: false,
   },
   {
     id: 'actions',
-    header: () => h('div', { class: 'w-[100px] text-muted-foreground' }, '操作'),
+    header: () => '',
     cell: ({ row }) =>
       h('div', { class: 'flex' }, [
         h(PlatformTenantsRowActions, {
           row: row.original,
-          onEdit: openEditDialog,
+          onEdit: goToTenantManage,
           onAddUser: openAddUserDialog,
           onResetPassword: openResetPasswordDialog,
           onToggleStatus: toggleStatus,
         }),
       ]),
     enableSorting: false,
+    enableHiding: false,
   },
 ])
 
-const table = useVueTable({
-  get data() {
-    return list.value
-  },
-  get columns() {
-    return columns.value
-  },
-  getCoreRowModel: getCoreRowModel(),
-  getPaginationRowModel: getPaginationRowModel(),
-  getSortedRowModel: getSortedRowModel(),
-  getFilteredRowModel: getFilteredRowModel(),
-  onSortingChange: (updater) => valueUpdater(updater, sorting),
-  onRowSelectionChange: (updater) => valueUpdater(updater, rowSelection),
-  state: {
-    get sorting() {
-      return sorting.value
-    },
-    get rowSelection() {
-      return rowSelection.value
-    },
-  },
+const { table, globalFilter, hasActiveFilters, resetTableState } = useClientDataTable({
+  data: list,
+  columns,
+  features: TABLE_FEATURES,
   getRowId: (row) => row.id,
-  initialState: {
-    pagination: { pageSize: 10 },
-  },
+  globalFilterFn: tenantsGlobalFilterFn,
+  initialPageSize: 10,
 })
+
+watch(statusFilter, () => {
+  resetTableState()
+  void loadTenants()
+})
+
+const toolbarHasActiveFilters = computed(
+  () => hasActiveFilters.value || statusFilter.value !== ALL_STATUS_VALUE,
+)
+
+function resetAllListFilters() {
+  resetTableState()
+  statusFilter.value = ALL_STATUS_VALUE
+}
 
 const selectedRows = computed(() => table.getSelectedRowModel().rows)
 const hasSelection = computed(() => selectedRows.value.length > 0)
 const selectedCount = computed(() => selectedRows.value.length)
 
+const tenantsEmptyText = computed(() => {
+  if (list.value.length === 0) {
+    if (statusFilter.value !== ALL_STATUS_VALUE) return '此狀態下尚無租戶'
+    if (globalFilter.value.trim()) return '沒有符合條件的資料'
+    return '尚無租戶，點「新增租戶」建立第一筆。'
+  }
+  return '沒有符合條件的資料'
+})
+
 function clearSelection() {
-  rowSelection.value = {}
+  table.setRowSelection({})
+}
+
+async function submitCreate() {
+  const name = createForm.value.name?.trim()
+  if (!name) {
+    createErrorMessage.value = '請輸入租戶名稱'
+    return
+  }
+  createSubmitting.value = true
+  createErrorMessage.value = ''
+  try {
+    const payload: CreateTenantPayload = {
+      name,
+      slug: createForm.value.slug?.trim() || undefined,
+      status: createForm.value.status,
+    }
+    if (createForm.value.expiresAt)
+      payload.expiresAt = createForm.value.expiresAt + 'T23:59:59.000Z'
+    const ul = createForm.value.userLimit
+    if (ul !== '' && ul !== undefined)
+      payload.userLimit = typeof ul === 'string' ? (ul === '' ? null : parseInt(ul, 10)) : ul
+    const fl = createForm.value.fileSizeLimitMb
+    if (fl !== '' && fl !== undefined)
+      payload.fileSizeLimitMb = typeof fl === 'string' ? (fl === '' ? null : parseInt(fl, 10)) : fl
+    const sq = createForm.value.storageQuotaMb
+    if (sq !== '' && sq !== undefined)
+      payload.storageQuotaMb = typeof sq === 'string' ? (sq === '' ? null : parseInt(sq, 10)) : sq
+    await createTenant(payload)
+    createDialogOpen.value = false
+    resetCreateForm()
+    table.setRowSelection({})
+    await loadTenants()
+  } catch (err: unknown) {
+    const msg =
+      err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+            ?.message
+        : '新增失敗'
+    createErrorMessage.value = msg ?? '新增失敗'
+  } finally {
+    createSubmitting.value = false
+  }
+}
+
+async function submitAddUser() {
+  const tenant = selectedTenant.value
+  if (!tenant) return
+  const email = userForm.value.email?.trim()
+  const password = userForm.value.password
+  if (!email || !password) {
+    userErrorMessage.value = '請輸入 Email 與密碼'
+    return
+  }
+  if (password.length < 6) {
+    userErrorMessage.value = '密碼至少 6 碼'
+    return
+  }
+  userSubmitting.value = true
+  userErrorMessage.value = ''
+  try {
+    await apiClient.post<ApiResponse<unknown>>(API_PATH.ADMIN_USERS, {
+      email,
+      password,
+      name: userForm.value.name?.trim() || undefined,
+      systemRole: 'tenant_admin',
+      tenantId: tenant.id,
+    })
+    closeAddUserDialog()
+    table.setRowSelection({})
+    await loadTenants()
+  } catch (err: unknown) {
+    const res =
+      err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+        : null
+    userErrorMessage.value = res?.message ?? '新增失敗'
+  } finally {
+    userSubmitting.value = false
+  }
 }
 
 async function confirmBatchDelete() {
@@ -505,7 +589,7 @@ async function confirmBatchDelete() {
       await apiClient.delete(`${API_PATH.PLATFORM_TENANTS}/${id}`)
     }
     closeBatchDelete()
-    rowSelection.value = {}
+    table.setRowSelection({})
     await loadTenants()
   } catch (err: unknown) {
     const res =
@@ -520,241 +604,198 @@ async function confirmBatchDelete() {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-4">
     <!-- Page header -->
     <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight text-foreground">租戶管理</h1>
+      <h1 class="text-xl font-semibold tracking-tight text-foreground">租戶管理</h1>
       <p class="text-sm text-muted-foreground">
-        建立、編輯、停用租戶，設定到期日與使用限制（人員數、上傳與儲存容量）。
+        建立租戶；點租戶名稱或「編輯」進入租戶詳情頁設定基本資料、模組開通與成員。列表可快速停用／啟用、建立帳號或重設密碼。可搜尋名稱、Slug、管理員 Email、狀態、到期日、人員／專案數與限制。
       </p>
     </div>
 
-    <!-- Toolbar: filter + 多選工具列（表格外、表格上方）+ 新增 -->
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <Select v-model="statusFilter" @update:model-value="loadTenants">
-          <SelectTrigger class="w-[140px] bg-background">
-            <SelectValue placeholder="全部狀態" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem :value="ALL_STATUS_VALUE">全部狀態</SelectItem>
-            <SelectItem value="active">使用中</SelectItem>
-            <SelectItem value="suspended">已停用</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div class="flex flex-wrap items-center gap-3">
-        <template v-if="hasSelection">
-          <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
-          <ButtonGroup>
-            <Button variant="outline" @click="clearSelection">
-              取消選取
-            </Button>
-            <Button
-              variant="outline"
-              class="text-destructive hover:text-destructive"
-              @click="openBatchDelete"
-            >
-              <Trash2 class="size-4" />
-              批次刪除
-            </Button>
-          </ButtonGroup>
-        </template>
-        <Dialog :open="createDialogOpen" @update:open="(v: boolean) => { createDialogOpen = v; if (!v) resetCreateForm() }">
-          <DialogTrigger as-child>
-            <Button class="gap-2">
-              <Plus class="size-4" />
-              新增租戶
-            </Button>
-          </DialogTrigger>
+    <DataTableFeatureToolbar
+      :table="table"
+      :features="TABLE_FEATURES"
+      :column-labels="COLUMN_LABELS"
+      :has-active-filters="toolbarHasActiveFilters"
+      :global-filter="globalFilter"
+      :search-disabled="loading"
+      search-placeholder="搜尋租戶名稱、Slug、Email、狀態、到期日、人員／專案、限制…"
+      @reset="resetAllListFilters"
+    >
+      <template #prepend-filters>
+        <DataTableFilterPill
+          v-model="statusFilter"
+          title="租戶狀態"
+          :all-value="ALL_STATUS_VALUE"
+          :options="TENANT_STATUS_FILTER_OPTIONS"
+          :disabled="loading"
+        />
+      </template>
+      <template #actions>
+        <div class="flex flex-wrap items-center justify-end gap-3">
+          <template v-if="hasSelection">
+            <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
+            <ButtonGroup>
+              <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                class="text-destructive hover:text-destructive"
+                @click="openBatchDelete"
+              >
+                <Trash2 class="size-4" />
+                批次刪除
+              </Button>
+            </ButtonGroup>
+          </template>
+          <Dialog
+            :open="createDialogOpen"
+            @update:open="
+              (v: boolean) => {
+                createDialogOpen = v
+                if (!v) resetCreateForm()
+              }
+            "
+          >
+            <DialogTrigger as-child>
+              <Button size="sm" class="gap-2">
+                <Plus class="size-4" />
+                新增租戶
+              </Button>
+            </DialogTrigger>
             <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>新增租戶</DialogTitle>
-                <DialogDescription>
-                  建立新租戶（廠商／公司）。名稱為必填；可設定到期日與使用限制。
-                </DialogDescription>
-              </DialogHeader>
-              <form class="grid gap-4 py-4" @submit.prevent="submitCreate">
+            <DialogHeader>
+              <DialogTitle>新增租戶</DialogTitle>
+              <DialogDescription>
+                建立新租戶（廠商／公司）。名稱為必填；可設定到期日與使用限制。
+              </DialogDescription>
+            </DialogHeader>
+            <form class="grid gap-4 py-4" @submit.prevent="submitCreate">
+              <div class="grid gap-2">
+                <label for="create-name" class="text-sm font-medium text-foreground"
+                  >租戶名稱</label
+                >
+                <Input
+                  id="create-name"
+                  v-model="createForm.name"
+                  placeholder="例：XX 營造"
+                  class="bg-background"
+                />
+              </div>
+              <div class="grid gap-2">
+                <label for="create-slug" class="text-sm font-medium text-foreground"
+                  >Slug（選填）</label
+                >
+                <Input
+                  id="create-slug"
+                  v-model="createForm.slug"
+                  placeholder="例：xx-construction"
+                  class="bg-background"
+                />
+              </div>
+              <div class="grid gap-2">
+                <label class="text-sm font-medium text-foreground">狀態</label>
+                <Select v-model="createForm.status">
+                  <SelectTrigger class="bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">使用中</SelectItem>
+                    <SelectItem value="suspended">已停用</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="grid gap-2">
+                <label for="create-expires" class="text-sm font-medium text-foreground"
+                  >到期日（選填）</label
+                >
+                <Input
+                  id="create-expires"
+                  v-model="createForm.expiresAt"
+                  type="date"
+                  class="bg-background"
+                />
+              </div>
+              <div class="grid grid-cols-2 gap-4">
                 <div class="grid gap-2">
-                  <label for="create-name" class="text-sm font-medium text-foreground">租戶名稱</label>
-                  <Input id="create-name" v-model="createForm.name" placeholder="例：XX 營造" class="bg-background" />
+                  <label for="create-userLimit" class="text-sm font-medium text-foreground"
+                    >人員上限</label
+                  >
+                  <Input
+                    id="create-userLimit"
+                    v-model="createForm.userLimit"
+                    type="number"
+                    min="0"
+                    placeholder="不限制"
+                    class="bg-background"
+                  />
                 </div>
                 <div class="grid gap-2">
-                  <label for="create-slug" class="text-sm font-medium text-foreground">Slug（選填）</label>
-                  <Input id="create-slug" v-model="createForm.slug" placeholder="例：xx-construction" class="bg-background" />
+                  <label for="create-fileSize" class="text-sm font-medium text-foreground"
+                    >單筆上傳 (MB)</label
+                  >
+                  <Input
+                    id="create-fileSize"
+                    v-model="createForm.fileSizeLimitMb"
+                    type="number"
+                    min="0"
+                    placeholder="不限制"
+                    class="bg-background"
+                  />
                 </div>
-                <div class="grid gap-2">
-                  <label class="text-sm font-medium text-foreground">狀態</label>
-                  <Select v-model="createForm.status">
-                    <SelectTrigger class="bg-background">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">使用中</SelectItem>
-                      <SelectItem value="suspended">已停用</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div class="grid gap-2">
-                  <label for="create-expires" class="text-sm font-medium text-foreground">到期日（選填）</label>
-                  <Input id="create-expires" v-model="createForm.expiresAt" type="date" class="bg-background" />
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                  <div class="grid gap-2">
-                    <label for="create-userLimit" class="text-sm font-medium text-foreground">人員上限</label>
-                    <Input id="create-userLimit" v-model="createForm.userLimit" type="number" min="0" placeholder="不限制" class="bg-background" />
-                  </div>
-                  <div class="grid gap-2">
-                    <label for="create-fileSize" class="text-sm font-medium text-foreground">單筆上傳 (MB)</label>
-                    <Input id="create-fileSize" v-model="createForm.fileSizeLimitMb" type="number" min="0" placeholder="不限制" class="bg-background" />
-                  </div>
-                </div>
-                <div class="grid gap-2">
-                  <label for="create-storage" class="text-sm font-medium text-foreground">總儲存容量 (MB)</label>
-                  <Input id="create-storage" v-model="createForm.storageQuotaMb" type="number" min="0" placeholder="不限制" class="bg-background" />
-                </div>
-                <p v-if="createErrorMessage" class="text-sm text-destructive">{{ createErrorMessage }}</p>
-                <DialogFooter>
-                  <Button type="button" variant="outline" @click="createDialogOpen = false">取消</Button>
-                  <Button type="submit" :disabled="createSubmitting">
-                    <Loader2 v-if="createSubmitting" class="size-4 animate-spin" />
-                    {{ createSubmitting ? '建立中…' : '建立' }}
-                  </Button>
-                </DialogFooter>
-              </form>
+              </div>
+              <div class="grid gap-2">
+                <label for="create-storage" class="text-sm font-medium text-foreground"
+                  >總儲存容量 (MB)</label
+                >
+                <Input
+                  id="create-storage"
+                  v-model="createForm.storageQuotaMb"
+                  type="number"
+                  min="0"
+                  placeholder="不限制"
+                  class="bg-background"
+                />
+              </div>
+              <p v-if="createErrorMessage" class="text-sm text-destructive">
+                {{ createErrorMessage }}
+              </p>
+              <DialogFooter>
+                <Button type="button" variant="outline" @click="createDialogOpen = false"
+                  >取消</Button
+                >
+                <Button type="submit" :disabled="createSubmitting">
+                  <Loader2 v-if="createSubmitting" class="size-4 animate-spin" />
+                  {{ createSubmitting ? '建立中…' : '建立' }}
+                </Button>
+              </DialogFooter>
+            </form>
             </DialogContent>
           </Dialog>
-      </div>
-    </div>
+        </div>
+      </template>
+    </DataTableFeatureToolbar>
 
-    <!-- Table -->
-    <div class="rounded-lg border border-border bg-card p-4">
+    <div class="rounded-lg border border-border bg-card">
       <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
         <Loader2 class="size-8 animate-spin" />
       </div>
-      <template v-else>
-        <Table>
-          <TableHeader>
-            <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-              <TableHead v-for="header in headerGroup.headers" :key="header.id">
-                <FlexRender
-                  v-if="!header.isPlaceholder"
-                  :render="header.column.columnDef.header"
-                  :props="header.getContext()"
-                />
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <template v-if="table.getRowModel().rows?.length">
-              <TableRow
-                v-for="row in table.getRowModel().rows"
-                :key="row.id"
-                :data-state="row.getIsSelected() ? 'selected' : undefined"
-              >
-                <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
-                  <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
-                </TableCell>
-              </TableRow>
-            </template>
-            <template v-else>
-              <TableRow>
-                <TableCell :colspan="9" class="h-24 text-center text-muted-foreground">
-                  尚無租戶，或目前篩選無結果。點擊「新增租戶」建立第一筆。
-                </TableCell>
-              </TableRow>
-            </template>
-          </TableBody>
-        </Table>
-        <DataTablePagination :table="table" />
-      </template>
+      <DataTableFeatureSection v-else :table="table" :empty-text="tenantsEmptyText" />
+    </div>
+    <div v-if="!loading && list.length > 0" class="mt-4">
+      <DataTablePagination :table="table" />
     </div>
 
-    <!-- Edit dialog -->
-    <Dialog :open="editDialogOpen" @update:open="(v: boolean) => { if (!v) closeEditDialog() }">
-      <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>編輯租戶</DialogTitle>
-          <DialogDescription>
-            修改租戶名稱、狀態、到期日與使用限制。
-          </DialogDescription>
-        </DialogHeader>
-        <form v-if="editingTenant" class="grid gap-4 py-4" @submit.prevent="submitEdit">
-          <div class="grid gap-2">
-            <label for="edit-name" class="text-sm font-medium text-foreground">租戶名稱</label>
-            <Input id="edit-name" v-model="editForm.name" class="bg-background" />
-          </div>
-          <div class="grid gap-2">
-            <label for="edit-slug" class="text-sm font-medium text-foreground">Slug</label>
-            <Input id="edit-slug" v-model="editForm.slug" class="bg-background" />
-          </div>
-          <div class="grid gap-2">
-            <label class="text-sm font-medium text-foreground">狀態</label>
-            <Select v-model="editForm.status">
-              <SelectTrigger class="bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">使用中</SelectItem>
-                <SelectItem value="suspended">已停用</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="grid gap-2">
-            <label for="edit-expires" class="text-sm font-medium text-foreground">到期日</label>
-            <Input id="edit-expires" v-model="editForm.expiresAt" type="date" class="bg-background" />
-          </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="grid gap-2">
-              <label for="edit-userLimit" class="text-sm font-medium text-foreground">人員上限</label>
-              <Input id="edit-userLimit" v-model="editForm.userLimit" type="number" min="0" placeholder="不限制" class="bg-background" />
-            </div>
-            <div class="grid gap-2">
-              <label for="edit-fileSize" class="text-sm font-medium text-foreground">單筆上傳 (MB)</label>
-              <Input id="edit-fileSize" v-model="editForm.fileSizeLimitMb" type="number" min="0" placeholder="不限制" class="bg-background" />
-            </div>
-          </div>
-          <div class="grid gap-2">
-            <label for="edit-storage" class="text-sm font-medium text-foreground">總儲存容量 (MB)</label>
-            <Input id="edit-storage" v-model="editForm.storageQuotaMb" type="number" min="0" placeholder="不限制" class="bg-background" />
-          </div>
-          <!-- 租戶管理員 -->
-          <div class="space-y-2 border-t border-border pt-4">
-            <p class="text-sm font-medium text-foreground">租戶管理員</p>
-            <p class="text-xs text-muted-foreground">此租戶下的租戶管理員帳號</p>
-            <div v-if="editTenantUsersLoading" class="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-              <Loader2 class="size-4 animate-spin" />
-              載入中…
-            </div>
-            <ul v-else-if="editTenantUsers.length === 0" class="rounded-md border border-border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
-              尚無租戶管理員
-            </ul>
-            <ul v-else class="space-y-1.5 rounded-md border border-border bg-muted/20 px-3 py-2">
-              <li
-                v-for="u in editTenantUsers"
-                :key="u.id"
-                class="flex flex-wrap items-center justify-between gap-2 text-sm"
-              >
-                <span class="font-medium text-foreground">{{ u.name || u.email }}</span>
-                <span class="text-muted-foreground">{{ u.email }}</span>
-                <Badge variant="secondary" class="shrink-0 text-xs">租戶管理員</Badge>
-              </li>
-            </ul>
-          </div>
-          <p v-if="editErrorMessage" class="text-sm text-destructive">{{ editErrorMessage }}</p>
-          <DialogFooter>
-            <Button type="button" variant="outline" @click="closeEditDialog">取消</Button>
-            <Button type="submit" :disabled="editSubmitting">
-              <Loader2 v-if="editSubmitting" class="size-4 animate-spin" />
-              {{ editSubmitting ? '儲存中…' : '儲存' }}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-
     <!-- Add user dialog -->
-    <Dialog :open="addUserDialogOpen" @update:open="(v: boolean) => { if (!v) closeAddUserDialog() }">
+    <Dialog
+      :open="addUserDialogOpen"
+      @update:open="
+        (v: boolean) => {
+          if (!v) closeAddUserDialog()
+        }
+      "
+    >
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>為租戶新增帳號</DialogTitle>
@@ -767,15 +808,34 @@ async function confirmBatchDelete() {
         <form class="grid gap-4 py-4" @submit.prevent="submitAddUser">
           <div class="grid gap-2">
             <label for="add-user-email" class="text-sm font-medium text-foreground">Email</label>
-            <Input id="add-user-email" v-model="userForm.email" type="email" placeholder="user@example.com" class="bg-background" />
+            <Input
+              id="add-user-email"
+              v-model="userForm.email"
+              type="email"
+              placeholder="user@example.com"
+              class="bg-background"
+            />
           </div>
           <div class="grid gap-2">
             <label for="add-user-password" class="text-sm font-medium text-foreground">密碼</label>
-            <Input id="add-user-password" v-model="userForm.password" type="password" placeholder="至少 6 碼" class="bg-background" />
+            <Input
+              id="add-user-password"
+              v-model="userForm.password"
+              type="password"
+              placeholder="至少 6 碼"
+              class="bg-background"
+            />
           </div>
           <div class="grid gap-2">
-            <label for="add-user-name" class="text-sm font-medium text-foreground">姓名（選填）</label>
-            <Input id="add-user-name" v-model="userForm.name" placeholder="顯示名稱" class="bg-background" />
+            <label for="add-user-name" class="text-sm font-medium text-foreground"
+              >姓名（選填）</label
+            >
+            <Input
+              id="add-user-name"
+              v-model="userForm.name"
+              placeholder="顯示名稱"
+              class="bg-background"
+            />
           </div>
           <p v-if="userErrorMessage" class="text-sm text-destructive">{{ userErrorMessage }}</p>
           <DialogFooter>
@@ -790,13 +850,21 @@ async function confirmBatchDelete() {
     </Dialog>
 
     <!-- Reset password dialog -->
-    <Dialog :open="resetPasswordDialogOpen" @update:open="(v: boolean) => { if (!v) closeResetPasswordDialog() }">
+    <Dialog
+      :open="resetPasswordDialogOpen"
+      @update:open="
+        (v: boolean) => {
+          if (!v) closeResetPasswordDialog()
+        }
+      "
+    >
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>重設密碼</DialogTitle>
           <DialogDescription>
             <template v-if="resetPasswordTenant">
-              為「{{ resetPasswordTenant.name }}」的帳號重設密碼（例如使用者忘記密碼時）。新密碼至少 6 碼。
+              為「{{ resetPasswordTenant.name }}」的帳號重設密碼（例如使用者忘記密碼時）。新密碼至少
+              6 碼。
             </template>
           </DialogDescription>
         </DialogHeader>
@@ -812,22 +880,23 @@ async function confirmBatchDelete() {
                   <SelectValue placeholder="請選擇要重設的帳號" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem
-                    v-for="u in tenantUsers"
-                    :key="u.id"
-                    :value="u.id"
-                  >
+                  <SelectItem v-for="u in tenantUsers" :key="u.id" :value="u.id">
                     {{ u.name || u.email }} ({{ u.email }})
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div v-if="tenantUsers.length === 0 && !tenantUsersLoading" class="text-sm text-muted-foreground">
+            <div
+              v-if="tenantUsers.length === 0 && !tenantUsersLoading"
+              class="text-sm text-muted-foreground"
+            >
               此租戶尚無帳號，請先使用「帳號」按鈕新增。
             </div>
             <template v-else>
               <div class="grid gap-2">
-                <label for="reset-new-password" class="text-sm font-medium text-foreground">新密碼</label>
+                <label for="reset-new-password" class="text-sm font-medium text-foreground"
+                  >新密碼</label
+                >
                 <Input
                   id="reset-new-password"
                   v-model="resetPasswordNewPassword"
@@ -836,9 +905,13 @@ async function confirmBatchDelete() {
                   class="bg-background"
                 />
               </div>
-              <p v-if="resetPasswordErrorMessage" class="text-sm text-destructive">{{ resetPasswordErrorMessage }}</p>
+              <p v-if="resetPasswordErrorMessage" class="text-sm text-destructive">
+                {{ resetPasswordErrorMessage }}
+              </p>
               <DialogFooter>
-                <Button type="button" variant="outline" @click="closeResetPasswordDialog">取消</Button>
+                <Button type="button" variant="outline" @click="closeResetPasswordDialog"
+                  >取消</Button
+                >
                 <Button type="submit" :disabled="resetPasswordSubmitting">
                   <Loader2 v-if="resetPasswordSubmitting" class="size-4 animate-spin" />
                   {{ resetPasswordSubmitting ? '重設中…' : '重設密碼' }}
@@ -860,7 +933,9 @@ async function confirmBatchDelete() {
         </DialogHeader>
         <p v-if="batchDeleteError" class="text-sm text-destructive">{{ batchDeleteError }}</p>
         <DialogFooter>
-          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete">取消</Button>
+          <Button variant="outline" :disabled="batchDeleteLoading" @click="closeBatchDelete"
+            >取消</Button
+          >
           <Button variant="destructive" :disabled="batchDeleteLoading" @click="confirmBatchDelete">
             <Loader2 v-if="batchDeleteLoading" class="mr-2 size-4 animate-spin" />
             刪除

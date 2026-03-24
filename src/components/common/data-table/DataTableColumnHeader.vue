@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 interface Props {
-  column: Column<unknown, unknown>
+  /** 各列表列型別不同，表頭元件僅呼叫排序／隱藏 API */
+  column: Column<any, unknown>
   title: string
   class?: string
 }

@@ -1,20 +1,12 @@
 <script setup lang="ts">
 import type { ColumnDef } from '@tanstack/vue-table'
 import { getCoreRowModel, getPaginationRowModel, useVueTable } from '@tanstack/vue-table'
-import { FlexRender } from '@tanstack/vue-table'
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import { valueUpdater } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -26,8 +18,11 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
+import DataTableToolbarShell from '@/components/common/data-table/DataTableToolbarShell.vue'
+import DataTableFeatureSection from '@/components/common/data-table/DataTableFeatureSection.vue'
+import DataTableFilterPill from '@/components/common/data-table/DataTableFilterPill.vue'
 import PlatformAnnouncementsRowActions from '@/views/platform-admin/PlatformAnnouncementsRowActions.vue'
-import { Loader2, Megaphone, Plus, Trash2 } from 'lucide-vue-next'
+import { Loader2, Plus, Search, Trash2 } from 'lucide-vue-next'
 import {
   fetchPlatformAnnouncements,
   createPlatformAnnouncement,
@@ -38,24 +33,62 @@ import {
   type TenantItem,
 } from '@/api/platform'
 
+const ALL_TARGET = 'all' as const
+const targetScopePillOptions = computed(() => {
+  const rows = list.value
+  const globalCount = rows.filter((r) => !r.targetTenantIds || r.targetTenantIds.length === 0).length
+  const specificCount = rows.filter((r) => (r.targetTenantIds?.length ?? 0) > 0).length
+  return [
+    { value: ALL_TARGET, label: '全部對象', count: rows.length },
+    { value: 'global', label: '全平台', count: globalCount },
+    { value: 'specific', label: '指定租戶', count: specificCount },
+  ]
+})
 const list = ref<PlatformAnnouncementItem[]>([])
 const loading = ref(true)
 const tenants = ref<TenantItem[]>([])
 const rowSelection = ref<Record<string, boolean>>({})
+const targetScopeFilter = ref<string>(ALL_TARGET)
 const dialogOpen = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const editingId = ref<string | null>(null)
-const form = ref({ title: '', body: '', publishedAt: '', expiresAt: '', targetSpecificTenants: false, targetTenantIds: [] as string[] })
+const form = ref({
+  title: '',
+  body: '',
+  publishedAt: '',
+  expiresAt: '',
+  targetSpecificTenants: false,
+  targetTenantIds: [] as string[],
+})
 const submitting = ref(false)
 const errorMessage = ref('')
 const batchDeleteOpen = ref(false)
 const batchDeleteLoading = ref(false)
 const batchDeleteError = ref('')
+const searchQuery = ref('')
+
+const displayList = computed(() => {
+  let rows = list.value
+  if (targetScopeFilter.value === 'global') {
+    rows = rows.filter((r) => !r.targetTenantIds || r.targetTenantIds.length === 0)
+  } else if (targetScopeFilter.value === 'specific') {
+    rows = rows.filter((r) => (r.targetTenantIds?.length ?? 0) > 0)
+  }
+  return rows
+})
+
+const toolbarHasActiveFilters = computed(
+  () => searchQuery.value.trim() !== '' || targetScopeFilter.value !== ALL_TARGET,
+)
 
 async function load() {
   loading.value = true
   try {
-    const res = await fetchPlatformAnnouncements({ page: 1, limit: 500 })
+    const res = await fetchPlatformAnnouncements({
+      page: 1,
+      limit: 500,
+      q: searchQuery.value.trim() || undefined,
+    })
     list.value = res.list ?? []
   } catch {
     list.value = []
@@ -63,6 +96,22 @@ async function load() {
     loading.value = false
   }
 }
+
+function resetFilters() {
+  searchQuery.value = ''
+  targetScopeFilter.value = ALL_TARGET
+  rowSelection.value = {}
+  void load()
+}
+
+watchDebounced(
+  searchQuery,
+  () => {
+    rowSelection.value = {}
+    void load()
+  },
+  { debounce: 400 },
+)
 
 async function loadTenants() {
   try {
@@ -76,16 +125,23 @@ async function loadTenants() {
 function openCreate() {
   dialogMode.value = 'create'
   editingId.value = null
-  form.value = { title: '', body: '', publishedAt: '', expiresAt: '', targetSpecificTenants: false, targetTenantIds: [] }
+  form.value = {
+    title: '',
+    body: '',
+    publishedAt: '',
+    expiresAt: '',
+    targetSpecificTenants: false,
+    targetTenantIds: [],
+  }
   errorMessage.value = ''
-  loadTenants()
+  void loadTenants()
   dialogOpen.value = true
 }
 
 function openEdit(row: PlatformAnnouncementItem) {
   dialogMode.value = 'edit'
   editingId.value = row.id
-  const ids = row.targetTenantIds as string[] | null
+  const ids = row.targetTenantIds
   form.value = {
     title: row.title,
     body: row.body,
@@ -95,7 +151,7 @@ function openEdit(row: PlatformAnnouncementItem) {
     targetTenantIds: ids ?? [],
   }
   errorMessage.value = ''
-  loadTenants()
+  void loadTenants()
   dialogOpen.value = true
 }
 
@@ -126,7 +182,10 @@ async function submit() {
     dialogOpen.value = false
     await load()
   } catch (e: unknown) {
-    const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : '操作失敗'
+    const msg =
+      e && typeof e === 'object' && 'message' in e
+        ? String((e as { message: string }).message)
+        : '操作失敗'
     errorMessage.value = msg
   } finally {
     submitting.value = false
@@ -135,7 +194,9 @@ async function submit() {
 
 function remove(row: PlatformAnnouncementItem) {
   if (!confirm(`確定要刪除公告「${row.title}」？`)) return
-  deletePlatformAnnouncement(row.id).then(load).catch(() => {})
+  deletePlatformAnnouncement(row.id)
+    .then(load)
+    .catch(() => {})
 }
 
 function formatDate(iso: string | null) {
@@ -144,7 +205,7 @@ function formatDate(iso: string | null) {
 }
 
 function targetLabel(row: PlatformAnnouncementItem) {
-  const ids = row.targetTenantIds as string[] | null
+  const ids = row.targetTenantIds
   if (!ids || ids.length === 0) return '全平台'
   return `指定 ${ids.length} 個租戶`
 }
@@ -184,13 +245,21 @@ const columns = computed<ColumnDef<PlatformAnnouncementItem, unknown>[]>(() => [
     accessorKey: 'publishedAt',
     header: () => '發佈時間',
     cell: ({ row }) =>
-      h('span', { class: 'tabular-nums text-muted-foreground' }, formatDate(row.original.publishedAt)),
+      h(
+        'span',
+        { class: 'tabular-nums text-muted-foreground' },
+        formatDate(row.original.publishedAt),
+      ),
   },
   {
     accessorKey: 'expiresAt',
     header: () => '下架時間',
     cell: ({ row }) =>
-      h('span', { class: 'tabular-nums text-muted-foreground' }, formatDate(row.original.expiresAt)),
+      h(
+        'span',
+        { class: 'tabular-nums text-muted-foreground' },
+        formatDate(row.original.expiresAt),
+      ),
   },
   {
     id: 'actions',
@@ -209,7 +278,7 @@ const columns = computed<ColumnDef<PlatformAnnouncementItem, unknown>[]>(() => [
 
 const table = useVueTable({
   get data() {
-    return list.value
+    return displayList.value
   },
   get columns() {
     return columns.value
@@ -228,9 +297,24 @@ const table = useVueTable({
   },
 })
 
+watch(targetScopeFilter, () => {
+  table.setPageIndex(0)
+  rowSelection.value = {}
+})
+
 const selectedRows = computed(() => table.getSelectedRowModel().rows)
 const hasSelection = computed(() => selectedRows.value.length > 0)
 const selectedCount = computed(() => selectedRows.value.length)
+
+const emptyText = computed(() => {
+  if (list.value.length === 0) {
+    return searchQuery.value.trim()
+      ? '搜尋無符合的公告。'
+      : '尚無公告，點擊「新增公告」建立。'
+  }
+  if (displayList.value.length === 0) return '此對象篩選下沒有公告。'
+  return '此頁無資料'
+})
 
 function clearSelection() {
   rowSelection.value = {}
@@ -259,7 +343,10 @@ async function confirmBatchDelete() {
     rowSelection.value = {}
     await load()
   } catch (e: unknown) {
-    const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : '批次刪除失敗'
+    const msg =
+      e && typeof e === 'object' && 'message' in e
+        ? String((e as { message: string }).message)
+        : '批次刪除失敗'
     batchDeleteError.value = msg
   } finally {
     batchDeleteLoading.value = false
@@ -267,99 +354,96 @@ async function confirmBatchDelete() {
 }
 
 onMounted(() => {
-  load()
-  loadTenants()
+  void load()
+  void loadTenants()
 })
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-4">
     <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight text-foreground">平台公告</h1>
+      <h1 class="text-xl font-semibold tracking-tight text-foreground">平台公告</h1>
       <p class="text-sm text-muted-foreground">
-        發佈維護通知或政策變更，可選擇全平台或指定租戶。
+        發佈維護通知或政策變更。關鍵字會於輸入後自動查詢 API；可篩選對象（全平台／指定租戶）。使用「重設」清空條件。
       </p>
     </div>
 
-    <!-- 工具列：右側 已選 + ButtonGroup + 新增公告 -->
-    <div class="flex flex-wrap items-center justify-end gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <template v-if="hasSelection">
-          <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
-          <ButtonGroup>
-            <Button variant="outline" @click="clearSelection">
-              取消選取
-            </Button>
-            <Button
-              variant="outline"
-              class="text-destructive hover:text-destructive"
-              @click="openBatchDelete"
-            >
-              <Trash2 class="size-4" />
-              批次刪除
-            </Button>
-          </ButtonGroup>
-        </template>
-        <Button @click="openCreate">
-          <Plus class="mr-2 size-4" />
-          新增公告
-        </Button>
-      </div>
-    </div>
+    <DataTableToolbarShell
+      :table="table"
+      :column-labels="{}"
+      :has-active-filters="toolbarHasActiveFilters"
+      :show-multi-sort="false"
+      :show-column-visibility="false"
+      @reset="resetFilters"
+    >
+      <template #filters>
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <div class="relative min-w-0 max-w-sm flex-1 basis-full sm:min-w-[240px] sm:basis-auto">
+            <Search
+              class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              v-model="searchQuery"
+              type="search"
+              placeholder="標題、內文關鍵字…"
+              class="h-8 w-full bg-background pl-9 sm:max-w-sm"
+              :disabled="loading"
+              autocomplete="off"
+            />
+          </div>
+          <DataTableFilterPill
+            v-model="targetScopeFilter"
+            title="對象"
+            :all-value="ALL_TARGET"
+            :options="targetScopePillOptions"
+            :disabled="loading"
+          />
+        </div>
+      </template>
+      <template #actions>
+        <div class="flex flex-wrap items-center justify-end gap-3">
+          <template v-if="hasSelection">
+            <span class="text-sm text-muted-foreground">已選 {{ selectedCount }} 項</span>
+            <ButtonGroup>
+              <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                class="text-destructive hover:text-destructive"
+                @click="openBatchDelete"
+              >
+                <Trash2 class="size-4" />
+                批次刪除
+              </Button>
+            </ButtonGroup>
+          </template>
+          <Button size="sm" @click="openCreate">
+            <Plus class="mr-2 size-4" />
+            新增公告
+          </Button>
+        </div>
+      </template>
+    </DataTableToolbarShell>
 
-    <!-- 表格區塊（規範：rounded-lg border bg-card，不用 Card 包） -->
-    <div class="rounded-lg border border-border bg-card p-4">
+    <div class="rounded-lg border border-border bg-card">
       <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
         <Loader2 class="size-8 animate-spin" />
       </div>
-      <template v-else>
-        <div v-if="!list.length" class="py-16 text-center text-sm text-muted-foreground">
-          <Megaphone class="mx-auto mb-2 size-10 opacity-50" />
-          <p>尚無公告，點擊「新增公告」建立。</p>
-        </div>
-        <template v-else>
-          <div class="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-                  <TableHead v-for="header in headerGroup.headers" :key="header.id">
-                    <FlexRender
-                      v-if="!header.isPlaceholder"
-                      :render="header.column.columnDef.header"
-                      :props="header.getContext()"
-                    />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <template v-if="table.getRowModel().rows?.length">
-                  <TableRow
-                    v-for="row in table.getRowModel().rows"
-                    :key="row.id"
-                    :data-state="row.getIsSelected() ? 'selected' : undefined"
-                  >
-                    <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
-                      <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
-                    </TableCell>
-                  </TableRow>
-                </template>
-                <template v-else>
-                  <TableRow>
-                    <TableCell :colspan="6" class="h-24 text-center text-muted-foreground">
-                      尚無公告，點擊「新增公告」建立。
-                    </TableCell>
-                  </TableRow>
-                </template>
-              </TableBody>
-            </Table>
-          </div>
-          <DataTablePagination :table="table" />
-        </template>
-      </template>
+      <DataTableFeatureSection v-else :table="table" :empty-text="emptyText" />
+    </div>
+    <div v-if="!loading && displayList.length > 0" class="mt-4">
+      <DataTablePagination :table="table" />
     </div>
 
-    <!-- 批次刪除確認 -->
-    <Dialog :open="batchDeleteOpen" @update:open="(v: boolean) => { if (!v) closeBatchDelete() }">
+    <Dialog
+      :open="batchDeleteOpen"
+      @update:open="
+        (v: boolean) => {
+          if (!v) closeBatchDelete()
+        }
+      "
+    >
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>批次刪除公告</DialogTitle>
@@ -386,11 +470,19 @@ onMounted(() => {
         </DialogHeader>
         <div class="grid gap-4 py-4">
           <div class="grid gap-2">
-            <label for="title" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">標題</label>
+            <label
+              for="title"
+              class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >標題</label
+            >
             <Input id="title" v-model="form.title" placeholder="公告標題" class="bg-background" />
           </div>
           <div class="grid gap-2">
-            <label for="body" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">內容</label>
+            <label
+              for="body"
+              class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >內容</label
+            >
             <textarea
               id="body"
               v-model="form.body"
@@ -410,8 +502,10 @@ onMounted(() => {
             </div>
           </div>
           <div class="flex items-center space-x-2">
-            <Switch id="targetSpecificTenants" v-model:checked="form.targetSpecificTenants" />
-            <label for="targetSpecificTenants" class="text-sm font-medium leading-none">指定租戶（開啟後可多選，未開啟則為全平台）</label>
+            <Switch id="targetSpecificTenants" v-model="form.targetSpecificTenants" />
+            <label for="targetSpecificTenants" class="text-sm font-medium leading-none"
+              >指定租戶（開啟後可多選，未開啟則為全平台）</label
+            >
           </div>
           <div v-if="form.targetSpecificTenants" class="grid gap-2">
             <label class="text-sm font-medium leading-none">選擇要顯示的租戶（可多選）</label>

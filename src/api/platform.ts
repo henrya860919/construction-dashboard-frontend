@@ -40,7 +40,8 @@ export interface LoginLogItem {
 export async function fetchLoginLogs(params?: {
   page?: number
   limit?: number
-  email?: string
+  /** 關鍵字：Email／IP／失敗原因 */
+  q?: string
   success?: boolean
   from?: string
   to?: string
@@ -70,6 +71,8 @@ export async function fetchAuditLogs(params?: {
   action?: string
   resourceType?: string
   tenantId?: string
+  /** 關鍵字：操作者 Email／姓名、動作、資源類型、資源 ID、IP */
+  search?: string
   from?: string
   to?: string
 }) {
@@ -106,6 +109,31 @@ export async function fetchTenants(params?: { page?: number; limit?: number; sta
 export async function getTenant(id: string) {
   const { data } = await apiClient.get<ApiResponse<TenantItem>>(
     `${API_PATH.PLATFORM_TENANTS}/${id}`
+  )
+  return data.data
+}
+
+/** 租戶模組開通：未儲存前 moduleEntitlementsGranted=false，租戶端視為未開通 */
+export interface TenantModuleEntitlementsDto {
+  disabledModuleIds: string[]
+  moduleEntitlementsGranted: boolean
+}
+
+export async function getTenantModuleEntitlements(tenantId: string): Promise<TenantModuleEntitlementsDto> {
+  const { data } = await apiClient.get<ApiResponse<TenantModuleEntitlementsDto>>(
+    `${API_PATH.PLATFORM_TENANTS}/${tenantId}/module-entitlements`,
+    { params: { _t: Date.now() } }
+  )
+  return data.data
+}
+
+export async function replaceTenantModuleEntitlements(
+  tenantId: string,
+  disabledModuleIds: string[]
+): Promise<TenantModuleEntitlementsDto> {
+  const { data } = await apiClient.put<ApiResponse<TenantModuleEntitlementsDto>>(
+    `${API_PATH.PLATFORM_TENANTS}/${tenantId}/module-entitlements`,
+    { disabledModuleIds }
   )
   return data.data
 }
@@ -177,7 +205,12 @@ export interface PlatformAnnouncementItem {
   updatedAt: string
 }
 
-export async function fetchPlatformAnnouncements(params?: { page?: number; limit?: number }) {
+export async function fetchPlatformAnnouncements(params?: {
+  page?: number
+  limit?: number
+  /** 關鍵字：標題、內文 */
+  q?: string
+}) {
   const { data } = await apiClient.get<PaginatedResponse<PlatformAnnouncementItem>>(
     API_PATH.PLATFORM_ANNOUNCEMENTS,
     { params }

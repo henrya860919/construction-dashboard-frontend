@@ -31,7 +31,7 @@ export const buttonVariants = cva(
     },
     defaultVariants: {
       variant: "default",
-      size: "sm",
+      size: "default",
     },
   },
 )

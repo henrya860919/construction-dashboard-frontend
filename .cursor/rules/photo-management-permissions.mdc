@@ -1,0 +1,15 @@
+---
+description: 照片管理（construction.photo）權限與 category=photo 規則；擴充前後端時對齊
+---
+
+# 照片管理權限
+
+完整對照表、檔案索引與檢查清單見 **`docs/photo-management-permissions.md`**。
+
+實作要點：
+
+- 模組 id：**`construction.photo`**；專案路徑 suffix：**`/files/photos`**（`permission-modules.ts` 的 `NAV_PATH_PERMISSION_MODULE`）。
+- 前端：`useProjectModuleActions(projectId, 'construction.photo')`；路由 read 守門已用 `resolvePermissionPathSuffix`。
+- 後端：相簿／我的最愛在各自 `*.service.ts` 內 `ensurePhoto` → `assertProjectModuleAction`。
+- 經 **file** 上傳／讀／刪：附件 **`category` 必須為 `photo`**（`FILE_CATEGORY_PHOTO`）才會守 `construction.photo`；否則屬 **`construction.upload`**。
+- 新增 API 或路由時：對齊 CRUD 語意、更新 path→模組映射，並與後端 `permission-modules` 常數同步。

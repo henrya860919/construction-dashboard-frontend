@@ -16,6 +16,16 @@ import {
   Circle,
   CheckCircle2,
 } from 'lucide-vue-next'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
@@ -28,6 +38,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { listProjectFiles, deleteFile } from '@/api/files'
 import type { AttachmentItem } from '@/api/files'
 import {
@@ -47,12 +63,75 @@ import {
 import { useUploadQueue } from '@/composables/useUploadQueue'
 import { useAuthImageUrl } from '@/composables/useAuthImageUrl'
 import PhotoThumbnail from '@/components/files/PhotoThumbnail.vue'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { toast } from '@/components/ui/sonner'
 
 const PHOTO_CATEGORY = 'photo'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.projectId as string) ?? '')
 const { enqueueAndUpload } = useUploadQueue()
+const photoPerm = useProjectModuleActions(projectId, 'construction.photo')
+
+const PERMISSION_HINT = '您沒有操作權限，如需使用請洽專案管理員。'
+
+/** 我的最愛：需能變更資料（與後端 update 語意對齊） */
+const canFavorite = computed(
+  () => photoPerm.canUpdate.value || photoPerm.canCreate.value
+)
+
+type FeedbackVariant = 'default' | 'destructive'
+
+/** 漂浮 toast（Sonner），不佔版面。預設不帶 duration，沿用 `Sonner.vue` 的 Toaster `:duration`。 */
+function showFeedback(
+  variant: FeedbackVariant,
+  title: string,
+  description?: string,
+  durationMs?: number
+) {
+  const opts = {
+    ...(description ? { description } : {}),
+    ...(durationMs != null ? { duration: durationMs } : {}),
+  }
+  if (variant === 'destructive') toast.error(title, opts)
+  else toast.success(title, opts)
+}
+
+const noticeDialogOpen = ref(false)
+const noticeDialogTitle = ref('')
+const noticeDialogDescription = ref('')
+
+function openNoticeDialog(title: string, description: string) {
+  noticeDialogTitle.value = title
+  noticeDialogDescription.value = description
+  noticeDialogOpen.value = true
+}
+
+function apiErrorMessage(err: unknown): string | null {
+  const e = err as { response?: { data?: { error?: { message?: string } } } }
+  return e?.response?.data?.error?.message ?? null
+}
+
+function isNoPermission(err: unknown): boolean {
+  const e = err as { response?: { status?: number } }
+  return e?.response?.status === 403
+}
+
+function isNetworkError(err: unknown): boolean {
+  const e = err as { response?: unknown; code?: string; message?: string }
+  if (e?.response !== undefined) return false
+  return e?.code === 'ERR_NETWORK' || e?.message === 'Network Error'
+}
+
+function handleActionError(err: unknown, fallback: string) {
+  if (isNoPermission(err)) {
+    showFeedback('destructive', '沒有權限', apiErrorMessage(err) ?? '您沒有執行此操作的權限。')
+  } else if (isNetworkError(err)) {
+    openNoticeDialog('連線異常', '無法連線到伺服器，請檢查網路後再試。')
+  } else {
+    showFeedback('destructive', '操作失敗', apiErrorMessage(err) ?? fallback)
+  }
+}
 
 // Left sidebar
 const sidebarCollapsed = ref(false)
@@ -110,9 +189,17 @@ const selectedIds = ref<Set<string>>(new Set())
 const lastClickedId = ref<string | null>(null)
 
 function toggleSelectionMode() {
+  if (!photoPerm.canCreate.value && !photoPerm.canDelete.value) return
   selectionMode.value = !selectionMode.value
   if (!selectionMode.value) clearSelection()
 }
+
+watch(
+  () => [photoPerm.canCreate.value, photoPerm.canDelete.value] as const,
+  ([canC, canD]) => {
+    if (!canC && !canD && (selectionMode.value || selectedIds.value.size > 0)) clearSelection()
+  }
+)
 
 const isLibrary = computed(() => activeView.value === 'library' || activeView.value === 'recent')
 const currentPhotos = computed(() => {
@@ -192,10 +279,7 @@ const photosGroupedByYearMonth = computed(() => {
 const photosGroupedByDate = computed(() => {
   const items = photoGridItems.value
   if (!items.length) return []
-  const yearMap = new Map<
-    number,
-    Map<number, Map<number, PhotoGridItem[]>>
-  >()
+  const yearMap = new Map<number, Map<number, Map<number, PhotoGridItem[]>>>()
   for (const item of items) {
     const d = new Date(item.createdAt)
     const y = d.getFullYear()
@@ -208,7 +292,10 @@ const photosGroupedByDate = computed(() => {
     if (!dayMap.has(day)) dayMap.set(day, [])
     dayMap.get(day)!.push(item)
   }
-  const result: { year: number; months: { month: number; days: { day: number; items: PhotoGridItem[] }[] }[] }[] = []
+  const result: {
+    year: number
+    months: { month: number; days: { day: number; items: PhotoGridItem[] }[] }[]
+  }[] = []
   const years = Array.from(yearMap.keys()).sort((a, b) => a - b)
   for (const year of years) {
     const monthMap = yearMap.get(year)!
@@ -279,7 +366,9 @@ async function fetchFavorites() {
 function loadPhotos() {
   if (activeView.value === 'favorites') {
     loadingPhotos.value = true
-    fetchFavorites().finally(() => { loadingPhotos.value = false })
+    fetchFavorites().finally(() => {
+      loadingPhotos.value = false
+    })
   } else if (activeView.value === 'library' || activeView.value === 'recent') {
     fetchLibraryPhotos()
   } else if (activeView.value) {
@@ -299,12 +388,16 @@ async function toggleFavorite(item: PhotoGridItem) {
       favoriteIds.value.delete(id)
       favoriteIds.value = new Set(favoriteIds.value)
       favoritePhotos.value = favoritePhotos.value.filter((p) => p.id !== id)
+      showFeedback('default', '已取消我的最愛')
     } else {
       await addPhotoFavorite(projectId.value, id)
       favoriteIds.value.add(id)
       favoriteIds.value = new Set(favoriteIds.value)
       if (activeView.value === 'favorites') await fetchFavorites()
+      showFeedback('default', '已加入我的最愛')
     }
+  } catch (err: unknown) {
+    handleActionError(err, '更新我的最愛失敗，請稍後再試')
   } finally {
     favoriteTogglingId.value = null
   }
@@ -342,7 +435,7 @@ async function onFileInputChange(e: Event) {
   if (!files.length || !projectId.value) return
   uploadInProgress.value = true
   try {
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       files.map((file) =>
         enqueueAndUpload({
           file,
@@ -352,8 +445,25 @@ async function onFileInputChange(e: Event) {
         })
       )
     )
+    const ok = results.filter((r) => r.status === 'fulfilled').length
+    const fail = results.length - ok
     await fetchLibraryPhotos()
     if (activeView.value) await loadPhotos()
+    if (fail === 0) showFeedback('default', '照片已上傳')
+    else if (ok > 0)
+      showFeedback(
+        'default',
+        '部分照片已上傳',
+        `${fail} 個檔案上傳失敗，詳情請見右上角上傳清單。`
+      )
+    else
+      showFeedback(
+        'destructive',
+        '上傳失敗',
+        '請見右上角上傳清單的錯誤說明，或稍後再試。'
+      )
+  } catch (err: unknown) {
+    handleActionError(err, '處理上傳結果時發生錯誤')
   } finally {
     uploadInProgress.value = false
   }
@@ -372,11 +482,17 @@ function isSelected(id: string) {
 function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
   const list = photoGridItems.value
   const idx = list.findIndex((p) => p.id === item.id)
+  if (
+    selectionMode.value &&
+    !photoPerm.canCreate.value &&
+    !photoPerm.canDelete.value
+  ) {
+    selectionMode.value = false
+  }
   if (selectionMode.value) {
     if (e.shiftKey) {
-      const lastIdx = lastClickedId.value != null
-        ? list.findIndex((p) => p.id === lastClickedId.value)
-        : -1
+      const lastIdx =
+        lastClickedId.value != null ? list.findIndex((p) => p.id === lastClickedId.value) : -1
       const from = lastIdx >= 0 ? Math.min(lastIdx, idx) : idx
       const to = lastIdx >= 0 ? Math.max(lastIdx, idx) : idx
       const next = new Set(selectedIds.value)
@@ -400,10 +516,11 @@ function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
     lastClickedId.value = item.id
     return
   }
-  if (e.shiftKey) {
-    const lastIdx = lastClickedId.value != null
-      ? list.findIndex((p) => p.id === lastClickedId.value)
-      : -1
+  const canPhotoBatch =
+    photoPerm.canCreate.value || photoPerm.canDelete.value
+  if (canPhotoBatch && e.shiftKey) {
+    const lastIdx =
+      lastClickedId.value != null ? list.findIndex((p) => p.id === lastClickedId.value) : -1
     const from = lastIdx >= 0 ? Math.min(lastIdx, idx) : idx
     const to = lastIdx >= 0 ? Math.max(lastIdx, idx) : idx
     const next = new Set(selectedIds.value)
@@ -412,7 +529,7 @@ function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
     lastClickedId.value = item.id
     return
   }
-  if (e.metaKey || e.ctrlKey) {
+  if (canPhotoBatch && (e.metaKey || e.ctrlKey)) {
     const next = new Set(selectedIds.value)
     if (next.has(item.id)) next.delete(item.id)
     else next.add(item.id)
@@ -423,7 +540,8 @@ function handlePhotoClick(item: PhotoGridItem, e: MouseEvent) {
   selectedIds.value = new Set()
   lastClickedId.value = item.id
   // 僅在「全部」tab 或非圖庫檢視（相簿／我的最愛等）時才開啟 lightbox；年／月 tab 點擊精選不開 modal
-  const inYearOrMonthTab = activeView.value === 'library' && (photoTab.value === 'year' || photoTab.value === 'month')
+  const inYearOrMonthTab =
+    activeView.value === 'library' && (photoTab.value === 'year' || photoTab.value === 'month')
   if (!inYearOrMonthTab) {
     goToAllAndOpenLightbox(item.id)
   }
@@ -454,7 +572,11 @@ function openCreateAlbum() {
 
 async function submitCreateAlbum() {
   const name = newAlbumName.value.trim()
-  if (!name || !projectId.value) return
+  if (!projectId.value) return
+  if (!name) {
+    openNoticeDialog('無法建立', '請輸入相簿名稱。')
+    return
+  }
   createAlbumLoading.value = true
   createAlbumError.value = ''
   try {
@@ -462,9 +584,17 @@ async function submitCreateAlbum() {
     albums.value = [album, ...albums.value]
     createAlbumOpen.value = false
     activeView.value = album.id
+    showFeedback('default', '已新增相簿')
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
-    createAlbumError.value = msg ?? '建立失敗，請稍後再試'
+    if (isNoPermission(err)) {
+      createAlbumError.value = apiErrorMessage(err) ?? '沒有建立相簿的權限'
+      showFeedback('destructive', '沒有權限', createAlbumError.value)
+    } else if (isNetworkError(err)) {
+      openNoticeDialog('連線異常', '無法連線到伺服器，請檢查網路後再試。')
+    } else {
+      const msg = apiErrorMessage(err) ?? '建立失敗，請稍後再試'
+      createAlbumError.value = msg
+    }
   } finally {
     createAlbumLoading.value = false
   }
@@ -489,6 +619,9 @@ async function confirmDeleteAlbum() {
     albums.value = albums.value.filter((a) => a.id !== album.id)
     if (activeView.value === album.id) activeView.value = 'library'
     closeDeleteAlbumDialog()
+    showFeedback('default', '已刪除相簿')
+  } catch (err: unknown) {
+    handleActionError(err, '刪除相簿失敗，請稍後再試')
   } finally {
     deleteAlbumLoading.value = false
   }
@@ -515,7 +648,13 @@ function toggleAddToAlbumSelection(id: string) {
 
 async function submitAddToAlbum() {
   const albumId = activeView.value
-  if (!albumId || typeof albumId !== 'string' || !projectId.value || addToAlbumSelectedIds.value.size === 0) return
+  if (
+    !albumId ||
+    typeof albumId !== 'string' ||
+    !projectId.value ||
+    addToAlbumSelectedIds.value.size === 0
+  )
+    return
   addToAlbumLoading.value = true
   addToAlbumError.value = ''
   try {
@@ -524,9 +663,16 @@ async function submitAddToAlbum() {
     }
     addToAlbumOpen.value = false
     await fetchAlbumPhotos(albumId)
+    showFeedback('default', '照片已加入相簿')
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
-    addToAlbumError.value = msg ?? '加入失敗，請稍後再試'
+    if (isNoPermission(err)) {
+      addToAlbumError.value = apiErrorMessage(err) ?? '沒有加入相簿的權限'
+      showFeedback('destructive', '沒有權限', addToAlbumError.value)
+    } else if (isNetworkError(err)) {
+      openNoticeDialog('連線異常', '無法連線到伺服器，請檢查網路後再試。')
+    } else {
+      addToAlbumError.value = apiErrorMessage(err) ?? '加入失敗，請稍後再試'
+    }
   } finally {
     addToAlbumLoading.value = false
   }
@@ -539,7 +685,11 @@ const libraryPhotoItems = computed(() =>
 /** 從圖庫加入對話框：只顯示尚未在此相簿的照片 */
 const libraryPhotoItemsForAddToAlbum = computed(() => {
   const items = libraryPhotoItems.value
-  if (activeView.value === 'library' || activeView.value === 'recent' || typeof activeView.value !== 'string') {
+  if (
+    activeView.value === 'library' ||
+    activeView.value === 'recent' ||
+    typeof activeView.value !== 'string'
+  ) {
     return items
   }
   const inAlbumIds = new Set(albumPhotos.value.map((p) => p.id))
@@ -571,6 +721,9 @@ async function confirmDeletePhoto() {
     else if (!isLibrary.value && typeof activeView.value === 'string') {
       await fetchAlbumPhotos(activeView.value)
     }
+    showFeedback('default', '已刪除照片')
+  } catch (err: unknown) {
+    handleActionError(err, '刪除照片失敗，請稍後再試')
   } finally {
     deletePhotoLoading.value = false
   }
@@ -603,6 +756,9 @@ async function confirmDeleteSelected() {
     else if (!isLibrary.value && typeof activeView.value === 'string') {
       await fetchAlbumPhotos(activeView.value)
     }
+    showFeedback('default', '已刪除所選照片')
+  } catch (err: unknown) {
+    handleActionError(err, '刪除照片失敗，請稍後再試')
   } finally {
     deleteSelectedLoading.value = false
   }
@@ -633,9 +789,16 @@ async function confirmAddSelectedToAlbum() {
     clearSelection()
     closeAddSelectedToAlbum()
     if (activeView.value === albumId) await fetchAlbumPhotos(albumId)
+    showFeedback('default', '照片已加入相簿')
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message
-    addSelectedToAlbumError.value = msg ?? '加入失敗，請稍後再試'
+    if (isNoPermission(err)) {
+      addSelectedToAlbumError.value = apiErrorMessage(err) ?? '沒有加入相簿的權限'
+      showFeedback('destructive', '沒有權限', addSelectedToAlbumError.value)
+    } else if (isNetworkError(err)) {
+      openNoticeDialog('連線異常', '無法連線到伺服器，請檢查網路後再試。')
+    } else {
+      addSelectedToAlbumError.value = apiErrorMessage(err) ?? '加入失敗，請稍後再試'
+    }
   } finally {
     addSelectedToAlbumLoading.value = false
   }
@@ -643,6 +806,7 @@ async function confirmAddSelectedToAlbum() {
 </script>
 
 <template>
+  <TooltipProvider :delay-duration="300">
   <div class="flex h-full min-h-0 overflow-hidden">
     <!-- Left sidebar -->
     <aside
@@ -732,6 +896,7 @@ async function confirmAddSelectedToAlbum() {
                   <span class="truncate">{{ album.name }}</span>
                 </span>
                 <Button
+                  v-if="photoPerm.canDelete"
                   variant="ghost"
                   size="icon"
                   class="size-7 shrink-0 opacity-70 hover:opacity-100"
@@ -742,6 +907,7 @@ async function confirmAddSelectedToAlbum() {
                 </Button>
               </button>
               <Button
+                v-if="photoPerm.canCreate"
                 variant="ghost"
                 class="w-full justify-start gap-2 text-muted-foreground"
                 @click="openCreateAlbum"
@@ -749,6 +915,23 @@ async function confirmAddSelectedToAlbum() {
                 <Plus class="size-4" />
                 新增相簿
               </Button>
+              <Tooltip v-else>
+                <TooltipTrigger as-child>
+                  <span class="inline-flex w-full">
+                    <Button
+                      variant="ghost"
+                      disabled
+                      class="w-full justify-start gap-2 text-muted-foreground"
+                    >
+                      <Plus class="size-4" />
+                      新增相簿
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" class="max-w-[240px]">
+                  {{ PERMISSION_HINT }}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </nav>
@@ -774,6 +957,7 @@ async function confirmAddSelectedToAlbum() {
           <div class="min-w-0 flex-1" />
           <div class="flex shrink-0 items-center gap-2">
             <input
+              v-if="photoPerm.canCreate"
               ref="fileInputRef"
               type="file"
               class="hidden"
@@ -781,22 +965,42 @@ async function confirmAddSelectedToAlbum() {
               multiple
               @change="onFileInputChange"
             />
-            <Button
-              v-if="activeView !== 'favorites' && activeView !== 'library' && activeView !== 'recent'"
-              variant="outline"
-              size="sm"
-              :disabled="!libraryPhotoItems.length || addToAlbumLoading"
-              @click="openAddToAlbum"
+            <template
+              v-if="
+                activeView !== 'favorites' &&
+                activeView !== 'library' &&
+                activeView !== 'recent'
+              "
             >
-              從圖庫加入
-            </Button>
-            <template v-if="selectionMode || selectedIds.size > 0">
+              <Button
+                v-if="photoPerm.canCreate"
+                variant="outline"
+                size="sm"
+                :disabled="!libraryPhotoItems.length || addToAlbumLoading"
+                @click="openAddToAlbum"
+              >
+                從圖庫加入
+              </Button>
+              <Tooltip v-else>
+                <TooltipTrigger as-child>
+                  <span class="inline-flex">
+                    <Button variant="outline" size="sm" disabled> 從圖庫加入 </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent class="max-w-[240px]">{{ PERMISSION_HINT }}</TooltipContent>
+              </Tooltip>
+            </template>
+            <template
+              v-if="
+                (photoPerm.canDelete || photoPerm.canCreate) &&
+                (selectionMode || selectedIds.size > 0)
+              "
+            >
               <span class="text-sm text-muted-foreground">已選 {{ selectedIds.size }} 張</span>
               <ButtonGroup>
-                <Button variant="outline" size="sm" @click="clearSelection">
-                  取消選取
-                </Button>
+                <Button variant="outline" size="sm" @click="clearSelection"> 取消選取 </Button>
                 <Button
+                  v-if="photoPerm.canDelete"
                   variant="outline"
                   size="sm"
                   class="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -807,6 +1011,7 @@ async function confirmAddSelectedToAlbum() {
                   刪除
                 </Button>
                 <Button
+                  v-if="photoPerm.canCreate"
                   variant="outline"
                   size="sm"
                   :disabled="selectedIds.size === 0"
@@ -815,10 +1020,21 @@ async function confirmAddSelectedToAlbum() {
                   <FolderOpen class="mr-1.5 size-4" />
                   加入相簿
                 </Button>
+                <Tooltip v-else-if="photoPerm.canDelete">
+                  <TooltipTrigger as-child>
+                    <span class="inline-flex">
+                      <Button variant="outline" size="sm" disabled>
+                        <FolderOpen class="mr-1.5 size-4" />
+                        加入相簿
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent class="max-w-[240px]">{{ PERMISSION_HINT }}</TooltipContent>
+                </Tooltip>
               </ButtonGroup>
             </template>
             <Button
-              v-else
+              v-else-if="photoPerm.canDelete || photoPerm.canCreate"
               variant="outline"
               size="sm"
               @click="toggleSelectionMode"
@@ -826,6 +1042,7 @@ async function confirmAddSelectedToAlbum() {
               選取
             </Button>
             <Button
+              v-if="photoPerm.canCreate"
               size="sm"
               :disabled="uploadInProgress || !projectId"
               @click="triggerUpload"
@@ -834,10 +1051,23 @@ async function confirmAddSelectedToAlbum() {
               <Upload v-else class="mr-2 size-4" />
               上傳照片
             </Button>
+            <Tooltip v-else>
+              <TooltipTrigger as-child>
+                <span class="inline-flex">
+                  <Button size="sm" disabled>
+                    <Upload class="mr-2 size-4" />
+                    上傳照片
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent class="max-w-[240px]">{{ PERMISSION_HINT }}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
         <!-- 避免按 Shift／Cmd 多選時觸發 focus-visible 出現橫線 -->
-        <ScrollArea class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:focus-visible:outline-none [&_[data-slot=scroll-area-viewport]]:focus-visible:ring-0">
+        <ScrollArea
+          class="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:focus-visible:outline-none [&_[data-slot=scroll-area-viewport]]:focus-visible:ring-0"
+        >
           <div v-if="loadingPhotos" class="flex flex-col items-center justify-center py-24">
             <Loader2 class="size-10 animate-spin text-muted-foreground" />
             <p class="mt-3 text-sm text-muted-foreground">載入中…</p>
@@ -849,12 +1079,34 @@ async function confirmAddSelectedToAlbum() {
             <ImageIcon class="size-16 text-muted-foreground/50" />
             <p class="mt-4 text-sm font-medium text-foreground">尚無照片</p>
             <p class="mt-1 text-xs text-muted-foreground">
-              {{ activeView === 'favorites' ? '尚未加入任何最愛，在照片上點擊星號即可加入' : isLibrary ? '上傳照片後會顯示於圖庫與最近儲存' : '在此相簿加入照片後會顯示於此' }}
+              {{
+                activeView === 'favorites'
+                  ? '尚未加入任何最愛，在照片上點擊星號即可加入'
+                  : isLibrary
+                    ? '上傳照片後會顯示於圖庫與最近儲存'
+                    : '在此相簿加入照片後會顯示於此'
+              }}
             </p>
-            <Button v-if="isLibrary" class="mt-4" size="sm" @click="triggerUpload">
+            <Button
+              v-if="isLibrary && photoPerm.canCreate"
+              class="mt-4"
+              size="sm"
+              @click="triggerUpload"
+            >
               <Upload class="mr-2 size-4" />
               上傳照片
             </Button>
+            <Tooltip v-else-if="isLibrary">
+              <TooltipTrigger as-child>
+                <span class="mt-4 inline-flex">
+                  <Button size="sm" disabled>
+                    <Upload class="mr-2 size-4" />
+                    上傳照片
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent class="max-w-[240px]">{{ PERMISSION_HINT }}</TooltipContent>
+            </Tooltip>
           </div>
           <template v-else>
             <!-- 年：每個年份底下僅「該年精選」（僅圖庫時顯示） -->
@@ -865,27 +1117,36 @@ async function confirmAddSelectedToAlbum() {
                   <template v-if="group.items.slice(0, FEATURED_PER_GROUP).length">
                     <div class="mb-4">
                       <p class="mb-2 text-sm font-medium text-muted-foreground">精選</p>
-                      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                       <div
-                        v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
-                        :key="item.id"
-                        :class="[
-                          'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-                          isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
-                        ]"
-                        @click="handlePhotoClick(item, $event)"
+                        class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
                       >
-                        <PhotoThumbnail :file-id="item.id" />
                         <div
-                          v-if="selectionMode"
-                          class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
-                          aria-hidden
+                          v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
+                          :key="item.id"
+                          :class="[
+                            'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                            isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
+                          ]"
+                          @click="handlePhotoClick(item, $event)"
                         >
-                          <CheckCircle2 v-if="isSelected(item.id)" class="size-3.5 text-primary" fill="currentColor" />
-                          <Circle v-else class="size-3.5" />
+                          <PhotoThumbnail :file-id="item.id" />
+                          <div
+                            v-if="
+                              selectionMode &&
+                              (photoPerm.canDelete || photoPerm.canCreate)
+                            "
+                            class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
+                            aria-hidden
+                          >
+                            <CheckCircle2
+                              v-if="isSelected(item.id)"
+                              class="size-3.5 text-primary"
+                              fill="currentColor"
+                            />
+                            <Circle v-else class="size-3.5" />
+                          </div>
                         </div>
                       </div>
-                    </div>
                     </div>
                   </template>
                 </section>
@@ -893,40 +1154,57 @@ async function confirmAddSelectedToAlbum() {
             </div>
             <!-- 月：每個月份底下僅「該月精選」（僅圖庫時顯示） -->
             <div v-show="activeView === 'library' && photoTab === 'month'" class="space-y-8 p-4">
-              <template v-for="group in photosGroupedByYearMonth" :key="`${group.year}-${group.month}`">
+              <template
+                v-for="group in photosGroupedByYearMonth"
+                :key="`${group.year}-${group.month}`"
+              >
                 <section class="group">
-                  <h3 class="mb-3 text-lg font-semibold text-foreground/90">{{ group.year }} 年 {{ group.month }} 月</h3>
+                  <h3 class="mb-3 text-lg font-semibold text-foreground/90">
+                    {{ group.year }} 年 {{ group.month }} 月
+                  </h3>
                   <template v-if="group.items.slice(0, FEATURED_PER_GROUP).length">
                     <div class="mb-4">
                       <p class="mb-2 text-sm font-medium text-muted-foreground">精選</p>
-                      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                       <div
-                        v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
-                        :key="item.id"
-                        :class="[
-                          'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-                          isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
-                        ]"
-                        @click="handlePhotoClick(item, $event)"
+                        class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
                       >
-                        <PhotoThumbnail :file-id="item.id" />
                         <div
-                          v-if="selectionMode"
-                          class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
-                          aria-hidden
+                          v-for="item in group.items.slice(0, FEATURED_PER_GROUP)"
+                          :key="item.id"
+                          :class="[
+                            'group/thumb relative aspect-square min-w-0 cursor-pointer overflow-hidden rounded-lg focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                            isSelected(item.id) && 'ring-2 ring-primary ring-offset-2',
+                          ]"
+                          @click="handlePhotoClick(item, $event)"
                         >
-                          <CheckCircle2 v-if="isSelected(item.id)" class="size-3.5 text-primary" fill="currentColor" />
-                          <Circle v-else class="size-3.5" />
+                          <PhotoThumbnail :file-id="item.id" />
+                          <div
+                            v-if="
+                              selectionMode &&
+                              (photoPerm.canDelete || photoPerm.canCreate)
+                            "
+                            class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
+                            aria-hidden
+                          >
+                            <CheckCircle2
+                              v-if="isSelected(item.id)"
+                              class="size-3.5 text-primary"
+                              fill="currentColor"
+                            />
+                            <Circle v-else class="size-3.5" />
+                          </div>
                         </div>
                       </div>
-                    </div>
                     </div>
                   </template>
                 </section>
               </template>
             </div>
             <!-- 全部：年 > 月 > 日，可刪除（圖庫時依 tab，其餘檢視一律顯示此塊） -->
-            <div v-show="(activeView === 'library' && photoTab === 'all') || activeView !== 'library'" class="space-y-8 p-4">
+            <div
+              v-show="(activeView === 'library' && photoTab === 'all') || activeView !== 'library'"
+              class="space-y-8 p-4"
+            >
               <template v-for="group in photosGroupedByDate" :key="group.year">
                 <section>
                   <h3 class="sticky top-0 z-10 mb-3 py-1 text-lg font-semibold text-foreground/90">
@@ -939,12 +1217,17 @@ async function confirmAddSelectedToAlbum() {
                           {{ monthGroup.month }} 月
                         </h4>
                         <div class="space-y-4">
-                          <template v-for="dayGroup in monthGroup.days" :key="`${monthGroup.month}-${dayGroup.day}`">
+                          <template
+                            v-for="dayGroup in monthGroup.days"
+                            :key="`${monthGroup.month}-${dayGroup.day}`"
+                          >
                             <div>
                               <p class="mb-2 text-xs font-medium text-muted-foreground/90">
                                 {{ dayGroup.day }} 日
                               </p>
-                              <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                              <div
+                                class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                              >
                                 <div
                                   v-for="item in dayGroup.items"
                                   :key="item.id"
@@ -958,25 +1241,57 @@ async function confirmAddSelectedToAlbum() {
                                     <PhotoThumbnail :file-id="item.id" />
                                   </div>
                                   <div
-                                    v-if="selectionMode"
+                                    v-if="
+                                      selectionMode &&
+                                      (photoPerm.canDelete || photoPerm.canCreate)
+                                    "
                                     class="absolute left-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-background/90 text-foreground"
                                     aria-hidden
                                   >
-                                    <CheckCircle2 v-if="isSelected(item.id)" class="size-3.5 text-primary" fill="currentColor" />
+                                    <CheckCircle2
+                                      v-if="isSelected(item.id)"
+                                      class="size-3.5 text-primary"
+                                      fill="currentColor"
+                                    />
                                     <Circle v-else class="size-3.5" />
                                   </div>
                                   <template v-if="!selectionMode">
                                     <button
+                                      v-if="canFavorite"
                                       type="button"
                                       class="absolute bottom-1.5 left-1.5 z-10 flex size-8 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm opacity-0 transition-opacity hover:bg-background group-hover:opacity-100 focus:opacity-100"
                                       aria-label="我的最愛"
                                       @click.stop="toggleFavorite(item)"
                                     >
                                       <Star
-                                        :class="['size-4', isFavorite(item.id) ? 'fill-primary text-primary' : '']"
+                                        :class="[
+                                          'size-4',
+                                          isFavorite(item.id) ? 'fill-primary text-primary' : '',
+                                        ]"
                                       />
                                     </button>
+                                    <Tooltip v-else>
+                                      <TooltipTrigger as-child>
+                                        <span
+                                          class="absolute bottom-1.5 left-1.5 z-10 inline-flex size-8 items-center justify-center rounded-full bg-background/80 text-muted-foreground shadow-sm opacity-0 group-hover:opacity-100"
+                                        >
+                                          <button
+                                            type="button"
+                                            disabled
+                                            class="flex size-full items-center justify-center rounded-full"
+                                            aria-label="我的最愛（無權限）"
+                                            @click.stop
+                                          >
+                                            <Star class="size-4 opacity-50" />
+                                          </button>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent class="max-w-[240px]">
+                                        {{ PERMISSION_HINT }}
+                                      </TooltipContent>
+                                    </Tooltip>
                                     <Button
+                                      v-if="photoPerm.canDelete"
                                       type="button"
                                       variant="ghost"
                                       size="icon"
@@ -1038,10 +1353,7 @@ async function confirmAddSelectedToAlbum() {
       </div>
       <DialogFooter>
         <Button variant="outline" @click="createAlbumOpen = false">取消</Button>
-        <Button
-          :disabled="!newAlbumName.trim() || createAlbumLoading"
-          @click="submitCreateAlbum"
-        >
+        <Button :disabled="!newAlbumName.trim() || createAlbumLoading" @click="submitCreateAlbum">
           <Loader2 v-if="createAlbumLoading" class="mr-2 size-4 animate-spin" />
           建立
         </Button>
@@ -1058,7 +1370,10 @@ async function confirmAddSelectedToAlbum() {
       <p v-if="addToAlbumError" class="shrink-0 text-sm text-destructive">{{ addToAlbumError }}</p>
       <div class="min-h-0 max-h-[50vh] flex-1 overflow-hidden rounded-md border border-border">
         <ScrollArea v-if="!addToAlbumFetching" class="h-full min-h-0">
-          <div v-if="libraryPhotoItemsForAddToAlbum.length === 0" class="py-12 text-center text-sm text-muted-foreground">
+          <div
+            v-if="libraryPhotoItemsForAddToAlbum.length === 0"
+            class="py-12 text-center text-sm text-muted-foreground"
+          >
             圖庫中尚無可加入的照片，或已全部加入此相簿。
           </div>
           <div v-else class="grid grid-cols-3 gap-2 p-4 sm:grid-cols-4 md:grid-cols-5">
@@ -1101,61 +1416,82 @@ async function confirmAddSelectedToAlbum() {
   </Dialog>
 
   <!-- Delete album -->
-  <Dialog v-model:open="deleteAlbumOpen">
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>刪除相簿</DialogTitle>
-      </DialogHeader>
-      <p class="text-sm text-muted-foreground">
-        確定要刪除「{{ deleteAlbumTarget?.name }}」？相簿內的照片不會被刪除，僅會從此相簿移除。
-      </p>
-      <DialogFooter>
-        <Button variant="outline" @click="closeDeleteAlbumDialog">取消</Button>
-        <Button variant="destructive" :disabled="deleteAlbumLoading" @click="confirmDeleteAlbum">
+  <AlertDialog
+    :open="deleteAlbumOpen"
+    @update:open="(v: boolean) => !v && closeDeleteAlbumDialog()"
+  >
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>刪除相簿</AlertDialogTitle>
+        <AlertDialogDescription>
+          確定要刪除「{{ deleteAlbumTarget?.name }}」？相簿內的照片不會被刪除，僅會從此相簿移除。
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>取消</AlertDialogCancel>
+        <Button
+          variant="destructive"
+          :disabled="deleteAlbumLoading"
+          @click="confirmDeleteAlbum"
+        >
           <Loader2 v-if="deleteAlbumLoading" class="mr-2 size-4 animate-spin" />
           刪除
         </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 
   <!-- Delete photo -->
-  <Dialog v-model:open="deletePhotoOpen">
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>刪除照片</DialogTitle>
-      </DialogHeader>
-      <p class="text-sm text-muted-foreground">
-        確定要刪除此照片？刪除後無法復原。
-      </p>
-      <DialogFooter>
-        <Button variant="outline" @click="closeDeletePhoto">取消</Button>
-        <Button variant="destructive" :disabled="deletePhotoLoading" @click="confirmDeletePhoto">
+  <AlertDialog
+    :open="deletePhotoOpen"
+    @update:open="(v: boolean) => !v && closeDeletePhoto()"
+  >
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>刪除照片</AlertDialogTitle>
+        <AlertDialogDescription>
+          確定要刪除此照片？刪除後無法復原。
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>取消</AlertDialogCancel>
+        <Button
+          variant="destructive"
+          :disabled="deletePhotoLoading"
+          @click="confirmDeletePhoto"
+        >
           <Loader2 v-if="deletePhotoLoading" class="mr-2 size-4 animate-spin" />
           刪除
         </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 
   <!-- 多選：批次刪除 -->
-  <Dialog v-model:open="deleteSelectedOpen">
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>刪除所選照片</DialogTitle>
-      </DialogHeader>
-      <p class="text-sm text-muted-foreground">
-        確定要刪除所選的 {{ selectedIds.size }} 張照片？刪除後無法復原。
-      </p>
-      <DialogFooter>
-        <Button variant="outline" @click="closeDeleteSelected">取消</Button>
-        <Button variant="destructive" :disabled="deleteSelectedLoading" @click="confirmDeleteSelected">
+  <AlertDialog
+    :open="deleteSelectedOpen"
+    @update:open="(v: boolean) => !v && closeDeleteSelected()"
+  >
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>刪除所選照片</AlertDialogTitle>
+        <AlertDialogDescription>
+          確定要刪除所選的 {{ selectedIds.size }} 張照片？刪除後無法復原。
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>取消</AlertDialogCancel>
+        <Button
+          variant="destructive"
+          :disabled="deleteSelectedLoading"
+          @click="confirmDeleteSelected"
+        >
           <Loader2 v-if="deleteSelectedLoading" class="mr-2 size-4 animate-spin" />
           刪除
         </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 
   <!-- 多選：加入到相簿 -->
   <Dialog v-model:open="addSelectedToAlbumOpen">
@@ -1163,7 +1499,9 @@ async function confirmAddSelectedToAlbum() {
       <DialogHeader>
         <DialogTitle>加入到相簿</DialogTitle>
       </DialogHeader>
-      <p class="text-sm text-muted-foreground">將所選 {{ selectedIds.size }} 張照片加入至以下相簿：</p>
+      <p class="text-sm text-muted-foreground">
+        將所選 {{ selectedIds.size }} 張照片加入至以下相簿：
+      </p>
       <div class="grid gap-2">
         <label class="text-sm font-medium text-foreground">選擇相簿</label>
         <select
@@ -1173,7 +1511,9 @@ async function confirmAddSelectedToAlbum() {
           <option value="">請選擇相簿</option>
           <option v-for="a in albums" :key="a.id" :value="a.id">{{ a.name }}</option>
         </select>
-        <p v-if="addSelectedToAlbumError" class="text-sm text-destructive">{{ addSelectedToAlbumError }}</p>
+        <p v-if="addSelectedToAlbumError" class="text-sm text-destructive">
+          {{ addSelectedToAlbumError }}
+        </p>
       </div>
       <DialogFooter>
         <Button variant="outline" @click="closeAddSelectedToAlbum">取消</Button>
@@ -1187,4 +1527,18 @@ async function confirmAddSelectedToAlbum() {
       </DialogFooter>
     </DialogContent>
   </Dialog>
+
+  <!-- 提示：驗證／連線等（單鍵確認） -->
+  <AlertDialog :open="noticeDialogOpen" @update:open="(v: boolean) => (noticeDialogOpen = v)">
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>{{ noticeDialogTitle }}</AlertDialogTitle>
+        <AlertDialogDescription>{{ noticeDialogDescription }}</AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogAction>確定</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+  </TooltipProvider>
 </template>

@@ -1,22 +1,15 @@
 <script setup lang="ts">
 import type { ColumnDef } from '@tanstack/vue-table'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
-import { FlexRender } from '@tanstack/vue-table'
 import { ref, computed, watch, h } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { valueUpdater } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -25,16 +18,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Loader2, FileText, Clock, CheckCircle, Plus } from 'lucide-vue-next'
+import { Loader2, FileText, Clock, CheckCircle, Plus, Search } from 'lucide-vue-next'
 import StateCard from '@/components/common/StateCard.vue'
 import DataTablePagination from '@/components/common/data-table/DataTablePagination.vue'
+import DataTableToolbarShell from '@/components/common/data-table/DataTableToolbarShell.vue'
+import DataTableFeatureSection from '@/components/common/data-table/DataTableFeatureSection.vue'
+import DataTableServerFacetedFilter from '@/components/common/data-table/DataTableServerFacetedFilter.vue'
 import { listRepairRequests, deleteRepairRequest } from '@/api/repair-requests'
 import type { RepairRequestItem, RepairRequestStatus } from '@/types/repair-request'
 import { ROUTE_NAME } from '@/constants'
@@ -47,8 +36,9 @@ const router = useRouter()
 const projectId = computed(() => route.params.projectId as string)
 const repairRecordPerm = useProjectModuleActions(projectId, 'repair.record')
 
-const ALL_STATUS = 'all' as const
-const statusFilter = ref<string>(ALL_STATUS)
+/** 未選＝不篩狀態；可複選（與 DataTableFacetedFilter 一致，右側為專案統計筆數） */
+const statusFilter = ref<RepairRequestStatus[]>([])
+const searchQuery = ref('')
 
 const list = ref<RepairRequestItem[]>([])
 const meta = ref<{ page: number; limit: number; total: number } | null>(null)
@@ -75,6 +65,40 @@ const STATUS_LABELS: Record<RepairRequestStatus, string> = {
 
 const totalPages = computed(() => (meta.value ? Math.ceil(meta.value.total / limit.value) : 0))
 
+const STATUS_FILTER_KEYS = ['in_progress', 'completed'] as const satisfies readonly RepairRequestStatus[]
+
+const toolbarHasActiveFilters = computed(() => {
+  const q = searchQuery.value.trim() !== ''
+  const partialStatus =
+    statusFilter.value.length > 0 && statusFilter.value.length < STATUS_FILTER_KEYS.length
+  return q || partialStatus
+})
+
+const statusFilterOptionsWithCounts = computed(() => [
+  { value: 'in_progress' as const, label: '進行中', count: stats.value.inProgress },
+  { value: 'completed' as const, label: '已完成', count: stats.value.completed },
+])
+
+const emptyText = computed(() => {
+  if (errorMessage.value) return '無法顯示列表'
+  if (!meta.value || meta.value.total === 0) {
+    return toolbarHasActiveFilters.value
+      ? '目前篩選條件下沒有報修紀錄。'
+      : '尚無報修紀錄。可點「新增報修」建立單據，或使用手機版於現場填報。'
+  }
+  return '此頁無資料'
+})
+
+const COLUMN_LABELS: Record<string, string> = {
+  customerName: '客戶',
+  contactPhone: '聯絡電話',
+  problemCategory: '問題類別',
+  isSecondRepair: '二次',
+  status: '狀態',
+  repairContent: '報修內容',
+  updatedAt: '最後更新',
+}
+
 function formatDateTime(iso: string) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('zh-TW', {
@@ -93,8 +117,8 @@ async function loadStats() {
   try {
     const [all, prog, done] = await Promise.all([
       listRepairRequests(pid, { page: 1, limit: 1 }),
-      listRepairRequests(pid, { page: 1, limit: 1, status: 'in_progress' }),
-      listRepairRequests(pid, { page: 1, limit: 1, status: 'completed' }),
+      listRepairRequests(pid, { page: 1, limit: 1, statusIn: ['in_progress'] }),
+      listRepairRequests(pid, { page: 1, limit: 1, statusIn: ['completed'] }),
     ])
     stats.value = {
       total: all.meta.total,
@@ -114,12 +138,13 @@ async function loadList() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const st =
-      statusFilter.value === ALL_STATUS ? undefined : (statusFilter.value as RepairRequestStatus)
+    const q = searchQuery.value.trim()
+    const statusIn = statusFilter.value.length ? [...statusFilter.value] : undefined
     const res = await listRepairRequests(pid, {
       page: page.value,
       limit: limit.value,
-      status: st,
+      ...(statusIn?.length ? { statusIn } : {}),
+      ...(q ? { q } : {}),
     })
     list.value = res.data
     meta.value = res.meta
@@ -130,6 +155,14 @@ async function loadList() {
   } finally {
     loading.value = false
   }
+}
+
+function clearFilters() {
+  searchQuery.value = ''
+  statusFilter.value = []
+  page.value = 1
+  rowSelection.value = {}
+  void loadList()
 }
 
 function goView(row: RepairRequestItem) {
@@ -351,25 +384,40 @@ watch(
     if (!id) return
     page.value = 1
     rowSelection.value = {}
+    searchQuery.value = ''
+    statusFilter.value = []
     loadStats()
     loadList()
   },
   { immediate: true }
 )
 
-watch(statusFilter, () => {
-  page.value = 1
-  rowSelection.value = {}
-  loadList()
-})
+watch(
+  () => [...statusFilter.value],
+  () => {
+    page.value = 1
+    rowSelection.value = {}
+    void loadList()
+  }
+)
+
+watchDebounced(
+  searchQuery,
+  () => {
+    page.value = 1
+    rowSelection.value = {}
+    void loadList()
+  },
+  { debounce: 400 }
+)
 </script>
 
 <template>
   <div class="space-y-4">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight text-foreground">報修紀錄表</h1>
+      <h1 class="text-xl font-semibold tracking-tight text-foreground">報修紀錄表</h1>
       <p class="mt-1 text-sm text-muted-foreground">
-        檢視專案報修單與處理狀態；點「新增報修」於此頁面建立單據。現場亦可使用手機版報修（獨立介面）。
+        檢視專案報修單與處理狀態；關鍵字輸入後會短暫延遲再查詢。點「新增報修」於此頁面建立單據；現場可使用手機版報修（獨立介面）。
       </p>
     </div>
 
@@ -418,93 +466,83 @@ watch(statusFilter, () => {
       </StateCard>
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <Select v-model="statusFilter">
-          <SelectTrigger class="w-[140px] bg-background">
-            <SelectValue placeholder="狀態" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem :value="ALL_STATUS">全部狀態</SelectItem>
-            <SelectItem value="in_progress">進行中</SelectItem>
-            <SelectItem value="completed">已完成</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div class="flex flex-wrap items-center justify-end gap-3">
-        <template v-if="hasSelection">
-          <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
-          <ButtonGroup>
-            <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
-            <Button
-              v-if="repairRecordPerm.canDelete"
-              variant="outline"
-              size="sm"
-              class="text-destructive hover:text-destructive"
-              @click="openBatchDelete"
-            >
-              批次刪除
-            </Button>
-          </ButtonGroup>
-        </template>
-        <Button class="gap-2" @click="goNewRepair">
-          <Plus class="size-4" />
-          新增報修
-        </Button>
-      </div>
-    </div>
-
-    <div class="rounded-lg border border-border bg-card">
-      <p v-if="errorMessage" class="mb-3 px-4 pt-4 text-sm text-destructive">{{ errorMessage }}</p>
-      <div v-else-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
-        <Loader2 class="size-8 animate-spin" />
-      </div>
-      <template v-else>
-        <div class="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-                <TableHead v-for="header in headerGroup.headers" :key="header.id">
-                  <FlexRender
-                    v-if="!header.isPlaceholder"
-                    :render="header.column.columnDef.header"
-                    :props="header.getContext()"
-                  />
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <template v-if="list.length === 0">
-                <TableRow>
-                  <TableCell :colspan="9" class="h-24 text-center text-muted-foreground">
-                    尚無報修紀錄。可點上方「新增報修」建立單據，或使用手機版於現場填報。
-                  </TableCell>
-                </TableRow>
-              </template>
-              <template v-else-if="table.getRowModel().rows?.length">
-                <TableRow
-                  v-for="row in table.getRowModel().rows"
-                  :key="row.id"
-                  :data-state="row.getIsSelected() ? 'selected' : undefined"
-                >
-                  <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
-                    <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
-                  </TableCell>
-                </TableRow>
-              </template>
-              <template v-else>
-                <TableRow>
-                  <TableCell :colspan="9" class="h-24 text-center text-muted-foreground">
-                    此頁無資料
-                  </TableCell>
-                </TableRow>
-              </template>
-            </TableBody>
-          </Table>
+    <DataTableToolbarShell
+      :table="table"
+      :column-labels="COLUMN_LABELS"
+      :has-active-filters="toolbarHasActiveFilters"
+      :show-multi-sort="false"
+      :show-column-visibility="false"
+      @reset="clearFilters"
+    >
+      <template #filters>
+        <div
+          v-if="!hasSelection"
+          class="flex min-w-0 flex-1 flex-wrap items-center gap-2"
+        >
+          <div
+            class="relative min-w-0 max-w-sm flex-1 basis-full sm:min-w-[240px] sm:basis-auto"
+          >
+            <Search
+              class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              v-model="searchQuery"
+              type="search"
+              placeholder="客戶、電話、報修內容、問題類別、戶別、備註…"
+              class="h-8 w-full bg-background pl-9 sm:max-w-sm"
+              :disabled="loading"
+              autocomplete="off"
+            />
+          </div>
+          <DataTableServerFacetedFilter
+            v-model="statusFilter"
+            title="狀態"
+            :options="statusFilterOptionsWithCounts"
+            search-placeholder="狀態"
+            :disabled="loading"
+          />
         </div>
       </template>
+      <template #actions>
+        <div class="flex flex-wrap items-center justify-end gap-3">
+          <template v-if="hasSelection">
+            <span class="text-sm text-muted-foreground">已選 {{ selectedRows.length }} 項</span>
+            <ButtonGroup>
+              <Button variant="outline" size="sm" @click="clearSelection">取消選取</Button>
+              <Button
+                v-if="repairRecordPerm.canDelete"
+                variant="outline"
+                size="sm"
+                class="text-destructive hover:text-destructive"
+                @click="openBatchDelete"
+              >
+                批次刪除
+              </Button>
+            </ButtonGroup>
+          </template>
+          <Button
+            v-if="repairRecordPerm.canCreate && !hasSelection"
+            size="sm"
+            class="gap-2"
+            @click="goNewRepair"
+          >
+            <Plus class="size-4" />
+            新增報修
+          </Button>
+        </div>
+      </template>
+    </DataTableToolbarShell>
+
+    <p v-if="errorMessage" class="text-sm text-destructive">{{ errorMessage }}</p>
+
+    <div class="rounded-lg border border-border bg-card">
+      <div v-if="loading" class="flex items-center justify-center py-12 text-muted-foreground">
+        <Loader2 class="size-8 animate-spin" />
+      </div>
+      <DataTableFeatureSection v-else :table="table" :empty-text="emptyText" />
     </div>
-    <div v-if="!loading && !errorMessage && list.length > 0" class="mt-4">
+    <div v-if="!loading && !errorMessage && meta && meta.total > 0" class="mt-4">
       <DataTablePagination :table="table" />
     </div>
 

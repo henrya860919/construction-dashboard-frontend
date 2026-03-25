@@ -45,4 +45,4 @@ alwaysApply: false
 - **`src/views/files/FileFormsView.vue`**、**`src/views/construction/ConstructionValuationsListView.vue`**、**`src/views/construction/PccesImportsListView.vue`**、**`src/views/construction/ConstructionDrawingsView.vue`**（樹狀表身自訂；輕量 `useClientDataTable` 僅綁 **`globalFilter`** + **`filteredFlattenedList`**；**僅全文搜尋**：`search: true`，`filtersAndSort`／`columnVisibility` 為 `false`）。
 - **`src/views/construction/ConstructionDailyLogsListView.vue`**（**搜尋 + 填表日期區間**：`search: true`、`filtersAndSort: true`、`columnVisibility: false`；`logDate` 欄 `meta.filter.type === 'dateRange'`）。
 - **`src/views/construction/ConstructionDefectsView.vue`**（**搜尋 + 分面 + 日期區間**：`search: true`、`filtersAndSort: true`、`columnVisibility: false`；`status`／`priority` 為 `faceted`，`updatedAt` 為 `dateRange`；列勾選與批次刪除）。
-- **`src/views/repair/ProductRepairDataTableTemplateView.vue`**（示範；新頁優先採 meta 驅動之 Feature 工具列）。
+- **`src/views/repair/RepairRecordsView.vue`**（伺服端分頁列表：`DataTableToolbarShell`、搜尋列、`DataTableFilterPill`、批次刪除）。

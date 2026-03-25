@@ -133,7 +133,7 @@ src/composables/useXxxListQuery.ts      # API + query 參數同步（可選）
 
 ## 相關檔案（本 repo）
 
-- **可操作的完整範本頁**（商品報修假資料 150 筆）：專案內路由 `buildProjectPath(projectId, '/repair/product-repair-demo')`，名稱 `ROUTE_NAME.PROJECT_REPAIR_DEMO_TABLE`；實作於 `src/views/repair/ProductRepairDataTableTemplateView.vue`（含分面篩選、日期區間、多欄排序、欄位搜尋顯示、全文搜尋、重設）。
+- **Feature 工具列完整範例**：`src/views/construction/ConstructionDefectsView.vue`（`DataTableFeatureToolbar`、分面篩選、日期區間、多欄排序、全文搜尋、重設）；伺服端分頁列表可參考 `src/views/repair/RepairRecordsView.vue`（`DataTableToolbarShell` + 後端 `q`／狀態篩選）。
 - 共用表格：`src/components/common/data-table/`
 - TanStack 版本：`package.json` → `@tanstack/vue-table`
 - UI 規範：`.cursor/rules/ui-ux-principles.mdc`、`theme-support.mdc`

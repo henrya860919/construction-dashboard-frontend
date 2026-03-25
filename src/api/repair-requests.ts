@@ -17,13 +17,21 @@ const recordsPath = (projectId: string, repairId: string) =>
 
 export async function listRepairRequests(
   projectId: string,
-  params?: { status?: 'in_progress' | 'completed'; page?: number; limit?: number }
+  params?: {
+    /** 多選狀態（OR）；空陣列或不傳表示不篩狀態 */
+    statusIn?: Array<'in_progress' | 'completed'>
+    /** 後端以客戶／電話／內容／類別／戶別／備註模糊搜尋 */
+    q?: string
+    page?: number
+    limit?: number
+  }
 ): Promise<{ data: RepairRequestItem[]; meta: { page: number; limit: number; total: number } }> {
   const { data } = await apiClient.get<PaginatedResponse<RepairRequestItem>>(listPath(projectId), {
     params: {
       page: params?.page ?? 1,
       limit: params?.limit ?? 50,
-      ...(params?.status && { status: params.status }),
+      ...(params?.statusIn?.length && { status: params.statusIn.join(',') }),
+      ...(params?.q?.trim() && { q: params.q.trim() }),
     },
   })
   const meta = data.meta ?? { page: 1, limit: 50, total: 0 }

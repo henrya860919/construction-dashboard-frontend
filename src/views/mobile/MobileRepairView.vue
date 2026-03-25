@@ -69,8 +69,8 @@ async function fetchCounts() {
   if (!projectId.value) return
   try {
     const [inProgressRes, completedRes] = await Promise.all([
-      listRepairRequests(projectId.value, { status: 'in_progress', limit: 1 }),
-      listRepairRequests(projectId.value, { status: 'completed', limit: 1 }),
+      listRepairRequests(projectId.value, { statusIn: ['in_progress'], limit: 1 }),
+      listRepairRequests(projectId.value, { statusIn: ['completed'], limit: 1 }),
     ])
     countByStatus.value = {
       in_progress: inProgressRes.meta.total,
@@ -86,7 +86,7 @@ async function fetchList() {
   loading.value = true
   try {
     const res = await listRepairRequests(projectId.value, {
-      status: statusTab.value,
+      statusIn: [statusTab.value],
       limit: 50,
     })
     items.value = res.data

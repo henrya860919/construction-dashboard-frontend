@@ -60,6 +60,7 @@ export const BREADCRUMB_PROJECT_SUFFIX_LABELS: Record<string, string> = {
   '/construction/defects': '缺失改善',
   '/repair/overview': '報修總覽',
   '/repair/records': '報修紀錄表',
+  '/repair/records/new': '新增報修',
   '/repair/product-repair-demo': '商品報修表範本',
 }
 

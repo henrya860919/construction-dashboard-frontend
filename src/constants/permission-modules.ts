@@ -98,6 +98,7 @@ export const NAV_PATH_PERMISSION_MODULE: Record<string, PermissionModuleId> = {
   '/construction/drawings': 'project.drawings',
   '/repair/overview': 'repair.overview',
   '/repair/records': 'repair.record',
+  '/repair/records/new': 'repair.record',
 }
 
 export function permissionModuleForProjectPath(pathSuffix: string): PermissionModuleId {

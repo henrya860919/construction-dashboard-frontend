@@ -105,6 +105,7 @@ export const ROUTE_PATH = {
   /** 報修管理 */
   PROJECT_REPAIR_OVERVIEW: '/repair/overview',
   PROJECT_REPAIR_RECORDS: '/repair/records',
+  PROJECT_REPAIR_RECORD_NEW: '/repair/records/new',
   PROJECT_REPAIR_RECORD_DETAIL: '/repair/records/:repairId',
   /** 商品報修表 · 進階資料表 UI 範本（假資料） */
   PROJECT_REPAIR_DEMO_TABLE: '/repair/product-repair-demo',
@@ -200,6 +201,7 @@ export const ROUTE_NAME = {
   PROJECT_CONSTRUCTION_DEFECT_DETAIL: 'project-construction-defect-detail',
   PROJECT_REPAIR_OVERVIEW: 'project-repair-overview',
   PROJECT_REPAIR_RECORDS: 'project-repair-records',
+  PROJECT_REPAIR_RECORD_NEW: 'project-repair-record-new',
   PROJECT_REPAIR_RECORD_DETAIL: 'project-repair-record-detail',
   PROJECT_REPAIR_DEMO_TABLE: 'project-repair-demo-table',
   ADMIN: 'admin',

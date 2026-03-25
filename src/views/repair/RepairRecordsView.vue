@@ -142,7 +142,7 @@ function goView(row: RepairRequestItem) {
 function goNewRepair() {
   if (!ensureProjectPermission(repairRecordPerm.canCreate.value, 'create')) return
   router.push({
-    name: ROUTE_NAME.MOBILE_REPAIR_NEW,
+    name: ROUTE_NAME.PROJECT_REPAIR_RECORD_NEW,
     params: { projectId: projectId.value },
   })
 }
@@ -369,7 +369,7 @@ watch(statusFilter, () => {
     <div>
       <h1 class="text-2xl font-semibold tracking-tight text-foreground">報修紀錄表</h1>
       <p class="mt-1 text-sm text-muted-foreground">
-        檢視專案報修單與處理狀態；可點「新增報修」建立單據，現場亦可用手機版報修填報。
+        檢視專案報修單與處理狀態；點「新增報修」於此頁面建立單據。現場亦可使用手機版報修（獨立介面）。
       </p>
     </div>
 
@@ -477,7 +477,7 @@ watch(statusFilter, () => {
               <template v-if="list.length === 0">
                 <TableRow>
                   <TableCell :colspan="9" class="h-24 text-center text-muted-foreground">
-                    尚無報修紀錄。可點上方「新增報修」，或使用手機版報修管理現場填報。
+                    尚無報修紀錄。可點上方「新增報修」建立單據，或使用手機版於現場填報。
                   </TableCell>
                 </TableRow>
               </template>

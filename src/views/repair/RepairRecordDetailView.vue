@@ -14,14 +14,20 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, ArrowLeft, ImageIcon, Paperclip, Download } from 'lucide-vue-next'
-import { getRepairRequest, listRepairRecords } from '@/api/repair-requests'
-import { getFileBlob } from '@/api/files'
+import PhotoThumbnail from '@/components/files/PhotoThumbnail.vue'
+import { Loader2, ArrowLeft, ImageIcon, Paperclip, Download, Plus, X } from 'lucide-vue-next'
+import { Label } from '@/components/ui/label'
+import { getRepairRequest, listRepairRecords, createRepairRecord } from '@/api/repair-requests'
+import { getFileBlob, uploadFile } from '@/api/files'
 import { ROUTE_NAME } from '@/constants'
 import { useRepairBreadcrumbStore } from '@/stores/repairBreadcrumb'
+import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
+import { ensureProjectPermission } from '@/lib/permission-toast'
 import type { RepairRequestItem, RepairExecutionRecordItem, RepairRequestStatus } from '@/types/repair-request'
 
 const route = useRoute()
@@ -30,6 +36,7 @@ const repairBreadcrumbStore = useRepairBreadcrumbStore()
 
 const projectId = computed(() => route.params.projectId as string)
 const repairId = computed(() => route.params.repairId as string)
+const repairRecordPerm = useProjectModuleActions(projectId, 'repair.record')
 
 const loading = ref(true)
 const loadError = ref('')
@@ -39,7 +46,19 @@ const recordsLoading = ref(false)
 
 const imagePreviewOpen = ref(false)
 const imagePreviewUrl = ref<string | null>(null)
+const imagePreviewTitle = ref('')
 const downloadingId = ref<string | null>(null)
+
+const newRecordModalOpen = ref(false)
+const newRecordContent = ref('')
+const newRecordAttachmentIds = ref<string[]>([])
+const newRecordPhotoInputRef = ref<HTMLInputElement | null>(null)
+const newRecordUploading = ref(false)
+const newRecordSubmitting = ref(false)
+const newRecordError = ref('')
+
+const newRecordTextareaClass =
+  'flex min-h-[6rem] w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none transition-[color,box-shadow] selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30'
 
 const STATUS_LABELS: Record<RepairRequestStatus, string> = {
   in_progress: '進行中',
@@ -129,17 +148,19 @@ onUnmounted(() => {
 
 function closeImagePreview() {
   imagePreviewOpen.value = false
+  imagePreviewTitle.value = ''
   if (imagePreviewUrl.value) {
     URL.revokeObjectURL(imagePreviewUrl.value)
     imagePreviewUrl.value = null
   }
 }
 
-async function openImagePreview(attId: string) {
+async function openImagePreview(attId: string, title?: string) {
   try {
     const { blob } = await getFileBlob(attId)
     if (imagePreviewUrl.value) URL.revokeObjectURL(imagePreviewUrl.value)
     imagePreviewUrl.value = URL.createObjectURL(blob)
+    imagePreviewTitle.value = title?.trim() || '預覽'
     imagePreviewOpen.value = true
   } catch {
     // ignore
@@ -164,6 +185,90 @@ async function downloadFile(attId: string, fileName: string) {
 
 function isImageMime(mime: string): boolean {
   return mime.startsWith('image/')
+}
+
+function resetNewRecordForm() {
+  newRecordContent.value = ''
+  newRecordAttachmentIds.value = []
+  newRecordError.value = ''
+}
+
+function openNewRecordModal() {
+  resetNewRecordForm()
+  newRecordModalOpen.value = true
+}
+
+function onNewRecordModalOpenChange(open: boolean) {
+  newRecordModalOpen.value = open
+  if (!open && !newRecordSubmitting.value) {
+    resetNewRecordForm()
+  }
+}
+
+function cancelNewRecordModal() {
+  newRecordModalOpen.value = false
+}
+
+function removeDraftAttachment(id: string) {
+  newRecordAttachmentIds.value = newRecordAttachmentIds.value.filter((x) => x !== id)
+}
+
+function pickNewRecordPhotos() {
+  newRecordPhotoInputRef.value?.click()
+}
+
+async function onNewRecordPhotosChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = input.files
+  if (!files?.length || !projectId.value) return
+  newRecordUploading.value = true
+  newRecordError.value = ''
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (!file.type.startsWith('image/')) continue
+      const result = await uploadFile({
+        file,
+        projectId: projectId.value,
+        category: 'repair_record',
+      })
+      newRecordAttachmentIds.value = [...newRecordAttachmentIds.value, result.id]
+    }
+  } catch {
+    newRecordError.value = '照片上傳失敗'
+  } finally {
+    newRecordUploading.value = false
+    input.value = ''
+  }
+}
+
+async function submitNewRecord() {
+  if (!ensureProjectPermission(repairRecordPerm.canUpdate.value, 'change')) return
+  const trimmed = newRecordContent.value.trim()
+  if (!trimmed) {
+    newRecordError.value = '請填寫執行紀錄內容'
+    return
+  }
+  const pid = projectId.value
+  const rid = repairId.value
+  if (!pid || !rid) return
+  newRecordSubmitting.value = true
+  newRecordError.value = ''
+  try {
+    await createRepairRecord(pid, rid, {
+      content: trimmed,
+      attachmentIds: newRecordAttachmentIds.value.length
+        ? newRecordAttachmentIds.value
+        : undefined,
+    })
+    resetNewRecordForm()
+    newRecordModalOpen.value = false
+    await loadRecords()
+  } catch {
+    newRecordError.value = '送出失敗'
+  } finally {
+    newRecordSubmitting.value = false
+  }
 }
 
 const detailFields = computed(() => {
@@ -242,22 +347,23 @@ const detailFields = computed(() => {
             <ImageIcon class="size-4 text-muted-foreground" />
             照片
           </h3>
-          <ul class="mt-3 flex flex-col gap-2">
+          <p class="mt-1 text-xs text-muted-foreground">點縮圖可放大預覽；非圖檔請用下載。</p>
+          <ul class="mt-3 flex flex-wrap gap-3">
             <li
               v-for="p in item.photos"
               :key="p.id"
-              class="flex flex-wrap items-center gap-2"
+              class="flex flex-col items-start gap-1.5"
             >
-              <Button
+              <button
                 v-if="isImageMime(p.mimeType)"
-                variant="outline"
-                size="sm"
-                class="max-w-[240px] truncate"
+                type="button"
+                class="relative size-24 shrink-0 overflow-hidden rounded-md border border-border bg-muted ring-offset-background transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 :title="p.fileName"
-                @click="openImagePreview(p.id)"
+                :aria-label="`預覽 ${p.fileName}`"
+                @click="openImagePreview(p.id, p.fileName)"
               >
-                {{ p.fileName }}
-              </Button>
+                <PhotoThumbnail :file-id="p.id" />
+              </button>
               <template v-else>
                 <span class="max-w-[200px] truncate text-sm text-foreground">{{ p.fileName }}</span>
                 <Button
@@ -270,6 +376,13 @@ const detailFields = computed(() => {
                   下載
                 </Button>
               </template>
+              <span
+                v-if="isImageMime(p.mimeType)"
+                class="max-w-[6.5rem] truncate text-xs text-muted-foreground"
+                :title="p.fileName"
+              >
+                {{ p.fileName }}
+              </span>
             </li>
           </ul>
         </div>
@@ -279,42 +392,75 @@ const detailFields = computed(() => {
             <Paperclip class="size-4 text-muted-foreground" />
             附件
           </h3>
-          <ul class="mt-3 flex flex-col gap-2">
-            <li v-for="a in item.attachments" :key="a.id" class="flex flex-wrap items-center gap-2">
-              <span class="truncate text-sm text-foreground">{{ a.fileName }}</span>
-              <span class="text-xs tabular-nums text-muted-foreground">
-                {{ (a.fileSize / 1024).toFixed(1) }} KB
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="downloadingId === a.id"
-                @click="downloadFile(a.id, a.fileName)"
+          <ul class="mt-3 flex flex-wrap gap-3">
+            <li
+              v-for="a in item.attachments"
+              :key="a.id"
+              class="flex flex-col items-start gap-1.5"
+            >
+              <button
+                v-if="isImageMime(a.mimeType)"
+                type="button"
+                class="relative size-24 shrink-0 overflow-hidden rounded-md border border-border bg-muted ring-offset-background transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :title="a.fileName"
+                :aria-label="`預覽 ${a.fileName}`"
+                @click="openImagePreview(a.id, a.fileName)"
               >
-                <Download class="mr-1 size-3.5" />
-                下載
-              </Button>
+                <PhotoThumbnail :file-id="a.id" />
+              </button>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="max-w-[200px] truncate text-sm text-foreground">{{ a.fileName }}</span>
+                <span class="text-xs tabular-nums text-muted-foreground">
+                  {{ (a.fileSize / 1024).toFixed(1) }} KB
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="downloadingId === a.id"
+                  @click="downloadFile(a.id, a.fileName)"
+                >
+                  <Download class="mr-1 size-3.5" />
+                  下載
+                </Button>
+              </div>
             </li>
           </ul>
         </div>
       </div>
 
       <div class="rounded-lg border border-border bg-card p-4 sm:p-6">
-        <h2 class="text-lg font-semibold text-foreground">執行紀錄</h2>
-        <p class="mt-1 text-sm text-muted-foreground">
-          現場填寫之處理歷程（含照片）；新增紀錄請使用手機版。
-        </p>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-foreground">執行紀錄</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              處理歷程與照片；具變更權限者可開啟視窗新增紀錄（與手機版寫入相同資料）。
+            </p>
+          </div>
+          <Button
+            v-if="repairRecordPerm.canUpdate"
+            type="button"
+            size="sm"
+            class="gap-1.5 shrink-0"
+            @click="openNewRecordModal"
+          >
+            <Plus class="size-4" />
+            新增執行紀錄
+          </Button>
+        </div>
 
-        <div v-if="recordsLoading" class="flex justify-center py-12 text-muted-foreground">
+        <div
+          v-if="recordsLoading"
+          class="mt-6 flex justify-center py-12 text-muted-foreground"
+        >
           <Loader2 class="size-8 animate-spin" />
         </div>
-        <Table v-else-if="records.length > 0" class="mt-4">
+        <Table v-else-if="records.length > 0" class="mt-6">
           <TableHeader>
             <TableRow>
               <TableHead class="w-[160px]">時間</TableHead>
               <TableHead class="w-[140px]">紀錄人</TableHead>
               <TableHead>內容</TableHead>
-              <TableHead class="w-[100px] text-right">照片</TableHead>
+              <TableHead class="min-w-[200px]">照片</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -327,22 +473,45 @@ const detailFields = computed(() => {
               </TableCell>
               <TableCell class="align-top">
                 <p class="whitespace-pre-wrap text-sm text-foreground">{{ rec.content }}</p>
-                <div v-if="rec.photos?.length" class="mt-2 flex flex-wrap gap-2">
-                  <Button
+              </TableCell>
+              <TableCell class="align-top">
+                <div v-if="rec.photos?.length" class="flex max-w-[220px] flex-wrap gap-2">
+                  <div
                     v-for="ph in rec.photos"
                     :key="ph.id"
-                    variant="secondary"
-                    size="sm"
-                    class="max-w-[160px] truncate"
-                    :disabled="!isImageMime(ph.mimeType)"
-                    @click="openImagePreview(ph.id)"
+                    class="flex flex-col items-center gap-1"
                   >
-                    {{ ph.fileName }}
-                  </Button>
+                    <button
+                      v-if="isImageMime(ph.mimeType)"
+                      type="button"
+                      class="relative size-16 shrink-0 overflow-hidden rounded-md border border-border bg-muted ring-offset-background transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      :title="ph.fileName"
+                      :aria-label="`預覽 ${ph.fileName}`"
+                      @click="openImagePreview(ph.id, ph.fileName)"
+                    >
+                      <PhotoThumbnail :file-id="ph.id" />
+                    </button>
+                    <Button
+                      v-else
+                      variant="outline"
+                      size="sm"
+                      class="max-w-[100px] truncate text-xs"
+                      :disabled="downloadingId === ph.id"
+                      @click="downloadFile(ph.id, ph.fileName)"
+                    >
+                      <Download class="mr-1 size-3" />
+                      檔案
+                    </Button>
+                    <span
+                      v-if="isImageMime(ph.mimeType)"
+                      class="line-clamp-2 w-16 text-center text-[10px] leading-tight text-muted-foreground"
+                      :title="ph.fileName"
+                    >
+                      {{ ph.fileName }}
+                    </span>
+                  </div>
                 </div>
-              </TableCell>
-              <TableCell class="align-top text-right text-sm text-muted-foreground">
-                {{ rec.photos?.length ?? 0 }} 張
+                <span v-else class="text-sm text-muted-foreground">—</span>
               </TableCell>
             </TableRow>
           </TableBody>
@@ -356,10 +525,113 @@ const detailFields = computed(() => {
       </div>
     </template>
 
+    <Dialog
+      :open="newRecordModalOpen"
+      @update:open="onNewRecordModalOpenChange"
+    >
+      <DialogContent
+        class="max-h-[min(92vh,40rem)] gap-0 overflow-y-auto border-border bg-card p-0 sm:max-w-lg"
+        @pointer-down-outside="(e) => newRecordSubmitting && e.preventDefault()"
+        @escape-key-down="(e) => newRecordSubmitting && e.preventDefault()"
+      >
+        <DialogHeader class="border-b border-border px-6 py-4 text-left">
+          <DialogTitle>新增執行紀錄</DialogTitle>
+          <DialogDescription>
+            填寫處理內容；照片選填，上傳後可見縮圖，點縮圖可預覽，送出後寫入此報修單。
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4 px-6 py-4">
+          <div class="space-y-2">
+            <Label for="newRecordContentModal" class="text-foreground">
+              紀錄內容 <span class="text-destructive">*</span>
+            </Label>
+            <textarea
+              id="newRecordContentModal"
+              v-model="newRecordContent"
+              :class="newRecordTextareaClass"
+              placeholder="請描述本次處理或回覆內容…"
+              rows="5"
+            />
+          </div>
+          <div class="space-y-2">
+            <Label class="text-foreground">照片（選填）</Label>
+            <input
+              ref="newRecordPhotoInputRef"
+              type="file"
+              accept="image/*"
+              multiple
+              class="sr-only"
+              @change="onNewRecordPhotosChange"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              class="h-8"
+              :disabled="newRecordUploading || newRecordSubmitting"
+              @click="pickNewRecordPhotos"
+            >
+              選擇圖片
+            </Button>
+            <p
+              v-if="newRecordUploading"
+              class="flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <Loader2 class="size-3.5 animate-spin" />
+              上傳中…
+            </p>
+            <div v-else-if="newRecordAttachmentIds.length" class="flex flex-wrap gap-3 pt-1">
+              <div
+                v-for="aid in newRecordAttachmentIds"
+                :key="aid"
+                class="relative shrink-0"
+              >
+                <button
+                  type="button"
+                  class="relative size-20 overflow-hidden rounded-md border border-border bg-muted ring-offset-background transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title="預覽"
+                  @click="openImagePreview(aid)"
+                >
+                  <PhotoThumbnail :file-id="aid" />
+                </button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  class="absolute -right-1.5 -top-1.5 size-6 rounded-full border border-border shadow-sm"
+                  :disabled="newRecordSubmitting"
+                  aria-label="移除此照片"
+                  @click.stop="removeDraftAttachment(aid)"
+                >
+                  <X class="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <p v-if="newRecordError" class="text-sm text-destructive">{{ newRecordError }}</p>
+        </div>
+        <DialogFooter class="border-t border-border bg-muted/30 px-6 py-3 sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            :disabled="newRecordSubmitting"
+            @click="cancelNewRecordModal"
+          >
+            取消
+          </Button>
+          <Button type="button" size="sm" :disabled="newRecordSubmitting" @click="submitNewRecord">
+            <Loader2 v-if="newRecordSubmitting" class="mr-2 size-4 animate-spin" />
+            送出紀錄
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <Dialog :open="imagePreviewOpen" @update:open="(v) => !v && closeImagePreview()">
       <DialogContent class="max-w-3xl border-border bg-card p-4">
         <DialogHeader>
-          <DialogTitle>預覽</DialogTitle>
+          <DialogTitle>{{ imagePreviewTitle || '預覽' }}</DialogTitle>
         </DialogHeader>
         <div v-if="imagePreviewUrl" class="max-h-[70vh] overflow-auto rounded-md border border-border bg-background p-2">
           <img

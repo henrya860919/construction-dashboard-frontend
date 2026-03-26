@@ -18,8 +18,15 @@ function getNetworkHost(): string | undefined {
 }
 
 export default defineConfig({
+  assetsInclude: ['**/*.wasm'],
   plugins: [
-    vue(),
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag.startsWith('bim-'),
+        },
+      },
+    }),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -41,6 +48,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        /** IFC 檢視 POC 動態 chunk 含 three／That Open，超過 Workbox 預設 2MiB */
+        maximumFileSizeToCacheInBytes: 7 * 1024 * 1024,
         // 勿快取 API：後台／平台設定依 GET 即時讀取；NetworkFirst 曾導致 PUT 後仍顯示舊模組開通狀態
         runtimeCaching: [],
       },
@@ -64,6 +73,12 @@ export default defineConfig({
         target: 'http://localhost:3003',
         changeOrigin: true,
       },
+      /** That Open 範例 .frag：繞過瀏覽器 CORS */
+      '/thatopen-frags': {
+        target: 'https://thatopen.github.io',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/thatopen-frags/, '/engine_components/resources/frags'),
+      },
     },
   },
   preview: {
@@ -73,6 +88,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3003',
         changeOrigin: true,
+      },
+      '/thatopen-frags': {
+        target: 'https://thatopen.github.io',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/thatopen-frags/, '/engine_components/resources/frags'),
       },
     },
   },

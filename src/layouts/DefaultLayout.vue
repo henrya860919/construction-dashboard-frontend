@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectRoutePermissionGuard } from '@/composables/useProjectRoutePermissionGuard'
 import AppHeader from '@/components/common/AppHeader.vue'
@@ -13,6 +13,16 @@ import { useIsMobile } from '@/composables'
 const route = useRoute()
 const sidebarStore = useSidebarStore()
 const isMobile = useIsMobile()
+
+const isIfcViewerPoc = computed(() => route.path.includes('ifc-viewer-poc'))
+const mainContentClass = computed(() =>
+  isIfcViewerPoc.value
+    ? 'min-h-0 min-w-0 flex-1 overflow-hidden p-0'
+    : 'min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6',
+)
+const routerViewWrapperClass = computed(() =>
+  isIfcViewerPoc.value ? 'flex h-full min-h-0 min-w-0 flex-col' : 'min-w-0',
+)
 
 useProjectRoutePermissionGuard()
 
@@ -57,8 +67,8 @@ watch(
       <div class="border-b border-border bg-background px-4 py-2 md:px-6">
         <AppBreadcrumb />
       </div>
-      <main class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
-        <div class="min-w-0">
+      <main :class="mainContentClass">
+        <div :class="routerViewWrapperClass">
           <RouterView />
         </div>
       </main>

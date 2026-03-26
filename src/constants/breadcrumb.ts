@@ -5,6 +5,7 @@
 export const BREADCRUMB_LABELS: Record<string, string> = {
   '/': '首頁',
   '/projects': '專案列表',
+  '/ifc-viewer-poc': 'IFC 檢視 POC',
   '/admin': '後台',
   '/admin/tenant-info': '租戶資訊',
   '/admin/projects': '專案管理',

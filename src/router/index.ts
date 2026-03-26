@@ -141,6 +141,11 @@ const router = createRouter({
           component: () => import('@/views/ProjectsView.vue'),
         },
         {
+          path: 'ifc-viewer-poc',
+          name: ROUTE_NAME.IFC_VIEWER_POC,
+          component: () => import('@/views/IfcViewerPocView.vue'),
+        },
+        {
           path: 'p/:projectId',
           redirect: (to) => ({ path: `/p/${to.params.projectId}/dashboard` }),
         },

@@ -28,6 +28,8 @@ export const ROUTE_PATH = {
   LOGIN: '/login',
   /** 專案列表（獨立入口，選專案後進入 /p/:projectId/dashboard） */
   PROJECTS: '/projects',
+  /** IFC／Fragments 檢視 POC（純前端） */
+  IFC_VIEWER_POC: '/ifc-viewer-poc',
 
   /** 手機版（PWA／現場查驗） */
   MOBILE: '/mobile',
@@ -137,6 +139,7 @@ export const ROUTE_NAME = {
   HOME: 'home',
   LOGIN: 'login',
   PROJECTS: 'projects',
+  IFC_VIEWER_POC: 'ifc-viewer-poc',
   MOBILE: 'mobile',
   MOBILE_PROJECT_PICKER: 'mobile-project-picker',
   MOBILE_INSPECTION: 'mobile-inspection',

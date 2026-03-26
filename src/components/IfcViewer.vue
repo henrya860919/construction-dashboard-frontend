@@ -20,12 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Box,
   Expand,
@@ -121,8 +116,8 @@ const navModeId = ref<string>('Orbit')
 const orbitPanPrimary = ref(false)
 /** 第一人稱漫遊（自訂 WASD + E/Q 升降／桌面左鍵拖曳轉向／手機雙搖桿；與引擎內建 FirstPerson 分開） */
 const freeRoamActive = ref(false)
-/** 漫遊移動速度（世界座標單位／秒）；按住 Shift ×3 */
-const freeRoamMoveSpeed = ref(0.1)
+/** 漫遊移動速度（世界座標單位／秒）；按住 Shift ×3；滑桿範圍 14–16 */
+const freeRoamMoveSpeed = ref(14)
 const roamStickMoveZoneRef = ref<HTMLElement | null>(null)
 const roamStickLookZoneRef = ref<HTMLElement | null>(null)
 const showRoamVirtualSticks = useMediaQuery('(pointer: coarse)')
@@ -134,6 +129,10 @@ const viewerCanvasReady = ref(false)
 const ROAM_DRAG_LOOK_SENS = 0.0025
 const ROAM_PITCH_LIMIT = 1.55
 const ROAM_LOOK_STICK_SPEED = 2.2
+/** 與 Highlighter.mouseMoveThreshold 對齊：位移小視為「對準星點擊」、大視為轉向拖曳 */
+const ROAM_PICK_MOVE_THRESHOLD_PX = 5
+const ROAM_SPEED_MIN = 14
+const ROAM_SPEED_MAX = 16
 
 const roamKeysDown = new Set<string>()
 let roamYaw = 0
@@ -148,6 +147,8 @@ let roamLookCanvas: HTMLCanvasElement | null = null
 let roamLookDragging = false
 let roamLookLastX = 0
 let roamLookLastY = 0
+let roamPickDownX = 0
+let roamPickDownY = 0
 
 function getViewerCanvas(): HTMLCanvasElement | null {
   return containerRef.value?.querySelector('canvas') ?? null
@@ -228,9 +229,10 @@ function roamFrame(ts: number) {
   roamLastTs = ts
 
   const sp = freeRoamMoveSpeed.value
-  const base = Number.isFinite(sp) ? Math.min(5, Math.max(0.02, sp)) : 0.05
-  const shiftBoost =
-    roamKeysDown.has('ShiftLeft') || roamKeysDown.has('ShiftRight') ? 3 : 1
+  const base = Number.isFinite(sp)
+    ? Math.min(ROAM_SPEED_MAX, Math.max(ROAM_SPEED_MIN, sp))
+    : ROAM_SPEED_MIN
+  const shiftBoost = roamKeysDown.has('ShiftLeft') || roamKeysDown.has('ShiftRight') ? 3 : 1
   const speed = base * shiftBoost
   const cam = worldRef.camera.three
 
@@ -355,6 +357,13 @@ function onRoamLookPointerMove(ev: MouseEvent) {
 
 function onRoamLookPointerUp(ev: MouseEvent) {
   if (ev.button === 0) {
+    if (freeRoamActive.value && !showRoamVirtualSticks.value && roamLookDragging) {
+      const dist = Math.hypot(ev.clientX - roamPickDownX, ev.clientY - roamPickDownY)
+      /** 滑鼠點擊觸發，射線永遠從螢幕中心（準星）出發，不依游標座標 */
+      if (dist <= ROAM_PICK_MOVE_THRESHOLD_PX) {
+        void performRoamCenterSelection(ev.shiftKey)
+      }
+    }
     roamLookDragging = false
   }
 }
@@ -364,6 +373,8 @@ function onRoamCanvasMouseDown(ev: MouseEvent) {
   const canvas = getViewerCanvas()
   if (!canvas || ev.button !== 0) return
   if (!(ev.target instanceof Node) || !canvas.contains(ev.target)) return
+  roamPickDownX = ev.clientX
+  roamPickDownY = ev.clientY
   roamLookDragging = true
   roamLookLastX = ev.clientX
   roamLookLastY = ev.clientY
@@ -393,6 +404,54 @@ function detachRoamLookCanvasListeners() {
   roamLookDragging = false
   window.removeEventListener('mousemove', onRoamLookPointerMove, true)
   window.removeEventListener('mouseup', onRoamLookPointerUp, true)
+}
+
+function syncHighlighterAutoClickForRoam() {
+  const hl = componentsRef.value?.get(OBCF.Highlighter)
+  if (!hl?.isSetup || !hl.config) return
+  /** 漫遊中關閉套件「依游標」點選；改由我們在滑鼠放開時用螢幕中心射線選取 */
+  hl.config.autoHighlightOnClick = !freeRoamActive.value
+}
+
+/**
+ * 漫遊準星選取：左鍵點擊（小位移）觸發。
+ * 注意：OBC.SimpleRaycaster.castRay({ position }) 仍把 this.mouse.rawPosition（真實游標）傳給
+ * FragmentsManager.raycast，故 IFC 命中會跟著滑鼠走；改為直接 raycast 並傳「畫布中心」的 client 座標。
+ */
+async function performRoamCenterSelection(shiftKey: boolean) {
+  const obc = componentsRef.value
+  if (!obc || !worldRef?.renderer) return
+  const hl = obc.get(OBCF.Highlighter)
+  if (!hl.isSetup) return
+  const removePrevious = hl.multiple === 'none' ? true : !shiftKey
+  const dom = worldRef.renderer.three.domElement
+  const camera = worldRef.camera.three
+  const rect = dom.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return
+  const centerMouse = new THREE.Vector2(rect.left + rect.width * 0.5, rect.top + rect.height * 0.5)
+  try {
+    const fragments = obc.get(OBC.FragmentsManager)
+    if (!fragments.initialized) {
+      if (removePrevious) await hl.clear(SELECT_NAME).catch(() => {})
+      return
+    }
+    const fragResult = await fragments.raycast({
+      camera,
+      dom,
+      mouse: centerMouse,
+    })
+    if (!fragResult || fragResult.localId === undefined || fragResult.localId === null) {
+      if (removePrevious) await hl.clear(SELECT_NAME).catch(() => {})
+      return
+    }
+    const modelId = fragResult.fragments.modelId
+    const modelIdMap: OBC.ModelIdMap = {
+      [modelId]: new Set([fragResult.localId]),
+    }
+    await hl.highlightByID(SELECT_NAME, modelIdMap, removePrevious, false, null, true)
+  } catch (e) {
+    console.warn('[IfcViewer] roam center pick', e)
+  }
 }
 
 function attachRoamWindowListeners() {
@@ -435,7 +494,15 @@ async function exitFreeRoamMode() {
     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion)
     const target = cam.position.clone().add(fwd)
     try {
-      await c.setLookAt(cam.position.x, cam.position.y, cam.position.z, target.x, target.y, target.z, false)
+      await c.setLookAt(
+        cam.position.x,
+        cam.position.y,
+        cam.position.z,
+        target.x,
+        target.y,
+        target.z,
+        false
+      )
     } catch {
       /* ignore */
     }
@@ -478,6 +545,7 @@ async function toggleFreeRoamMode() {
 }
 
 watch([freeRoamActive, showRoamVirtualSticks], () => {
+  syncHighlighterAutoClickForRoam()
   if (!freeRoamActive.value) {
     destroyRoamNipples()
     return
@@ -496,7 +564,7 @@ watch([freeRoamActive, showRoamVirtualSticks], () => {
 const floorsEmptyHint = computed(
   () =>
     storeyNames.value.length === 0 &&
-    '此模型未偵測到 IfcBuildingStorey 樓層資訊，無法使用樓層篩選（不影響檢視）。',
+    '此模型未偵測到 IfcBuildingStorey 樓層資訊，無法使用樓層篩選（不影響檢視）。'
 )
 
 /** web-ifc 需要 wasm 檔所在「目錄」的絕對 URL（結尾 /） */
@@ -543,7 +611,11 @@ function formatAttrValue(v: unknown): string {
   }
 }
 
-function flattenItemData(data: ItemData, category: string, out: { category: string; name: string; value: string }[]) {
+function flattenItemData(
+  data: ItemData,
+  category: string,
+  out: { category: string; name: string; value: string }[]
+) {
   for (const [key, val] of Object.entries(data)) {
     const name = fixIfcText(key)
     if (isItemAttribute(val)) {
@@ -704,7 +776,9 @@ async function disposeAllFragmentModels() {
     if (model && worldRef) {
       worldRef.scene.three.remove(model.object)
     }
-    await fragments.core.disposeModel(id).catch((e) => console.warn('[IfcViewer] disposeModel', id, e))
+    await fragments.core
+      .disposeModel(id)
+      .catch((e) => console.warn('[IfcViewer] disposeModel', id, e))
   }
 
   for (const k of Object.keys(fragModelLabels)) {
@@ -795,7 +869,11 @@ async function initViewer() {
   const components = new OBC.Components()
   componentsRef.value = components
   const worlds = components.get(OBC.Worlds)
-  const w = worlds.create<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBCF.PostproductionRenderer>()
+  const w = worlds.create<
+    OBC.SimpleScene,
+    OBC.OrthoPerspectiveCamera,
+    OBCF.PostproductionRenderer
+  >()
 
   w.scene = new OBC.SimpleScene(components)
   w.scene.setup()
@@ -993,7 +1071,8 @@ async function loadIfcFile(file: File) {
     await ifcLoader.load(buf, true, ifcModelId, {
       processData: {
         progressCallback: (p) => {
-          const pct = typeof p === 'number' ? Math.round(Math.min(100, Math.max(0, p <= 1 ? p * 100 : p))) : 0
+          const pct =
+            typeof p === 'number' ? Math.round(Math.min(100, Math.max(0, p <= 1 ? p * 100 : p))) : 0
           ifcProgressPercent.value = pct
         },
       },
@@ -1021,7 +1100,7 @@ async function loadFragPayload(
   viewerRoot: OBC.Components,
   payload: Uint8Array,
   modelId: string,
-  camera: FragLoadCamera,
+  camera: FragLoadCamera
 ) {
   const fragments = viewerRoot.get(OBC.FragmentsManager)
   await fragments.core.load(payload, { modelId, camera })
@@ -1059,7 +1138,9 @@ async function disposeFragmentModel(modelId: string) {
   const hl = c.get(OBCF.Highlighter)
   await hl.clear(SELECT_NAME).catch(() => {})
   worldRef.scene.three.remove(model.object)
-  await fragments.core.disposeModel(modelId).catch((e) => console.warn('[IfcViewer] disposeModel', modelId, e))
+  await fragments.core
+    .disposeModel(modelId)
+    .catch((e) => console.warn('[IfcViewer] disposeModel', modelId, e))
   delete fragModelLabels[modelId]
   syncLoadedModelRows()
   void refreshStoreyData()
@@ -1106,7 +1187,7 @@ async function onFragInputChange(ev: Event) {
           viewerRoot,
           new Uint8Array(await file.arrayBuffer()),
           modelId,
-          viewerCameraForFragLoad(),
+          viewerCameraForFragLoad()
         )
       } catch (e) {
         delete fragModelLabels[modelId]
@@ -1128,13 +1209,13 @@ async function onFragInputChange(ev: Event) {
 
 function onSampleArq() {
   void loadExampleFrag(EXAMPLE_FRAG_ARQ, 'school_arq.frag').catch(
-    (e) => (error.value = e instanceof Error ? e.message : String(e)),
+    (e) => (error.value = e instanceof Error ? e.message : String(e))
   )
 }
 
 function onSampleStr() {
   void loadExampleFrag(EXAMPLE_FRAG_STR, 'school_str.frag').catch(
-    (e) => (error.value = e instanceof Error ? e.message : String(e)),
+    (e) => (error.value = e instanceof Error ? e.message : String(e))
   )
 }
 
@@ -1184,7 +1265,7 @@ function enableHorizontalSection() {
   const id = clipper.createFromNormalAndCoplanarPoint(
     worldRef,
     new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(0, y, 0),
+    new THREE.Vector3(0, y, 0)
   )
   horizontalSectionPlaneId.value = id
   horizontalSectionActive.value = true
@@ -1218,7 +1299,8 @@ async function resetCameraView() {
  * - pinchSpeed：camera-controls@3.1.2 未讀取此屬性，雙指捏合仍走 dollySpeed；仍寫入以利日後版相容。
  */
 function applyViewerCameraControlParams(c: CameraControls) {
-  c.dollySpeed = 0.5
+  /** 略降靈敏度，避免滾輪 zoom out 單次幅度過大、模型一下飄出畫面 */
+  c.dollySpeed = 0.22
   c.minDistance = 1
   c.maxDistance = 500
   c.dollyToCursor = true
@@ -1249,6 +1331,16 @@ function getSceneBoundingInfo() {
 function applyOrbitPointerBindings() {
   if (!worldRef?.camera.hasCameraControls()) return
   const c = worldRef.camera.controls
+  const camThree = worldRef.camera.three
+  const isPerspective = camThree instanceof THREE.PerspectiveCamera
+  /** 漫遊結束時曾將 wheel／中鍵／右鍵／雙指設為 NONE，僅還原 left／touch.one 會導致環繞無法滾輪縮放 */
+  c.mouseButtons.middle = CameraControls.ACTION.DOLLY
+  c.mouseButtons.right = CameraControls.ACTION.TRUCK
+  c.mouseButtons.wheel = isPerspective ? CameraControls.ACTION.DOLLY : CameraControls.ACTION.ZOOM
+  c.touches.two = isPerspective
+    ? CameraControls.ACTION.TOUCH_DOLLY_TRUCK
+    : CameraControls.ACTION.TOUCH_ZOOM_TRUCK
+  c.touches.three = CameraControls.ACTION.TOUCH_TRUCK
   if (orbitPanPrimary.value) {
     c.mouseButtons.left = CameraControls.ACTION.TRUCK
     c.touches.one = CameraControls.ACTION.TOUCH_TRUCK
@@ -1299,13 +1391,34 @@ async function setViewPreset(preset: 'top' | 'front' | 'right' | 'iso' | 'reset'
   const d = dist
   switch (preset) {
     case 'top':
-      await worldRef.camera.controls.setLookAt(center.x, center.y + d, center.z, center.x, center.y, center.z)
+      await worldRef.camera.controls.setLookAt(
+        center.x,
+        center.y + d,
+        center.z,
+        center.x,
+        center.y,
+        center.z
+      )
       break
     case 'front':
-      await worldRef.camera.controls.setLookAt(center.x, center.y, center.z + d, center.x, center.y, center.z)
+      await worldRef.camera.controls.setLookAt(
+        center.x,
+        center.y,
+        center.z + d,
+        center.x,
+        center.y,
+        center.z
+      )
       break
     case 'right':
-      await worldRef.camera.controls.setLookAt(center.x + d, center.y, center.z, center.x, center.y, center.z)
+      await worldRef.camera.controls.setLookAt(
+        center.x + d,
+        center.y,
+        center.z,
+        center.x,
+        center.y,
+        center.z
+      )
       break
     case 'iso':
       await worldRef.camera.controls.setLookAt(
@@ -1314,7 +1427,7 @@ async function setViewPreset(preset: 'top' | 'front' | 'right' | 'iso' | 'reset'
         center.z + d * 0.75,
         center.x,
         center.y,
-        center.z,
+        center.z
       )
       break
     default:
@@ -1347,7 +1460,6 @@ function closePropertiesPanel() {
 function openPropertiesPanel() {
   if (hasPropertySelection.value) showPropertiesPanel.value = true
 }
-
 </script>
 
 <template>
@@ -1404,7 +1516,9 @@ function openPropertiesPanel() {
         v-if="loadedModelRows.length > 0"
         class="border-border bg-muted/30 w-full rounded-md border px-2 py-2"
       >
-        <div class="text-muted-foreground mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div
+          class="text-muted-foreground mb-2 flex flex-wrap items-center justify-between gap-2 text-xs"
+        >
           <span>已載入模型（{{ loadedModelRows.length }}）</span>
           <Button
             type="button"
@@ -1458,7 +1572,9 @@ function openPropertiesPanel() {
           />
         </div>
       </div>
-      <p v-if="status" class="text-muted-foreground w-full text-xs sm:ml-auto sm:w-auto">{{ status }}</p>
+      <p v-if="status" class="text-muted-foreground w-full text-xs sm:ml-auto sm:w-auto">
+        {{ status }}
+      </p>
       <p v-if="error" class="text-destructive w-full text-xs sm:ml-auto sm:w-auto">{{ error }}</p>
     </div>
 
@@ -1484,9 +1600,7 @@ function openPropertiesPanel() {
           </Button>
           <ul class="space-y-0.5">
             <li v-for="name in storeyNames" :key="name">
-              <div
-                class="hover:bg-muted/50 flex items-center gap-2 rounded-md px-1.5 py-1"
-              >
+              <div class="hover:bg-muted/50 flex items-center gap-2 rounded-md px-1.5 py-1">
                 <Checkbox
                   :id="`ifc-storey-${name}`"
                   class="size-3.5 shrink-0"
@@ -1506,7 +1620,11 @@ function openPropertiesPanel() {
       </aside>
 
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div ref="containerRef" class="ifc-viewer-canvas-host min-h-0 min-w-0 flex-1" />
+        <div
+          ref="containerRef"
+          class="ifc-viewer-canvas-host min-h-0 min-w-0 flex-1"
+          :class="freeRoamActive && !showRoamVirtualSticks ? 'cursor-none' : ''"
+        />
 
         <!-- 桌面漫遊：螢幕中央準星（不攔截點擊） -->
         <div
@@ -1551,22 +1669,28 @@ function openPropertiesPanel() {
           >
             <span class="text-muted-foreground shrink-0 font-medium">漫遊</span>
             <div class="flex min-w-[9rem] flex-col gap-1">
-              <Label for="ifcviewer-roam-speed" class="text-muted-foreground shrink-0 font-normal">速度</Label>
+              <Label for="ifcviewer-roam-speed" class="text-muted-foreground shrink-0 font-normal"
+                >速度</Label
+              >
               <input
                 id="ifcviewer-roam-speed"
                 v-model.number="freeRoamMoveSpeed"
                 type="range"
-                min="0.02"
-                max="2"
-                step="0.01"
+                :min="ROAM_SPEED_MIN"
+                :max="ROAM_SPEED_MAX"
+                step="0.05"
                 class="accent-primary h-2 w-full min-w-0 cursor-pointer"
               />
-              <span class="text-muted-foreground tabular-nums">{{ freeRoamMoveSpeed.toFixed(2) }}（Shift ×3）</span>
+              <span class="text-muted-foreground tabular-nums"
+                >{{ freeRoamMoveSpeed.toFixed(2) }}（Shift ×3）</span
+              >
             </div>
             <span v-if="!showRoamVirtualSticks" class="text-muted-foreground min-w-0">
-              左鍵拖曳轉向 · E 上升／Q 下降 · Shift 加速 · ESC 退出
+              左鍵點擊選準星處（拖曳＝轉向）· Shift 加選 · E 上升／Q 下降 · Shift 加速 · ESC 退出
             </span>
-            <span v-else class="text-muted-foreground min-w-0">左移動 · 右視角 · Shift 加速 · ESC 退出</span>
+            <span v-else class="text-muted-foreground min-w-0"
+              >左移動 · 右視角 · Shift 加速 · ESC 退出</span
+            >
           </div>
         </div>
 
@@ -1641,7 +1765,9 @@ function openPropertiesPanel() {
                       <Hand class="size-5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">平移：Orbit 下主按鈕改為拖曳平移；雙指亦可平移</TooltipContent>
+                  <TooltipContent side="top"
+                    >平移：Orbit 下主按鈕改為拖曳平移；雙指亦可平移</TooltipContent
+                  >
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -1651,7 +1777,9 @@ function openPropertiesPanel() {
                       size="icon"
                       :disabled="!viewerCanvasReady"
                       class="relative size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
-                      :class="navModeId === 'Plan' ? 'border-primary/50 bg-primary/10 text-primary' : ''"
+                      :class="
+                        navModeId === 'Plan' ? 'border-primary/50 bg-primary/10 text-primary' : ''
+                      "
                       aria-label="平面導覽"
                       @click="void setCameraNav('Plan')"
                     >
@@ -1668,7 +1796,11 @@ function openPropertiesPanel() {
                       size="icon"
                       :disabled="!viewerCanvasReady"
                       class="relative size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
-                      :class="navModeId === 'FirstPerson' ? 'border-primary/50 bg-primary/10 text-primary' : ''"
+                      :class="
+                        navModeId === 'FirstPerson'
+                          ? 'border-primary/50 bg-primary/10 text-primary'
+                          : ''
+                      "
                       aria-label="第一人稱導覽"
                       @click="void setCameraNav('FirstPerson')"
                     >
@@ -1696,7 +1828,7 @@ function openPropertiesPanel() {
                     {{
                       freeRoamActive
                         ? '結束漫遊（恢復環繞）'
-                        : '第一人稱漫遊（WASD、E/Q 升降、左鍵拖曳轉向；手機雙搖桿）'
+                        : '第一人稱漫遊（WASD、左鍵點準星選取／拖曳轉向、E/Q 升降；手機雙搖桿）'
                     }}
                   </TooltipContent>
                 </Tooltip>
@@ -1737,21 +1869,21 @@ function openPropertiesPanel() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="center" class="w-44">
-                    <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('top')">
-                      俯視
-                    </DropdownMenuItem>
-                    <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('front')">
-                      前視
-                    </DropdownMenuItem>
-                    <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('right')">
-                      右視
-                    </DropdownMenuItem>
-                    <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('iso')">
-                      等角
-                    </DropdownMenuItem>
-                    <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('reset')">
-                      重置為預設視角
-                    </DropdownMenuItem>
+                          <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('top')">
+                            俯視
+                          </DropdownMenuItem>
+                          <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('front')">
+                            前視
+                          </DropdownMenuItem>
+                          <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('right')">
+                            右視
+                          </DropdownMenuItem>
+                          <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('iso')">
+                            等角
+                          </DropdownMenuItem>
+                          <DropdownMenuItem class="cursor-pointer" @click="setViewPreset('reset')">
+                            重置為預設視角
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </span>
@@ -1793,7 +1925,11 @@ function openPropertiesPanel() {
                             variant="ghost"
                             size="icon"
                             class="relative size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
-                            :class="horizontalSectionActive ? 'border-primary/50 bg-primary/10 text-primary' : ''"
+                            :class="
+                              horizontalSectionActive
+                                ? 'border-primary/50 bg-primary/10 text-primary'
+                                : ''
+                            "
                             aria-label="剖切"
                           >
                             <Scissors class="size-5" />
@@ -1804,10 +1940,7 @@ function openPropertiesPanel() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="center" class="w-48">
-                          <DropdownMenuItem
-                            class="cursor-pointer"
-                            @click="showSectionPanel = true"
-                          >
+                          <DropdownMenuItem class="cursor-pointer" @click="showSectionPanel = true">
                             剖切設定…
                           </DropdownMenuItem>
                           <DropdownMenuItem class="cursor-pointer" @click="clearAllClipsAndSection">
@@ -1849,7 +1982,9 @@ function openPropertiesPanel() {
                       <Box class="size-5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">開啟 FRAG 檔（可複選，與頂部載入區相同）</TooltipContent>
+                  <TooltipContent side="top"
+                    >開啟 FRAG 檔（可複選，與頂部載入區相同）</TooltipContent
+                  >
                 </Tooltip>
               </div>
 
@@ -1951,45 +2086,49 @@ function openPropertiesPanel() {
         v-show="showPropertiesPanel && hasPropertySelection"
         class="border-border bg-card fixed inset-x-0 bottom-0 z-40 flex max-h-[55vh] flex-col border-t md:static md:z-auto md:max-h-none md:w-[min(100%,22rem)] md:max-w-[100%] md:shrink-0 md:border-t-0 md:border-l"
       >
-          <div class="border-border flex min-h-11 items-center justify-between gap-2 border-b px-3 py-2">
-            <span class="text-sm font-medium">IFC 屬性</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              class="h-11 w-11 shrink-0"
-              aria-label="關閉屬性"
-              @click="closePropertiesPanel"
+        <div
+          class="border-border flex min-h-11 items-center justify-between gap-2 border-b px-3 py-2"
+        >
+          <span class="text-sm font-medium">IFC 屬性</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="h-11 w-11 shrink-0"
+            aria-label="關閉屬性"
+            @click="closePropertiesPanel"
+          >
+            <X class="size-5" />
+          </Button>
+        </div>
+        <div class="text-foreground min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2 text-sm">
+          <div v-if="propertiesLoading" class="text-muted-foreground flex justify-center py-8">
+            載入屬性…
+          </div>
+          <template v-else>
+            <details
+              v-for="(sec, i) in propertySections"
+              :key="sec.id"
+              class="border-border mb-2 rounded-md border"
+              :open="i === 0"
             >
-              <X class="size-5" />
-            </Button>
-          </div>
-          <div class="text-foreground min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2 text-sm">
-            <div v-if="propertiesLoading" class="text-muted-foreground flex justify-center py-8">載入屬性…</div>
-            <template v-else>
-              <details
-                v-for="(sec, i) in propertySections"
-                :key="sec.id"
-                class="border-border mb-2 rounded-md border"
-                :open="i === 0"
+              <summary
+                class="text-foreground cursor-pointer list-none px-3 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden min-h-11 touch-manipulation"
               >
-                <summary
-                  class="text-foreground cursor-pointer list-none px-3 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden min-h-11 touch-manipulation"
-                >
-                  {{ sec.title }}
-                </summary>
-                <dl class="border-border space-y-2 border-t px-3 py-2">
-                  <template v-for="row in sec.rows" :key="sec.id + row.name + row.value">
-                    <div class="grid gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:gap-3">
-                      <dt class="text-muted-foreground break-words text-xs">{{ row.name }}</dt>
-                      <dd class="text-foreground break-all text-xs">{{ row.value }}</dd>
-                    </div>
-                  </template>
-                </dl>
-              </details>
-            </template>
-          </div>
-        </aside>
+                {{ sec.title }}
+              </summary>
+              <dl class="border-border space-y-2 border-t px-3 py-2">
+                <template v-for="row in sec.rows" :key="sec.id + row.name + row.value">
+                  <div class="grid gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:gap-3">
+                    <dt class="text-muted-foreground break-words text-xs">{{ row.name }}</dt>
+                    <dd class="text-foreground break-all text-xs">{{ row.value }}</dd>
+                  </div>
+                </template>
+              </dl>
+            </details>
+          </template>
+        </div>
+      </aside>
     </div>
 
     <!-- 手機樓層 -->
@@ -2072,7 +2211,13 @@ function openPropertiesPanel() {
         >
           <div class="mb-3 flex items-center justify-between">
             <span class="text-foreground font-medium">水平剖切</span>
-            <Button type="button" variant="ghost" size="icon" class="h-11 w-11" @click="showSectionPanel = false">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              class="h-11 w-11"
+              @click="showSectionPanel = false"
+            >
               <X class="size-5" />
             </Button>
           </div>
@@ -2100,7 +2245,12 @@ function openPropertiesPanel() {
               @input="onSectionSliderInput"
             />
           </div>
-          <Button type="button" variant="outline" class="mt-4 h-11 min-h-[44px] w-full" @click="clearAllClipsAndSection">
+          <Button
+            type="button"
+            variant="outline"
+            class="mt-4 h-11 min-h-[44px] w-full"
+            @click="clearAllClipsAndSection"
+          >
             關閉剖切
           </Button>
         </div>

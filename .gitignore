@@ -21,6 +21,9 @@ dist
 dist-ssr
 *.local
 
+# Cursor (local indexing rules; do not commit)
+.cursorignore
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

@@ -6,6 +6,7 @@ import * as BUIC from '@thatopen/ui-obc'
 import type { BIMMaterial, FragmentsModel, ItemAttribute, ItemData } from '@thatopen/fragments'
 import * as FRAGS from '@thatopen/fragments'
 import * as THREE from 'three'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import fragmentsWorkerUrl from '@thatopen/fragments/worker?url'
 import webIfcWasmUrl from 'web-ifc/web-ifc.wasm?url'
 import CameraControls from 'camera-controls'
@@ -20,20 +21,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  Box,
   Expand,
   Gamepad2,
   ChevronUp,
-  FolderOpen,
   Footprints,
   Hand,
   Layers2,
-  MapPinned,
   Maximize2,
   Move3d,
+  Package,
+  RectangleHorizontal,
+  RectangleVertical,
   Rotate3d,
+  SquareStack,
   Ruler,
   Scissors,
   Settings,
@@ -42,7 +46,16 @@ import {
   Video,
   X,
 } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch,
+} from 'vue'
 
 /** 範例檔走 Vite proxy，避免 CORS */
 const EXAMPLE_FRAG_ARQ = '/thatopen-frags/school_arq.frag'
@@ -62,9 +75,10 @@ const loading = ref(false)
 const loadingIfc = ref(false)
 const ifcProgressPercent = ref(0)
 
-const showFloorsPanel = ref(false)
+const floorsPopoverOpen = ref(false)
+const loadFilesPopoverOpen = ref(false)
+const loadFilesTab = ref<'ifc' | 'frag'>('ifc')
 const showPropertiesPanel = ref(false)
-const showSectionPanel = ref(false)
 
 const storeyNames = ref<string[]>([])
 const storeyVisible = reactive<Record<string, boolean>>({})
@@ -83,6 +97,24 @@ let onMaterialSet: ((data: { key: number; value: BIMMaterial }) => void) | null 
 let onControlsUpdate: (() => void) | null = null
 
 let clipperOnAfterCreate: ((plane: OBC.SimplePlane) => void) | null = null
+let clipperOnAfterDrag: ((plane: OBC.SimplePlane) => void) | null = null
+let clipperOnBeforeDragDecor: ((plane: OBC.SimplePlane) => void) | null = null
+/** 剖切面：滑鼠在面上／拖曳拉桿時才顯示邊框與箭頭 */
+const CLIP_PLANE_HOVER_EDGES_NAME = 'clip-plane-hover-edges'
+const clipPlaneRaycaster = new THREE.Raycaster()
+const clipPlanePointerNdc = new THREE.Vector2()
+let clipPlanePointerOverPlane = false
+let clipPlaneDecorDragging = false
+/** 環視時滑鼠未動也要重算 raycast，否則 hover 不會更新 */
+let clipPlaneLastClientX = 0
+let clipPlaneLastClientY = 0
+let clipPlanePointerInsideCanvas = false
+let clipPlanePointerMoveHandler: ((ev: PointerEvent) => void) | null = null
+let clipPlanePointerLeaveHandler: (() => void) | null = null
+/** ClipStyler 剖面線／填色；與目前單一剖切平面對應 */
+let activeSectionClipEdges: OBCF.ClipEdges | null = null
+let sectionClipLineMaterial: LineMaterial | null = null
+const SECTION_CLIP_STYLE_ID = 'SectionCut'
 let highlighterOnHighlight: (() => void) | null = null
 let highlighterOnClear: (() => void) | null = null
 
@@ -94,12 +126,17 @@ type PropertySection = { id: string; title: string; rows: PropertyRow[] }
 
 const propertySections = ref<PropertySection[]>([])
 
-/** 水平剖切：單一平面 + ClipEdges（ClipStyler） */
-const horizontalSectionActive = ref(false)
-const horizontalSectionPlaneId = ref<string | null>(null)
-/** 0–1 對應場景包圍盒 Y */
-const sectionHeightT = ref(0.5)
+/** 單面剖切：同一時間僅允許 X／Y／Z 其中一軸（互斥） */
+type AxisCutMode = 'off' | 'x' | 'y' | 'z'
+const axisCutMode = ref<AxisCutMode>('off')
+const axisCutPlaneId = ref<string | null>(null)
+/** 0–1 對應場景包圍盒各軸位置 */
+const axisCutTX = ref(0.5)
+const axisCutTY = ref(0.5)
+const axisCutTZ = ref(0.5)
+const sceneXRange = ref<{ min: number; max: number } | null>(null)
 const sceneYRange = ref<{ min: number; max: number } | null>(null)
+const sceneZRange = ref<{ min: number; max: number } | null>(null)
 
 /** 頂部載入區（檔案／範例）顯示開關 */
 const showLoadDock = ref(true)
@@ -662,17 +699,272 @@ function applyCanvasTouchNone() {
   })
 }
 
-function updateSceneYRange() {
+function computeSceneBoundingBox(): THREE.Box3 | null {
   const box = new THREE.Box3()
-  if (worldRef) {
-    for (const mesh of worldRef.meshes) {
-      box.expandByObject(mesh)
+  if (!worldRef) return null
+
+  for (const mesh of worldRef.meshes) {
+    box.expandByObject(mesh)
+  }
+
+  /** Fragments 模型常掛在 scene 上但未列入 world.meshes，需併入包圍盒否則剖切按鈕會永遠 disabled */
+  const components = componentsRef.value
+  if (components) {
+    try {
+      const fragments = components.get(OBC.FragmentsManager)
+      for (const id of fragments.list.keys()) {
+        const model = fragments.list.get(id)
+        const obj = model?.object
+        if (obj) {
+          obj.updateWorldMatrix(true, true)
+          box.expandByObject(obj)
+        }
+      }
+    } catch {
+      /* ignore */
     }
   }
-  if (!box.isEmpty()) {
-    sceneYRange.value = { min: box.min.y, max: box.max.y }
-  } else {
+
+  if (box.isEmpty() && worldRef.scene?.three) {
+    worldRef.scene.three.updateWorldMatrix(true, true)
+    const sceneBox = new THREE.Box3().setFromObject(worldRef.scene.three)
+    if (!sceneBox.isEmpty()) {
+      box.copy(sceneBox)
+    }
+  }
+
+  /** 已載入模型但 bbox 仍算不出（少見）：用第一個模型世界座標＋預設半徑，讓剖切可開、滑桿可用 */
+  if (box.isEmpty() && components) {
+    try {
+      const fr = components.get(OBC.FragmentsManager)
+      if (fr.list.size > 0) {
+        const wp = new THREE.Vector3()
+        for (const id of fr.list.keys()) {
+          const obj = fr.list.get(id)?.object
+          if (obj) {
+            obj.getWorldPosition(wp)
+            const half = 25
+            return new THREE.Box3(
+              new THREE.Vector3(wp.x - half, wp.y - half, wp.z - half),
+              new THREE.Vector3(wp.x + half, wp.y + half, wp.z + half),
+            )
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return box.isEmpty() ? null : box
+}
+
+function updateSceneClipBoundingRanges() {
+  const box = computeSceneBoundingBox()
+  if (!box) {
+    sceneXRange.value = null
     sceneYRange.value = null
+    sceneZRange.value = null
+    return
+  }
+  sceneXRange.value = { min: box.min.x, max: box.max.x }
+  sceneYRange.value = { min: box.min.y, max: box.max.y }
+  sceneZRange.value = { min: box.min.z, max: box.max.z }
+}
+
+/**
+ * 剖切片視覺尺寸須明顯大於模型（SimplePlane 為正方形平面，用場景對角線與最大邊估安全邊長）。
+ * 須在「平面已加入 clipper.list 之後」呼叫，否則 ThatOpen 仍以建構預設 size=5 顯示。
+ */
+function applyClipperPlaneGizmoSize() {
+  const c = componentsRef.value
+  if (!c) return
+  const clipper = c.get(OBC.Clipper)
+  clipper.autoScalePlanes = false
+  const box = computeSceneBoundingBox()
+  if (!box) {
+    clipper.size = 40
+    return
+  }
+  const size = new THREE.Vector3()
+  box.getSize(size)
+  const sx = Math.max(size.x, 1e-6)
+  const sy = Math.max(size.y, 1e-6)
+  const sz = Math.max(size.z, 1e-6)
+  const maxSpan = Math.max(sx, sy, sz)
+  const diagonal = Math.sqrt(sx * sx + sy * sy + sz * sz)
+  /** 正方形剖切面：依包圍盒略放大一圈即可，不必遠大於模型 */
+  clipper.size = Math.max(maxSpan * 1.22, diagonal * 0.75, 8)
+}
+
+const CLIP_PLANE_FILL_COLOR = 0xa855f7
+const CLIP_PLANE_FILL_OPACITY = 0.16
+
+/** Clipper 共用材質 + 各剖切面 mesh（That Open 有時需直接改 mesh.material 才會半透明） */
+function applyClipperPlaneFillStyle() {
+  const c = componentsRef.value
+  if (!c) return
+  const mat = c.get(OBC.Clipper).material
+  mat.color.setHex(CLIP_PLANE_FILL_COLOR)
+  mat.opacity = CLIP_PLANE_FILL_OPACITY
+  mat.transparent = true
+  mat.depthWrite = false
+  mat.depthTest = true
+  if ('side' in mat) {
+    ;(mat as THREE.MeshBasicMaterial).side = THREE.DoubleSide
+  }
+  mat.needsUpdate = true
+}
+
+function applyPerPlaneClipFillMaterial(plane: OBC.SimplePlane) {
+  for (const mesh of plane.meshes) {
+    const applyOne = (m: THREE.Material) => {
+      if ('color' in m && (m as THREE.MeshBasicMaterial).color) {
+        ;(m as THREE.MeshBasicMaterial).color.setHex(CLIP_PLANE_FILL_COLOR)
+      }
+      m.transparent = true
+      m.opacity = CLIP_PLANE_FILL_OPACITY
+      m.depthWrite = false
+      m.depthTest = true
+      if ('side' in m) {
+        ;(m as THREE.MeshBasicMaterial).side = THREE.DoubleSide
+      }
+      m.needsUpdate = true
+    }
+    const mats = mesh.material
+    if (Array.isArray(mats)) mats.forEach(applyOne)
+    else applyOne(mats)
+  }
+}
+
+function setupClipPlaneHoverDecor(plane: OBC.SimplePlane) {
+  const mesh = plane.meshes[0]
+  if (!mesh) return
+  const existing = mesh.getObjectByName(CLIP_PLANE_HOVER_EDGES_NAME)
+  if (existing) {
+    existing.removeFromParent()
+    const ls = existing as THREE.LineSegments
+    ls.geometry.dispose()
+    ;(ls.material as THREE.Material).dispose()
+  }
+  const edgesGeom = new THREE.EdgesGeometry(mesh.geometry, 18)
+  const edgeMat = new THREE.LineBasicMaterial({
+    color: 0xe879f9,
+    transparent: true,
+    opacity: 1,
+    depthTest: true,
+  })
+  const edgeLines = new THREE.LineSegments(edgesGeom, edgeMat)
+  edgeLines.name = CLIP_PLANE_HOVER_EDGES_NAME
+  edgeLines.visible = false
+  edgeLines.renderOrder = 2
+  mesh.add(edgeLines)
+  applyPerPlaneClipFillMaterial(plane)
+  const p = plane as unknown as { controls: { getHelper: () => THREE.Object3D } }
+  p.controls.getHelper().visible = false
+}
+
+function getActiveAxisCutPlane(): OBC.SimplePlane | null {
+  const c = componentsRef.value
+  const id = axisCutPlaneId.value
+  if (!c || !id || axisCutMode.value === 'off') return null
+  return c.get(OBC.Clipper).list.get(id) ?? null
+}
+
+function updateClipPlanePointerHover(clientX: number, clientY: number) {
+  const w = worldRef
+  const plane = getActiveAxisCutPlane()
+  if (!w?.renderer || !plane) {
+    clipPlanePointerOverPlane = false
+    return
+  }
+  const dom = w.renderer.three.domElement
+  const rect = dom.getBoundingClientRect()
+  const rw = rect.width
+  const rh = rect.height
+  if (rw <= 0 || rh <= 0) {
+    clipPlanePointerOverPlane = false
+    return
+  }
+  clipPlanePointerNdc.x = ((clientX - rect.left) / rw) * 2 - 1
+  clipPlanePointerNdc.y = -((clientY - rect.top) / rh) * 2 + 1
+  clipPlaneRaycaster.setFromCamera(clipPlanePointerNdc, w.camera.three)
+  const p = plane as unknown as { controls: { getHelper: () => THREE.Object3D } }
+  const helper = p.controls.getHelper()
+  /** 箭頭在 helper 內；raycast 時暫時可見才能從面移到拉桿不中斷 hover */
+  const prevH = helper.visible
+  helper.visible = true
+  const hits = clipPlaneRaycaster.intersectObjects([...plane.meshes, helper], true)
+  helper.visible = prevH
+  clipPlanePointerOverPlane = hits.length > 0
+}
+
+function applyClipPlaneDecorVisibility() {
+  const plane = getActiveAxisCutPlane()
+  if (!plane) return
+  const show = clipPlaneDecorDragging || clipPlanePointerOverPlane
+  const p = plane as unknown as { controls: { getHelper: () => THREE.Object3D } }
+  p.controls.getHelper().visible = show
+  const mesh = plane.meshes[0]
+  const edges = mesh?.getObjectByName(CLIP_PLANE_HOVER_EDGES_NAME)
+  if (edges) edges.visible = show
+}
+
+function bindClipPlanePointerTracking(
+  w: OBC.SimpleWorld<
+    OBC.SimpleScene,
+    OBC.OrthoPerspectiveCamera,
+    OBCF.PostproductionRenderer
+  >
+) {
+  if (!w.renderer || clipPlanePointerMoveHandler) return
+  const dom = w.renderer.three.domElement
+  clipPlanePointerMoveHandler = (ev: PointerEvent) => {
+    clipPlanePointerInsideCanvas = true
+    clipPlaneLastClientX = ev.clientX
+    clipPlaneLastClientY = ev.clientY
+    updateClipPlanePointerHover(ev.clientX, ev.clientY)
+    applyClipPlaneDecorVisibility()
+  }
+  clipPlanePointerLeaveHandler = () => {
+    clipPlanePointerInsideCanvas = false
+    clipPlanePointerOverPlane = false
+    applyClipPlaneDecorVisibility()
+  }
+  dom.addEventListener('pointermove', clipPlanePointerMoveHandler, { passive: true })
+  dom.addEventListener('pointerleave', clipPlanePointerLeaveHandler)
+  dom.addEventListener('pointerenter', () => {
+    clipPlanePointerInsideCanvas = true
+  })
+}
+
+function unbindClipPlanePointerTracking() {
+  if (!worldRef?.renderer || !clipPlanePointerMoveHandler) return
+  const dom = worldRef.renderer.three.domElement
+  dom.removeEventListener('pointermove', clipPlanePointerMoveHandler)
+  if (clipPlanePointerLeaveHandler) {
+    dom.removeEventListener('pointerleave', clipPlanePointerLeaveHandler)
+  }
+  clipPlanePointerMoveHandler = null
+  clipPlanePointerLeaveHandler = null
+  clipPlanePointerOverPlane = false
+  clipPlanePointerInsideCanvas = false
+}
+
+/** Fragments 預設不回傳剖切平面，Clipper 無法作用於 FRAG 幾何 */
+function bindFragmentsModelClipping(
+  model: FragmentsModel,
+  world: OBC.SimpleWorld<
+    OBC.SimpleScene,
+    OBC.OrthoPerspectiveCamera,
+    OBCF.PostproductionRenderer
+  >
+) {
+  const renderer = world.renderer
+  if (!renderer) return
+  model.getClippingPlanesEvent = () => {
+    renderer.updateClippingPlanes()
+    return renderer.clippingPlanes
   }
 }
 
@@ -683,6 +975,10 @@ function resizeRenderer() {
   const h = el.clientHeight
   if (w <= 0 || h <= 0) return
   worldRef.renderer.resize(new THREE.Vector2(w, h))
+  if (sectionClipLineMaterial) {
+    sectionClipLineMaterial.resolution.set(w, h)
+    sectionClipLineMaterial.needsUpdate = true
+  }
   applyCanvasTouchNone()
 }
 
@@ -746,8 +1042,13 @@ function syncHighlightToProperties() {
     showPropertiesPanel.value = false
     return
   }
-  showPropertiesPanel.value = true
   void loadPropertySections(sel)
+  /** 屬性面板改由使用者按工具列「屬性」開啟，不在選取時自動展開 */
+  if (!freeRoamActive.value && worldRef) {
+    void worldRef.camera.fitToItems(sel).catch(() => {
+      /* 部分模型／空 bbox 時略過 */
+    })
+  }
 }
 
 function syncLoadedModelRows() {
@@ -786,8 +1087,9 @@ async function disposeAllFragmentModels() {
   }
   syncLoadedModelRows()
 
-  horizontalSectionActive.value = false
-  horizontalSectionPlaneId.value = null
+  axisCutMode.value = 'off'
+  axisCutPlaneId.value = null
+  activeSectionClipEdges = null
   c.get(OBC.Clipper).deleteAll()
   storeyNames.value = []
   for (const k of Object.keys(storeyVisible)) {
@@ -796,7 +1098,7 @@ async function disposeAllFragmentModels() {
   propertySections.value = []
   hasPropertySelection.value = false
   showPropertiesPanel.value = false
-  updateSceneYRange()
+  updateSceneClipBoundingRanges()
   void fragments.core.update(true)
 }
 
@@ -814,11 +1116,38 @@ function setupViewerExtensions(components: OBC.Components, w: ViewerWorld) {
   }
 
   const clipper = components.get(OBC.Clipper)
-  clipper.setup()
+  clipper.setup({
+    color: new THREE.Color(CLIP_PLANE_FILL_COLOR),
+    opacity: CLIP_PLANE_FILL_OPACITY,
+  })
   clipper.orthogonalY = true
+  clipper.enabled = true
+  applyClipperPlaneFillStyle()
 
   const clipStyler = components.get(OBCF.ClipStyler)
   clipStyler.world = w
+  clipStyler.enabled = true
+  clipStyler.visible = true
+
+  const hostEl = containerRef.value
+  const resW = Math.max(hostEl?.clientWidth ?? 800, 1)
+  const resH = Math.max(hostEl?.clientHeight ?? 600, 1)
+  sectionClipLineMaterial = new LineMaterial({
+    color: 0xa855f7,
+    linewidth: 2,
+    resolution: new THREE.Vector2(resW, resH),
+    worldUnits: false,
+  })
+  clipStyler.styles.set(SECTION_CLIP_STYLE_ID, {
+    linesMaterial: sectionClipLineMaterial,
+    fillsMaterial: new THREE.MeshBasicMaterial({
+      color: CLIP_PLANE_FILL_COLOR,
+      transparent: true,
+      opacity: 0.1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  })
 
   clipperOnAfterCreate = (plane: OBC.SimplePlane) => {
     const cp = componentsRef.value?.get(OBC.Clipper)
@@ -826,12 +1155,43 @@ function setupViewerExtensions(components: OBC.Components, w: ViewerWorld) {
     const id = cp.list.getKey(plane)
     if (!id) return
     try {
-      clipStyler.createFromClipping(id, { link: true, world: w })
+      /** 須指定 items + style，否則不會產生剖面邊線／填色（見 ClipStyler 文件） */
+      activeSectionClipEdges = clipStyler.createFromClipping(id, {
+        link: true,
+        world: w,
+        items: {
+          all: { style: SECTION_CLIP_STYLE_ID },
+        },
+      })
+      void activeSectionClipEdges.update().catch((e) => {
+        console.warn('[IfcViewer] ClipEdges.update', e)
+      })
     } catch (e) {
       console.warn('[IfcViewer] ClipStyler.createFromClipping', e)
     }
+    applyClipperPlaneGizmoSize()
+    setupClipPlaneHoverDecor(plane)
+    applyClipPlaneDecorVisibility()
   }
   clipper.onAfterCreate.add(clipperOnAfterCreate)
+
+  clipperOnBeforeDragDecor = () => {
+    clipPlaneDecorDragging = true
+    applyClipPlaneDecorVisibility()
+  }
+  clipper.onBeforeDrag.add(clipperOnBeforeDragDecor)
+
+  clipperOnAfterDrag = (dragged: OBC.SimplePlane) => {
+    clipPlaneDecorDragging = false
+    setupClipPlaneHoverDecor(dragged)
+    applyClipPlaneDecorVisibility()
+    const cp = componentsRef.value?.get(OBC.Clipper)
+    if (!cp) return
+    const id = cp.list.getKey(dragged)
+    if (!id || id !== axisCutPlaneId.value) return
+    syncAxisCutSlidersFromActivePlane()
+  }
+  clipper.onAfterDrag.add(clipperOnAfterDrag)
 
   const highlighter = components.get(OBCF.Highlighter)
   highlighter.setup({
@@ -848,6 +1208,8 @@ function setupViewerExtensions(components: OBC.Components, w: ViewerWorld) {
     },
     autoUpdateFragments: true,
   })
+  /** 由 syncHighlightToProperties 呼叫 camera.fitToItems，避免與內建 zoom 重複；漫遊選取仍傳 zoom=false */
+  highlighter.zoomToSelection = false
 
   highlighterOnHighlight = () => syncHighlightToProperties()
   highlighterOnClear = () => {
@@ -890,13 +1252,27 @@ async function initViewer() {
   onModelLoaded = ({ value: model }) => {
     model.useCamera(w.camera.three)
     w.scene.three.add(model.object)
+    bindFragmentsModelClipping(model, w)
     void fragments.core.update(true)
     void refreshStoreyData()
-    updateSceneYRange()
+    const refreshClipBounds = () => {
+      updateSceneClipBoundingRanges()
+      applyClipperPlaneGizmoSize()
+    }
+    refreshClipBounds()
+    /** 幾何在下一幀才完整時更新矩陣，避免 sceneRange 一直為 null、剖切按鈕無法點 */
+    requestAnimationFrame(() => {
+      refreshClipBounds()
+      requestAnimationFrame(refreshClipBounds)
+    })
     syncLoadedModelRows()
     nextTick(() => applyCanvasTouchNone())
   }
   fragments.list.onItemSet.add(onModelLoaded)
+
+  w.renderer?.onClippingPlanesUpdated.add(() => {
+    void fragments.core.update(true)
+  })
 
   onMaterialSet = ({ value: material }) => {
     const m = material as THREE.Material & { isLodMaterial?: boolean }
@@ -912,6 +1288,10 @@ async function initViewer() {
     applyViewerCameraControlParams(w.camera.controls)
     onControlsUpdate = () => {
       void fragments.core.update()
+      if (axisCutMode.value !== 'off' && clipPlanePointerInsideCanvas) {
+        updateClipPlanePointerHover(clipPlaneLastClientX, clipPlaneLastClientY)
+        applyClipPlaneDecorVisibility()
+      }
     }
     w.camera.controls.addEventListener('update', onControlsUpdate)
   }
@@ -934,7 +1314,8 @@ async function initViewer() {
   resizeRenderer()
 
   setupViewerExtensions(components, w)
-  updateSceneYRange()
+  bindClipPlanePointerTracking(w)
+  updateSceneClipBoundingRanges()
   await nextTick()
   applyCanvasTouchNone()
 
@@ -966,10 +1347,18 @@ function teardownExtensionListeners() {
     if (clipperOnAfterCreate) {
       cp.onAfterCreate.remove(clipperOnAfterCreate)
     }
+    if (clipperOnAfterDrag) {
+      cp.onAfterDrag.remove(clipperOnAfterDrag)
+    }
+    if (clipperOnBeforeDragDecor) {
+      cp.onBeforeDrag.remove(clipperOnBeforeDragDecor)
+    }
   }
   highlighterOnHighlight = null
   highlighterOnClear = null
   clipperOnAfterCreate = null
+  clipperOnAfterDrag = null
+  clipperOnBeforeDragDecor = null
 }
 
 onUnmounted(() => {
@@ -991,6 +1380,7 @@ onUnmounted(() => {
   }
 
   teardownExtensionListeners()
+  unbindClipPlanePointerTracking()
 
   onModelLoaded = null
   onMaterialSet = null
@@ -1006,12 +1396,6 @@ onMounted(() => {
     error.value = e instanceof Error ? e.message : String(e)
     status.value = ''
   })
-})
-
-watch(sectionHeightT, () => {
-  if (horizontalSectionActive.value && horizontalSectionPlaneId.value) {
-    applyHorizontalClipAtCurrentT()
-  }
 })
 
 function randomIdSegment(): string {
@@ -1031,26 +1415,48 @@ function nextModelId(prefix: string) {
   return `${prefix}-${randomIdSegment()}`
 }
 
-function yFromSectionT(): number {
-  const r = sceneYRange.value
+function worldXFromAxisT(): number {
+  const r = sceneXRange.value
   if (!r || r.max <= r.min) return 0
-  return r.min + sectionHeightT.value * (r.max - r.min)
+  return r.min + axisCutTX.value * (r.max - r.min)
 }
 
-function applyHorizontalClipAtCurrentT() {
+function worldYFromAxisT(): number {
+  const r = sceneYRange.value
+  if (!r || r.max <= r.min) return 0
+  return r.min + axisCutTY.value * (r.max - r.min)
+}
+
+function worldZFromAxisT(): number {
+  const r = sceneZRange.value
+  if (!r || r.max <= r.min) return 0
+  return r.min + axisCutTZ.value * (r.max - r.min)
+}
+
+/** 在場景內拖曳剖切箭頭後，同步內部 0–1 軸向參數（供日後擴充） */
+function syncAxisCutSlidersFromActivePlane() {
   const components = componentsRef.value
   if (!components || !worldRef) return
-  const id = horizontalSectionPlaneId.value
-  if (!id) return
-  const clipper = components.get(OBC.Clipper)
-  const plane = clipper.list.get(id)
+  const planeId = axisCutPlaneId.value
+  const mode = axisCutMode.value
+  if (!planeId || mode === 'off') return
+  const plane = components.get(OBC.Clipper).list.get(planeId)
   if (!plane) return
-  const y = yFromSectionT()
-  const normal = new THREE.Vector3(0, -1, 0)
-  const point = new THREE.Vector3(0, y, 0)
-  plane.setFromNormalAndCoplanarPoint(normal, point)
-  plane.update()
-  void components.get(OBC.FragmentsManager).core.update(true)
+  const wp = new THREE.Vector3()
+  plane.helper.getWorldPosition(wp)
+  if (mode === 'x') {
+    const r = sceneXRange.value
+    if (!r || r.max <= r.min) return
+    axisCutTX.value = Math.min(1, Math.max(0, (wp.x - r.min) / (r.max - r.min)))
+  } else if (mode === 'y') {
+    const r = sceneYRange.value
+    if (!r || r.max <= r.min) return
+    axisCutTY.value = Math.min(1, Math.max(0, (wp.y - r.min) / (r.max - r.min)))
+  } else {
+    const r = sceneZRange.value
+    if (!r || r.max <= r.min) return
+    axisCutTZ.value = Math.min(1, Math.max(0, (wp.z - r.min) / (r.max - r.min)))
+  }
 }
 
 async function loadIfcFile(file: File) {
@@ -1144,7 +1550,7 @@ async function disposeFragmentModel(modelId: string) {
   delete fragModelLabels[modelId]
   syncLoadedModelRows()
   void refreshStoreyData()
-  updateSceneYRange()
+  updateSceneClipBoundingRanges()
   void fragments.core.update(true)
 }
 
@@ -1196,7 +1602,7 @@ async function onFragInputChange(ev: Event) {
     }
     status.value = n === 1 ? `已加入：${files[0]!.name}` : `已加入 ${n} 個 FRAG 模型`
     syncLoadedModelRows()
-    updateSceneYRange()
+    updateSceneClipBoundingRanges()
     void viewerRoot.get(OBC.FragmentsManager).core.update(true)
     void refreshStoreyData()
   } catch (e) {
@@ -1247,44 +1653,66 @@ async function showAllStoreys() {
 }
 
 function clearAllClipsAndSection() {
+  activeSectionClipEdges = null
+  clipPlanePointerOverPlane = false
+  clipPlaneDecorDragging = false
   componentsRef.value?.get(OBC.Clipper).deleteAll()
-  horizontalSectionActive.value = false
-  horizontalSectionPlaneId.value = null
+  axisCutMode.value = 'off'
+  axisCutPlaneId.value = null
   void componentsRef.value?.get(OBC.FragmentsManager).core.update(true)
 }
 
-function enableHorizontalSection() {
+async function enableAxisCutPlane(axis: 'x' | 'y' | 'z') {
   const components = componentsRef.value
   if (!components || !worldRef) return
-  updateSceneYRange()
-  if (!sceneYRange.value) return
+  updateSceneClipBoundingRanges()
+  applyClipperPlaneGizmoSize()
+  if (axis === 'x' && !sceneXRange.value) return
+  if (axis === 'y' && !sceneYRange.value) return
+  if (axis === 'z' && !sceneZRange.value) return
+
+  activeSectionClipEdges = null
   components.get(OBC.Clipper).deleteAll()
-  horizontalSectionPlaneId.value = null
+  axisCutPlaneId.value = null
+  axisCutMode.value = 'off'
+
   const clipper = components.get(OBC.Clipper)
-  const y = yFromSectionT()
-  const id = clipper.createFromNormalAndCoplanarPoint(
-    worldRef,
-    new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(0, y, 0)
-  )
-  horizontalSectionPlaneId.value = id
-  horizontalSectionActive.value = true
+  let id: string
+  if (axis === 'x') {
+    const x = worldXFromAxisT()
+    id = clipper.createFromNormalAndCoplanarPoint(
+      worldRef,
+      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(x, 0, 0)
+    )
+  } else if (axis === 'y') {
+    const y = worldYFromAxisT()
+    id = clipper.createFromNormalAndCoplanarPoint(
+      worldRef,
+      new THREE.Vector3(0, -1, 0),
+      new THREE.Vector3(0, y, 0)
+    )
+  } else {
+    const z = worldZFromAxisT()
+    id = clipper.createFromNormalAndCoplanarPoint(
+      worldRef,
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(0, 0, z)
+    )
+  }
+  axisCutPlaneId.value = id
+  axisCutMode.value = axis
   void components.get(OBC.FragmentsManager).core.update(true)
 }
 
-function onSectionToggle(active: boolean) {
-  if (active) {
-    enableHorizontalSection()
-  } else {
+/** 互斥：再點同一軸則關閉；換軸則先清再開新平面 */
+async function toggleAxisCutQuick(axis: 'x' | 'y' | 'z') {
+  if (!componentsRef.value || !worldRef) return
+  if (axisCutMode.value === axis) {
     clearAllClipsAndSection()
-    void componentsRef.value?.get(OBC.FragmentsManager).core.update(true)
+    return
   }
-}
-
-function onSectionSliderInput(ev: Event) {
-  const t = Number((ev.target as HTMLInputElement).value)
-  if (!Number.isFinite(t)) return
-  sectionHeightT.value = t
+  await enableAxisCutPlane(axis)
 }
 
 async function resetCameraView() {
@@ -1312,17 +1740,12 @@ function applyViewerCameraControlParams(c: CameraControls) {
 }
 
 function getSceneBoundingInfo() {
-  const box = new THREE.Box3()
-  if (worldRef) {
-    for (const mesh of worldRef.meshes) {
-      box.expandByObject(mesh)
-    }
-  }
+  const computed = computeSceneBoundingBox()
   const center = new THREE.Vector3(0, 5, 0)
   const size = new THREE.Vector3(50, 50, 50)
-  if (!box.isEmpty()) {
-    box.getCenter(center)
-    box.getSize(size)
+  if (computed && !computed.isEmpty()) {
+    computed.getCenter(center)
+    computed.getSize(size)
   }
   const dist = Math.max(size.x, size.y, size.z, 1) * 1.8
   return { center, size, dist }
@@ -1441,6 +1864,16 @@ function triggerIfcPicker() {
 
 function triggerFragPicker() {
   fragFileInputRef.value?.click()
+}
+
+function pickIfcAndCloseLoadPopover() {
+  loadFilesPopoverOpen.value = false
+  void nextTick(() => triggerIfcPicker())
+}
+
+function pickFragAndCloseLoadPopover() {
+  loadFilesPopoverOpen.value = false
+  void nextTick(() => triggerFragPicker())
 }
 
 function toggleFullscreen() {
@@ -1579,46 +2012,6 @@ function openPropertiesPanel() {
     </div>
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
-      <!-- 左側樓層（平板／桌面） -->
-      <aside
-        v-if="storeyNames.length > 0"
-        class="border-border bg-card hidden w-52 shrink-0 flex-col border-b md:flex md:border-b-0 md:border-r"
-      >
-        <div class="border-border border-b px-3 py-2">
-          <span class="text-sm font-medium">樓層</span>
-          <p class="text-muted-foreground mt-0.5 text-xs">勾選要顯示的樓層，可複選。</p>
-        </div>
-        <div class="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            class="mb-2 h-8 w-full"
-            @click="void showAllStoreys()"
-          >
-            全部顯示
-          </Button>
-          <ul class="space-y-0.5">
-            <li v-for="name in storeyNames" :key="name">
-              <div class="hover:bg-muted/50 flex items-center gap-2 rounded-md px-1.5 py-1">
-                <Checkbox
-                  :id="`ifc-storey-${name}`"
-                  class="size-3.5 shrink-0"
-                  :checked="storeyVisible[name] !== false"
-                  @update:checked="(c) => void onStoreyCheckChange(name, c === true)"
-                />
-                <Label
-                  :for="`ifc-storey-${name}`"
-                  class="text-foreground cursor-pointer truncate text-xs font-normal leading-snug"
-                >
-                  {{ name }}
-                </Label>
-              </div>
-            </li>
-          </ul>
-        </div>
-      </aside>
-
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div
           ref="containerRef"
@@ -1694,32 +2087,9 @@ function openPropertiesPanel() {
           </div>
         </div>
 
-        <!-- 剖切：高度滑桿（作用於目前場景內所有模型） -->
-        <div
-          v-if="horizontalSectionActive && sceneYRange"
-          class="border-border bg-card flex flex-col gap-2 border-t px-3 py-2"
-        >
-          <Label class="text-muted-foreground text-xs">剖切高度（水平）</Label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            :value="sectionHeightT"
-            class="accent-primary h-11 min-h-[44px] w-full cursor-pointer"
-            :aria-valuetext="`${Math.round(sectionHeightT * 100)}%`"
-            @input="onSectionSliderInput"
-          />
-        </div>
-
         <!-- 底部中央漂浮工具列（仿 BIM 檢視器島狀按鈕組） -->
         <div
-          class="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-2"
-          :class="
-            horizontalSectionActive && sceneYRange
-              ? 'bottom-[calc(7.25rem+env(safe-area-inset-bottom,0px))] md:bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))]'
-              : 'bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:bottom-[calc(1rem+env(safe-area-inset-bottom,0px))]'
-          "
+          class="pointer-events-none absolute inset-x-0 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-30 flex justify-center px-2 md:bottom-[calc(1rem+env(safe-area-inset-bottom,0px))]"
         >
           <TooltipProvider :delay-duration="350">
             <div
@@ -1926,87 +2296,245 @@ function openPropertiesPanel() {
                             size="icon"
                             class="relative size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
                             :class="
-                              horizontalSectionActive
+                              axisCutMode !== 'off'
                                 ? 'border-primary/50 bg-primary/10 text-primary'
                                 : ''
                             "
-                            aria-label="剖切"
+                            aria-label="剖切軸向（X／Y／Z）"
+                            aria-haspopup="menu"
+                            aria-controls="ifc-section-axis-menu"
                           >
                             <Scissors class="size-5" />
-                            <ChevronUp
-                              class="text-muted-foreground pointer-events-none absolute right-0 top-0 size-2.5 opacity-60"
-                              aria-hidden="true"
-                            />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="center" class="w-48">
-                          <DropdownMenuItem class="cursor-pointer" @click="showSectionPanel = true">
-                            剖切設定…
-                          </DropdownMenuItem>
-                          <DropdownMenuItem class="cursor-pointer" @click="clearAllClipsAndSection">
-                            關閉剖切
-                          </DropdownMenuItem>
+                        <DropdownMenuContent
+                          id="ifc-section-axis-menu"
+                          align="center"
+                          side="top"
+                          :side-offset="8"
+                          class="border-border bg-card text-foreground z-[60] w-auto min-w-0 rounded-xl border p-1 shadow-lg"
+                        >
+                          <div
+                            class="flex flex-col items-stretch gap-0.5"
+                            role="toolbar"
+                            aria-label="剖切軸向"
+                          >
+                            <Tooltip>
+                              <TooltipTrigger as-child>
+                                <button
+                                  type="button"
+                                  class="inline-flex size-11 shrink-0 items-center justify-center rounded-lg border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/70 disabled:pointer-events-none disabled:opacity-50"
+                                  :disabled="!viewerCanvasReady || !sceneXRange"
+                                  :class="
+                                    axisCutMode === 'x'
+                                      ? 'border-primary/50 bg-primary/10 text-primary'
+                                      : 'border-transparent text-foreground hover:bg-muted/80'
+                                  "
+                                  aria-label="沿 X 軸單面剖切（YZ 平面）"
+                                  @click="void toggleAxisCutQuick('x')"
+                                >
+                                  <RectangleVertical class="size-5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="right">X 軸（YZ 平面），再點一次關閉</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger as-child>
+                                <button
+                                  type="button"
+                                  class="inline-flex size-11 shrink-0 items-center justify-center rounded-lg border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/70 disabled:pointer-events-none disabled:opacity-50"
+                                  :disabled="!viewerCanvasReady || !sceneYRange"
+                                  :class="
+                                    axisCutMode === 'y'
+                                      ? 'border-primary/50 bg-primary/10 text-primary'
+                                      : 'border-transparent text-foreground hover:bg-muted/80'
+                                  "
+                                  aria-label="沿 Y 軸單面剖切（XZ 平面）"
+                                  @click="void toggleAxisCutQuick('y')"
+                                >
+                                  <RectangleHorizontal class="size-5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="right">Y 軸（XZ 平面），再點一次關閉</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger as-child>
+                                <button
+                                  type="button"
+                                  class="inline-flex size-11 shrink-0 items-center justify-center rounded-lg border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/70 disabled:pointer-events-none disabled:opacity-50"
+                                  :disabled="!viewerCanvasReady || !sceneZRange"
+                                  :class="
+                                    axisCutMode === 'z'
+                                      ? 'border-primary/50 bg-primary/10 text-primary'
+                                      : 'border-transparent text-foreground hover:bg-muted/80'
+                                  "
+                                  aria-label="沿 Z 軸單面剖切（XY 平面）"
+                                  @click="void toggleAxisCutQuick('z')"
+                                >
+                                  <SquareStack class="size-5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="right">Z 軸（XY 平面），再點一次關閉</TooltipContent>
+                            </Tooltip>
+                          </div>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent side="top">剖切（ClipEdges）</TooltipContent>
+                  <TooltipContent side="top">剖切：X／Y／Z 軸向（垂直選單在按鈕上方）</TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger as-child>
+                <Popover v-model:open="loadFilesPopoverOpen">
+                  <PopoverTrigger as-child>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       :disabled="loading"
                       class="size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
-                      aria-label="開啟檔案"
-                      @click="triggerIfcPicker"
+                      :class="
+                        loadFilesPopoverOpen ? 'border-primary/50 bg-primary/10 text-primary' : ''
+                      "
+                      aria-label="載入模型（IFC／FRAG）"
                     >
-                      <FolderOpen class="size-5" />
+                      <Package class="size-5" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">開啟 IFC 檔（與頂部載入區相同）</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      :disabled="loading"
-                      class="size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
-                      aria-label="開啟 FRAG"
-                      @click="triggerFragPicker"
-                    >
-                      <Box class="size-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top"
-                    >開啟 FRAG 檔（可複選，與頂部載入區相同）</TooltipContent
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    align="center"
+                    class="border-border bg-popover text-popover-foreground w-[min(calc(100vw-1rem),20rem)] p-0 shadow-lg"
                   >
-                </Tooltip>
+                    <div class="border-border flex items-center justify-between border-b px-3 py-2">
+                      <span class="text-sm font-medium">載入模型</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="text-muted-foreground h-8 w-8 shrink-0"
+                        aria-label="關閉"
+                        @click="loadFilesPopoverOpen = false"
+                      >
+                        <X class="size-4" />
+                      </Button>
+                    </div>
+                    <Tabs v-model="loadFilesTab" class="gap-0">
+                      <TabsList
+                        class="bg-muted text-muted-foreground grid h-9 w-full grid-cols-2 rounded-none border-b p-0"
+                      >
+                        <TabsTrigger value="ifc" class="rounded-none data-[state=active]:shadow-none">
+                          IFC
+                        </TabsTrigger>
+                        <TabsTrigger value="frag" class="rounded-none data-[state=active]:shadow-none">
+                          FRAG
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="ifc" class="mt-0 space-y-2 p-3">
+                        <p class="text-muted-foreground text-xs">
+                          選擇 .ifc 檔案匯入（與頂部載入區相同）。
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          class="h-8 w-full"
+                          :disabled="loading"
+                          @click="pickIfcAndCloseLoadPopover"
+                        >
+                          選擇 IFC 檔案
+                        </Button>
+                      </TabsContent>
+                      <TabsContent value="frag" class="mt-0 space-y-2 p-3">
+                        <p class="text-muted-foreground text-xs">
+                          選擇 .frag 檔案（可複選，與頂部載入區相同）。
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          class="h-8 w-full"
+                          :disabled="loading"
+                          @click="pickFragAndCloseLoadPopover"
+                        >
+                          選擇 FRAG 檔案
+                        </Button>
+                      </TabsContent>
+                    </Tabs>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <!-- 樓層、屬性、設定、全螢幕 -->
               <div
                 class="border-border bg-card flex items-center gap-0.5 rounded-xl border p-1 shadow-lg"
               >
-                <Tooltip>
-                  <TooltipTrigger as-child>
+                <Popover v-model:open="floorsPopoverOpen">
+                  <PopoverTrigger as-child>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       class="size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
-                      aria-label="樓層"
-                      @click="showFloorsPanel = true"
+                      :class="
+                        floorsPopoverOpen ? 'border-primary/50 bg-primary/10 text-primary' : ''
+                      "
+                      aria-label="樓層顯示（IfcBuildingStorey）"
                     >
                       <Layers2 class="size-5" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">樓層（IfcBuildingStorey）</TooltipContent>
-                </Tooltip>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    align="center"
+                    class="border-border bg-popover text-popover-foreground flex w-[min(calc(100vw-1rem),18rem)] max-h-[min(50dvh,22rem)] flex-col overflow-hidden p-0 shadow-lg"
+                  >
+                    <div class="border-border flex shrink-0 items-center justify-between border-b px-3 py-2">
+                      <span class="text-sm font-medium">樓層</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="text-muted-foreground h-8 w-8 shrink-0"
+                        aria-label="關閉"
+                        @click="floorsPopoverOpen = false"
+                      >
+                        <X class="size-4" />
+                      </Button>
+                    </div>
+                    <div class="min-h-0 flex-1 overflow-y-auto p-3">
+                      <p class="text-muted-foreground mb-2 text-xs">勾選要顯示的樓層，可複選。</p>
+                      <div v-if="storeyNames.length === 0" class="text-muted-foreground text-xs">
+                        {{ floorsEmptyHint }}
+                      </div>
+                      <template v-else>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          class="mb-2 h-8 w-full shrink-0"
+                          @click="void showAllStoreys()"
+                        >
+                          全部顯示
+                        </Button>
+                        <ul class="space-y-0.5">
+                          <li v-for="name in storeyNames" :key="name">
+                            <div class="hover:bg-muted/50 flex min-h-9 items-center gap-2 rounded-md px-1.5 py-1">
+                              <Checkbox
+                                :id="`ifc-storey-pop-${name}`"
+                                class="size-3.5 shrink-0"
+                                :checked="storeyVisible[name] !== false"
+                                @update:checked="(c) => void onStoreyCheckChange(name, c === true)"
+                              />
+                              <Label
+                                :for="`ifc-storey-pop-${name}`"
+                                class="text-foreground cursor-pointer truncate text-xs font-normal leading-snug"
+                              >
+                                {{ name }}
+                              </Label>
+                            </div>
+                          </li>
+                        </ul>
+                      </template>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Tooltip>
                   <TooltipTrigger as-child>
                     <Button
@@ -2021,7 +2549,9 @@ function openPropertiesPanel() {
                       <SlidersHorizontal class="size-5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">構件屬性</TooltipContent>
+                  <TooltipContent side="top"
+                    >構件屬性（點選後自行開啟；選取時相機會對準構件）</TooltipContent
+                  >
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -2053,27 +2583,6 @@ function openPropertiesPanel() {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top">全螢幕</TooltipContent>
-                </Tooltip>
-              </div>
-
-              <!-- 地圖（預留） -->
-              <div
-                class="border-border bg-card flex items-center gap-0.5 rounded-xl border p-1 shadow-lg"
-              >
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled
-                      class="size-11 min-h-11 min-w-11 shrink-0 rounded-lg"
-                      aria-label="地圖定位"
-                    >
-                      <MapPinned class="size-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">GIS／地圖定位（尚未開放）</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -2130,132 +2639,6 @@ function openPropertiesPanel() {
         </div>
       </aside>
     </div>
-
-    <!-- 手機樓層 -->
-    <Teleport to="body">
-      <div
-        v-if="showFloorsPanel"
-        class="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center md:hidden"
-        role="dialog"
-        aria-modal="true"
-        @click.self="showFloorsPanel = false"
-      >
-        <div
-          class="border-border bg-card flex max-h-[min(70dvh,28rem)] w-full max-w-md flex-col rounded-lg border shadow-lg"
-          @click.stop
-        >
-          <div class="border-border flex items-center justify-between border-b px-4 py-3">
-            <span class="text-foreground font-medium">樓層</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              class="h-11 w-11"
-              aria-label="關閉"
-              @click="showFloorsPanel = false"
-            >
-              <X class="size-5" />
-            </Button>
-          </div>
-          <div v-if="storeyNames.length === 0" class="text-muted-foreground p-4 text-xs">
-            {{ floorsEmptyHint }}
-          </div>
-          <div v-else class="flex max-h-[min(60dvh,22rem)] flex-col overflow-hidden p-3">
-            <p class="text-muted-foreground mb-2 text-xs">勾選要顯示的樓層，可複選。</p>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              class="mb-2 h-9 w-full shrink-0"
-              @click="void showAllStoreys()"
-            >
-              全部顯示
-            </Button>
-            <ul class="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-              <li v-for="name in storeyNames" :key="name">
-                <div
-                  class="hover:bg-muted/50 flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5"
-                >
-                  <Checkbox
-                    :id="`ifc-storey-mobile-${name}`"
-                    class="size-4 shrink-0"
-                    :checked="storeyVisible[name] !== false"
-                    @update:checked="(c) => void onStoreyCheckChange(name, c === true)"
-                  />
-                  <Label
-                    :for="`ifc-storey-mobile-${name}`"
-                    class="text-foreground cursor-pointer flex-1 truncate text-sm font-normal"
-                  >
-                    {{ name }}
-                  </Label>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- 剖切設定（手機為底部 sheet） -->
-    <Teleport to="body">
-      <div
-        v-if="showSectionPanel"
-        class="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center"
-        role="dialog"
-        aria-modal="true"
-        @click.self="showSectionPanel = false"
-      >
-        <div
-          class="border-border bg-card w-full max-w-md rounded-lg border p-4 shadow-lg"
-          @click.stop
-        >
-          <div class="mb-3 flex items-center justify-between">
-            <span class="text-foreground font-medium">水平剖切</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              class="h-11 w-11"
-              @click="showSectionPanel = false"
-            >
-              <X class="size-5" />
-            </Button>
-          </div>
-          <p class="text-muted-foreground mb-3 text-xs">
-            啟用後以滑桿調整高度；剖切套用於場景內所有已載入模型。
-          </p>
-          <label class="flex cursor-pointer items-center gap-3 py-2">
-            <input
-              type="checkbox"
-              class="border-border accent-primary size-5 shrink-0 rounded"
-              :checked="horizontalSectionActive"
-              @change="onSectionToggle(($event.target as HTMLInputElement).checked)"
-            />
-            <span class="text-sm">啟用水平剖切</span>
-          </label>
-          <div v-if="horizontalSectionActive && sceneYRange" class="mt-3">
-            <Label class="text-muted-foreground text-xs">高度</Label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              :value="sectionHeightT"
-              class="accent-primary mt-2 h-11 min-h-[44px] w-full"
-              @input="onSectionSliderInput"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            class="mt-4 h-11 min-h-[44px] w-full"
-            @click="clearAllClipsAndSection"
-          >
-            關閉剖切
-          </Button>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -2264,4 +2647,5 @@ function openPropertiesPanel() {
 .ifc-viewer-canvas-host :deep(canvas) {
   touch-action: none;
 }
+
 </style>

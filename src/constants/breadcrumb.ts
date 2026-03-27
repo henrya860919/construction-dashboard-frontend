@@ -5,6 +5,8 @@
 export const BREADCRUMB_LABELS: Record<string, string> = {
   '/': '首頁',
   '/projects': '專案列表',
+  '/lab': '測試',
+  '/lab/electronic-sheet-template': '電子俵單樣板',
   '/admin': '後台',
   '/admin/tenant-info': '租戶資訊',
   '/admin/projects': '專案管理',

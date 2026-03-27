@@ -141,6 +141,11 @@ const router = createRouter({
           component: () => import('@/views/ProjectsView.vue'),
         },
         {
+          path: ROUTE_PATH.LAB_ELECTRONIC_SHEET_TEMPLATE.replace(/^\//, ''),
+          name: ROUTE_NAME.LAB_ELECTRONIC_SHEET_TEMPLATE,
+          component: () => import('@/views/lab/ElectronicSheetTemplateLabView.vue'),
+        },
+        {
           path: 'p/:projectId',
           redirect: (to) => ({ path: `/p/${to.params.projectId}/dashboard` }),
         },

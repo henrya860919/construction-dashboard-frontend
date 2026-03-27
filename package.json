@@ -39,7 +39,7 @@
     "vue-echarts": "^7.0.3",
     "vue-router": "^4.4.5",
     "vue-sonner": "^2.0.9",
-    "web-ifc": "^0.0.77",
+    "web-ifc": "0.0.75",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

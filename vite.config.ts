@@ -19,6 +19,9 @@ function getNetworkHost(): string | undefined {
 
 export default defineConfig({
   assetsInclude: ['**/*.wasm'],
+  optimizeDeps: {
+    exclude: ['@thatopen/fragments'],
+  },
   plugins: [
     vue({
       template: {

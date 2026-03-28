@@ -40,6 +40,20 @@ export const API_PATH = {
     itemId: string
   ) =>
     `${API_V1}/admin/self-inspection-templates/${templateId}/blocks/${blockId}/items/${itemId}`,
+  /** 電子表單定義（動態表單 Builder） */
+  ADMIN_ELECTRONIC_FORM_DEFINITIONS: `${API_V1}/admin/electronic-form-definitions`,
+  ADMIN_ELECTRONIC_FORM_DEFINITION: (id: string) =>
+    `${API_V1}/admin/electronic-form-definitions/${id}`,
+  ADMIN_ELECTRONIC_FORM_DEFINITION_FIELDS: (id: string) =>
+    `${API_V1}/admin/electronic-form-definitions/${id}/fields`,
+  ADMIN_ELECTRONIC_FORM_DEFINITION_FIELDS_REORDER: (id: string) =>
+    `${API_V1}/admin/electronic-form-definitions/${id}/fields/reorder`,
+  ADMIN_ELECTRONIC_FORM_DEFINITION_FIELD: (formId: string, fieldId: string) =>
+    `${API_V1}/admin/electronic-form-definitions/${formId}/fields/${fieldId}`,
+  ADMIN_ELECTRONIC_FORM_DEFINITION_PUBLISH: (id: string) =>
+    `${API_V1}/admin/electronic-form-definitions/${id}/publish`,
+  ADMIN_ELECTRONIC_FORM_DEFINITION_DUPLICATE_AS_DRAFT: (id: string) =>
+    `${API_V1}/admin/electronic-form-definitions/${id}/duplicate-as-draft`,
   /** 專案表單樣板（GET 列表、POST 新增） */
   PROJECT_FORM_TEMPLATES: (projectId: string) => `${API_V1}/projects/${projectId}/form-templates`,
   /** 單一表單樣板（GET 下載、PATCH、DELETE） */

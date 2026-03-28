@@ -313,6 +313,12 @@ export const ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
     icon: 'FileText',
   },
   {
+    id: 'admin-electronic-form-definitions',
+    label: '電子表單',
+    path: '/admin/electronic-form-definitions',
+    icon: 'FileSpreadsheet',
+  },
+  {
     id: 'admin-self-inspection-templates',
     label: '自主檢查樣板',
     path: '/admin/self-inspection-templates',

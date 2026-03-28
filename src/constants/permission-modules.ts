@@ -21,6 +21,7 @@ export const PERMISSION_MODULES = [
   'construction.progress',
   'construction.defect',
   'construction.photo',
+  'construction.electronic_form',
   'repair.overview',
   'repair.record',
 ] as const
@@ -95,6 +96,7 @@ export const NAV_PATH_PERMISSION_MODULE: Record<string, PermissionModuleId> = {
   '/construction/diary/pcces/upload': 'construction.pcces',
   '/construction/diary/pcces/versions': 'construction.pcces',
   '/construction/defects': 'construction.defect',
+  '/construction/electronic-forms': 'construction.electronic_form',
   '/construction/drawings': 'project.drawings',
   '/repair/overview': 'repair.overview',
   '/repair/records': 'repair.record',
@@ -149,6 +151,7 @@ export const PERMISSION_MODULE_LABELS: Record<PermissionModuleId, string> = {
   'construction.progress': '進度管理',
   'construction.defect': '缺失改善',
   'construction.photo': '照片管理',
+  'construction.electronic_form': '電子表單（填寫／審核）',
   'repair.overview': '報修總覽',
   'repair.record': '報修紀錄',
 }

@@ -28,11 +28,6 @@ export const ROUTE_PATH = {
   LOGIN: '/login',
   /** 專案列表（獨立入口，選專案後進入 /p/:projectId/dashboard） */
   PROJECTS: '/projects',
-  /**
-   * 本機／開發測試用頁（與後台表單樣板無關）；顯示名稱：電子俵單樣板
-   */
-  LAB_ELECTRONIC_SHEET_TEMPLATE: '/lab/electronic-sheet-template',
-
   /** 手機版（PWA／現場查驗） */
   MOBILE: '/mobile',
   MOBILE_INSPECTION: 'inspection',
@@ -118,6 +113,7 @@ export const ROUTE_PATH = {
   ADMIN_PROJECTS: '/admin/projects',
   ADMIN_MEMBERS: '/admin/members',
   ADMIN_FORM_TEMPLATES: '/admin/form-templates',
+  ADMIN_ELECTRONIC_FORM_DEFINITIONS: '/admin/electronic-form-definitions',
   ADMIN_SELF_INSPECTION_TEMPLATES: '/admin/self-inspection-templates',
   ADMIN_SELF_INSPECTION_TEMPLATE_DETAIL: '/admin/self-inspection-templates/:templateId',
   ADMIN_SETTINGS: '/admin/settings',
@@ -137,12 +133,15 @@ export const ROUTE_PATH = {
   PLATFORM_ADMIN_SYSTEM: '/platform-admin/system',
 } as const
 
+/** 後台電子表單 Builder（`:id` 為 `new` 表示新建） */
+export function buildAdminElectronicFormBuilderPath(id: string): string {
+  return `${ROUTE_PATH.ADMIN_ELECTRONIC_FORM_DEFINITIONS}/${encodeURIComponent(id)}/builder`
+}
+
 export const ROUTE_NAME = {
   HOME: 'home',
   LOGIN: 'login',
   PROJECTS: 'projects',
-  /** 測試頁：電子俵單樣板 */
-  LAB_ELECTRONIC_SHEET_TEMPLATE: 'lab-electronic-sheet-template',
   MOBILE: 'mobile',
   MOBILE_PROJECT_PICKER: 'mobile-project-picker',
   MOBILE_INSPECTION: 'mobile-inspection',
@@ -212,6 +211,8 @@ export const ROUTE_NAME = {
   ADMIN_PROJECTS: 'admin-projects',
   ADMIN_MEMBERS: 'admin-members',
   ADMIN_FORM_TEMPLATES: 'admin-form-templates',
+  ADMIN_ELECTRONIC_FORM_DEFINITIONS: 'admin-electronic-form-definitions',
+  ADMIN_ELECTRONIC_FORM_BUILDER: 'admin-electronic-form-builder',
   ADMIN_SELF_INSPECTION_TEMPLATES: 'admin-self-inspection-templates',
   ADMIN_SELF_INSPECTION_TEMPLATE_DETAIL: 'admin-self-inspection-template-detail',
   ADMIN_SETTINGS: 'admin-settings',

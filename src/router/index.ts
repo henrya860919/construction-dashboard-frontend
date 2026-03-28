@@ -141,9 +141,8 @@ const router = createRouter({
           component: () => import('@/views/ProjectsView.vue'),
         },
         {
-          path: ROUTE_PATH.LAB_ELECTRONIC_SHEET_TEMPLATE.replace(/^\//, ''),
-          name: ROUTE_NAME.LAB_ELECTRONIC_SHEET_TEMPLATE,
-          component: () => import('@/views/lab/ElectronicSheetTemplateLabView.vue'),
+          path: 'lab/electronic-sheet-template',
+          redirect: ROUTE_PATH.ADMIN_ELECTRONIC_FORM_DEFINITIONS,
         },
         {
           path: 'p/:projectId',
@@ -431,6 +430,16 @@ const router = createRouter({
           path: 'admin/form-templates',
           name: ROUTE_NAME.ADMIN_FORM_TEMPLATES,
           component: () => import('@/views/admin/AdminFormTemplatesView.vue'),
+        },
+        {
+          path: 'admin/electronic-form-definitions',
+          name: ROUTE_NAME.ADMIN_ELECTRONIC_FORM_DEFINITIONS,
+          component: () => import('@/views/admin/AdminElectronicFormDefinitionsView.vue'),
+        },
+        {
+          path: 'admin/electronic-form-definitions/:id/builder',
+          name: ROUTE_NAME.ADMIN_ELECTRONIC_FORM_BUILDER,
+          component: () => import('@/views/admin/AdminElectronicFormBuilderView.vue'),
         },
         {
           path: 'admin/self-inspection-templates',

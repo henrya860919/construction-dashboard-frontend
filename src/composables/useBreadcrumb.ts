@@ -15,6 +15,7 @@ import {
 } from '@/lib/construction-daily-log-breadcrumb'
 import { useRepairBreadcrumbStore } from '@/stores/repairBreadcrumb'
 import { useSelfInspectionTemplateBreadcrumbStore } from '@/stores/selfInspectionTemplateBreadcrumb'
+import { useElectronicFormBuilderBreadcrumbStore } from '@/stores/electronicFormBuilderBreadcrumb'
 import { useSelfCheckBreadcrumbStore } from '@/stores/selfCheckBreadcrumb'
 import { useProjectStore } from '@/stores/project'
 import { useTenantStore } from '@/stores/tenant'
@@ -36,6 +37,7 @@ export function useBreadcrumb() {
   const constructionDailyLogBreadcrumbStore = useConstructionDailyLogBreadcrumbStore()
   const repairBreadcrumbStore = useRepairBreadcrumbStore()
   const selfInspectionTemplateBreadcrumbStore = useSelfInspectionTemplateBreadcrumbStore()
+  const electronicFormBuilderBreadcrumbStore = useElectronicFormBuilderBreadcrumbStore()
   const selfCheckBreadcrumbStore = useSelfCheckBreadcrumbStore()
   const projectStore = useProjectStore()
 
@@ -68,6 +70,29 @@ export function useBreadcrumb() {
     }
 
     const segments = path.split('/').filter(Boolean)
+
+    // 租戶後台：電子表單 Builder /admin/electronic-form-definitions/:id/builder
+    if (
+      segments[0] === 'admin' &&
+      segments[1] === 'electronic-form-definitions' &&
+      segments.length === 4 &&
+      segments[3] === 'builder'
+    ) {
+      const idSeg = segments[2]
+      const lastLabel =
+        idSeg === 'new'
+          ? '新增表單'
+          : electronicFormBuilderBreadcrumbStore.currentTitle ?? '編輯表單'
+      return [
+        { label: BREADCRUMB_LABELS['/'] ?? '首頁', to: '/' },
+        { label: BREADCRUMB_LABELS['/admin'] ?? '後台', to: '/admin/projects' },
+        {
+          label: BREADCRUMB_LABELS['/admin/electronic-form-definitions'] ?? '電子表單',
+          to: '/admin/electronic-form-definitions',
+        },
+        { label: lastLabel },
+      ]
+    }
 
     // 租戶後台：自主檢查樣板詳情 /admin/self-inspection-templates/:templateId
     if (

@@ -148,6 +148,12 @@ const router = createRouter({
           meta: { hideSidebar: true },
         },
         {
+          path: 'org',
+          name: ROUTE_NAME.ORG,
+          component: () => import('@/views/org/OrgChartView.vue'),
+          meta: { title: '組織架構' },
+        },
+        {
           path: 'features/:featureId/:submissionId',
           name: ROUTE_NAME.DYNAMIC_FEATURE_DETAIL,
           component: () => import('@/views/dynamic/DynamicFeatureDetailView.vue'),
@@ -447,6 +453,25 @@ const router = createRouter({
           path: 'admin/members',
           name: ROUTE_NAME.ADMIN_MEMBERS,
           component: () => import('@/views/admin/AdminMembersView.vue'),
+          meta: { title: '租戶成員' },
+        },
+        {
+          path: 'admin/org',
+          name: ROUTE_NAME.ADMIN_ORG,
+          component: () => import('@/views/admin/AdminOrgView.vue'),
+          meta: { title: '組織管理' },
+        },
+        {
+          path: 'admin/org/assignments/:assignmentId/edit',
+          name: ROUTE_NAME.ADMIN_ORG_ASSIGNMENT_EDIT,
+          component: () => import('@/views/admin/AdminOrgAssignmentEditView.vue'),
+          meta: { title: '組織指派詳情' },
+        },
+        {
+          path: 'admin/positions',
+          name: ROUTE_NAME.ADMIN_POSITIONS,
+          component: () => import('@/views/admin/AdminPositionsView.vue'),
+          meta: { title: '職位管理' },
         },
         {
           path: 'admin/form-templates',

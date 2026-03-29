@@ -36,7 +36,12 @@ import {
   createDefectRecord,
 } from '@/api/defect-improvements'
 import { uploadFile, getFileBlob } from '@/api/files'
-import type { DefectItem, DefectExecutionRecordItem, DefectPriority, DefectStatus } from '@/types/defect-improvement'
+import type {
+  DefectItem,
+  DefectExecutionRecordItem,
+  DefectPriority,
+  DefectStatus,
+} from '@/types/defect-improvement'
 import { ROUTE_NAME, ROUTE_PATH, buildProjectPath } from '@/constants/routes'
 import { useProjectModuleActions } from '@/composables/useProjectModuleActions'
 import { ensureProjectPermission } from '@/lib/permission-toast'
@@ -48,7 +53,9 @@ const projectId = computed(() => route.params.projectId as string)
 const defectId = computed(() => route.params.defectId as string)
 const defectPerm = useProjectModuleActions(projectId, 'construction.defect')
 
-const listPath = computed(() => buildProjectPath(projectId.value, ROUTE_PATH.PROJECT_CONSTRUCTION_DEFECTS))
+const listPath = computed(() =>
+  buildProjectPath(projectId.value, ROUTE_PATH.PROJECT_CONSTRUCTION_DEFECTS)
+)
 
 const loading = ref(true)
 const defect = ref<DefectItem | null>(null)
@@ -120,10 +127,14 @@ async function fetchRecords() {
   }
 }
 
-watch([projectId, defectId], () => {
-  fetchDefect()
-  fetchRecords()
-}, { immediate: true })
+watch(
+  [projectId, defectId],
+  () => {
+    fetchDefect()
+    fetchRecords()
+  },
+  { immediate: true }
+)
 
 function formatDateTime(iso: string) {
   if (!iso) return '—'
@@ -305,19 +316,28 @@ function recorderLabel(rec: DefectExecutionRecordItem) {
       </Button>
     </div>
 
-    <div v-if="loading" class="flex flex-col items-center justify-center py-16 text-muted-foreground">
+    <div
+      v-if="loading"
+      class="flex flex-col items-center justify-center py-16 text-muted-foreground"
+    >
       <Loader2 class="size-8 animate-spin" />
       <p class="mt-2 text-sm">載入中…</p>
     </div>
 
-    <div v-else-if="loadError" class="rounded-lg border border-border bg-card p-6 text-center text-sm text-destructive">
+    <div
+      v-else-if="loadError"
+      class="rounded-lg border border-border bg-card p-6 text-center text-sm text-destructive"
+    >
       {{ loadError }}
     </div>
 
     <template v-else-if="defect">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-xl font-semibold text-foreground">缺失詳情</h1>
-        <div v-if="defectPerm.canUpdate || defectPerm.canDelete" class="flex flex-wrap items-center gap-2">
+        <div
+          v-if="defectPerm.canUpdate || defectPerm.canDelete"
+          class="flex flex-wrap items-center gap-2"
+        >
           <Button v-if="defectPerm.canUpdate" variant="outline" @click="openEdit">
             <Pencil class="mr-2 size-4" />
             編輯
@@ -373,7 +393,9 @@ function recorderLabel(rec: DefectExecutionRecordItem) {
           </div>
           <div>
             <h3 class="text-xs font-medium text-muted-foreground">更新時間</h3>
-            <p class="mt-1 text-sm tabular-nums text-muted-foreground">{{ formatDateTime(defect.updatedAt) }}</p>
+            <p class="mt-1 text-sm tabular-nums text-muted-foreground">
+              {{ formatDateTime(defect.updatedAt) }}
+            </p>
           </div>
         </div>
         <div v-if="defect.photos?.length">
@@ -439,9 +461,7 @@ function recorderLabel(rec: DefectExecutionRecordItem) {
               </TableRow>
             </TableBody>
           </Table>
-          <div v-else class="py-12 text-center text-sm text-muted-foreground">
-            尚無執行紀錄
-          </div>
+          <div v-else class="py-12 text-center text-sm text-muted-foreground">尚無執行紀錄</div>
         </div>
       </div>
     </template>
@@ -557,7 +577,12 @@ function recorderLabel(rec: DefectExecutionRecordItem) {
               class="sr-only"
               @change="onRecordPhotosChange"
             />
-            <Button type="button" variant="outline" :disabled="recordUploading" @click="recordFileInputRef?.click()">
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="recordUploading"
+              @click="recordFileInputRef?.click()"
+            >
               {{ recordUploading ? '上傳中…' : '選擇圖片' }}
             </Button>
             <span v-if="recordAttachmentIds.length" class="ml-2 text-xs text-muted-foreground">

@@ -31,6 +31,7 @@
 |------|------|
 | [data-table-list-views.md](./data-table-list-views.md) | 列表頁與 DataTable 工具列 |
 | [advanced-data-table-toolbar-guide.md](./advanced-data-table-toolbar-guide.md) | 工具列進階用法 |
+| [standalone-page-layout.md](./standalone-page-layout.md) | **獨立路由頁**（整頁詳情／表單）：頁首、卡片區塊、頁尾操作 |
 
 ## 施工／契約相關 UI
 

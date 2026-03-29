@@ -248,13 +248,8 @@ async function handleDeleteCamera() {
 <template>
   <div class="flex h-full min-h-0 flex-col gap-4">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-4">
-      <Button
-        variant="ghost"
-        size="sm"
-        class="gap-2"
-        @click="goBack"
-      >
-        <ArrowLeft class="size-4" />
+      <Button variant="outline" type="button" size="sm" class="gap-2" @click="goBack">
+        <ArrowLeft class="size-4" aria-hidden="true" />
         返回設備列表
       </Button>
       <div

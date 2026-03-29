@@ -491,8 +491,13 @@ async function confirmDeleteItem() {
 <template>
   <div class="space-y-6">
     <div class="flex flex-wrap items-center gap-3">
-      <Button variant="outline" @click="router.push({ name: ROUTE_NAME.ADMIN_SELF_INSPECTION_TEMPLATES })">
-        <ArrowLeft class="mr-2 size-4" />
+      <Button
+        variant="outline"
+        type="button"
+        class="gap-2"
+        @click="router.push({ name: ROUTE_NAME.ADMIN_SELF_INSPECTION_TEMPLATES })"
+      >
+        <ArrowLeft class="size-4" aria-hidden="true" />
         返回列表
       </Button>
     </div>

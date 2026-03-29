@@ -299,13 +299,26 @@ export const PROJECT_SIDEBAR_GROUPS: NavGroupProject[] = [
 /** 非專案內（專案列表頁等）顯示的側欄項目；非平台方登入時顯示專案列表 */
 export const GLOBAL_SIDEBAR_ENTRIES: NavItem[] = [
   { id: 'projects', label: '專案列表', path: '/projects', icon: 'FolderKanban' },
+  { id: 'org', label: '組織架構', path: '/org', icon: 'Building2' },
 ]
 
-/** 單租後台側欄（廠商管理員點「後台管理」後顯示） */
+/** 單租後台側欄：組織圖／職位等（標題「組織」） */
+export const ADMIN_SIDEBAR_GROUPS: NavGroup[] = [
+  {
+    id: 'admin-org-section',
+    label: '組織',
+    children: [
+      { id: 'admin-org', label: '組織管理', path: '/admin/org', icon: 'Building2' },
+      { id: 'admin-positions', label: '職位管理', path: '/admin/positions', icon: 'Briefcase' },
+    ],
+  },
+]
+
+/** 單租後台側欄（廠商管理員點「後台管理」後顯示）；組織管理／職位管理見 {@link ADMIN_SIDEBAR_GROUPS} */
 export const ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
   { id: 'admin-tenant-info', label: '租戶資訊', path: '/admin/tenant-info', icon: 'Info' },
   { id: 'admin-projects', label: '專案管理', path: '/admin/projects', icon: 'FolderKanban' },
-  { id: 'admin-members', label: '成員管理', path: '/admin/members', icon: 'Users' },
+  { id: 'admin-members', label: '租戶成員', path: '/admin/members', icon: 'Users' },
   {
     id: 'admin-form-templates',
     label: '表單樣板',

@@ -42,6 +42,7 @@ import {
   Calculator,
   TrendingUp,
   Layers,
+  Briefcase,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -54,6 +55,7 @@ import {
   LAYER3_CONSTRUCTION,
   LAYER3_REPAIR,
   ADMIN_SIDEBAR_ENTRIES,
+  ADMIN_SIDEBAR_GROUPS,
   PLATFORM_ADMIN_SIDEBAR_GROUPS,
 } from '@/constants/navigation'
 import { buildProjectPath, ROUTE_PATH } from '@/constants/routes'
@@ -106,6 +108,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Calculator,
   TrendingUp,
   Layers,
+  Briefcase,
 }
 
 withDefaults(
@@ -419,6 +422,58 @@ function isTenantFeatureNavActive(featureId: string): boolean {
               <span class="truncate">{{ item.label }}</span>
             </Button>
           </div>
+          <template v-for="group in ADMIN_SIDEBAR_GROUPS" :key="group.id">
+            <div class="space-y-1">
+              <div
+                v-show="!collapsed"
+                class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+              >
+                {{ group.label }}
+              </div>
+              <div
+                v-for="item in group.children"
+                :key="item.id"
+                class="flex min-h-9 items-center rounded-md"
+                :class="collapsed ? 'justify-center' : 'pl-3'"
+              >
+                <Tooltip v-if="collapsed">
+                  <TooltipTrigger as-child>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      :class="
+                        cn(
+                          'h-9 w-9 shrink-0 justify-center rounded-md',
+                          isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                        )
+                      "
+                      @click="router.push(item.path)"
+                    >
+                      <component
+                        :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                        class="size-4 shrink-0"
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{{ item.label }}</TooltipContent>
+                </Tooltip>
+                <Button
+                  v-else
+                  variant="ghost"
+                  :class="
+                    cn(
+                      'h-9 w-full justify-start gap-3 rounded-md px-3',
+                      isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                    )
+                  "
+                  @click="router.push(item.path)"
+                >
+                  <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                  <span class="truncate">{{ item.label }}</span>
+                </Button>
+              </div>
+            </div>
+          </template>
         </template>
 
         <!-- 動態功能（租戶自建）：首頁改由 AppHeader，此處僅說明 -->

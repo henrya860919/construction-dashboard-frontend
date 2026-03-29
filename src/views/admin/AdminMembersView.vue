@@ -35,6 +35,7 @@ import DataTableFilterPill from '@/components/common/data-table/DataTableFilterP
 import { useClientDataTable } from '@/composables/useClientDataTable'
 import type { TableListFeatures } from '@/types/data-table'
 import AdminMembersRowActions from '@/views/admin/AdminMembersRowActions.vue'
+import AdminOrgAssignmentDialog from '@/components/org/AdminOrgAssignmentDialog.vue'
 import PermissionMatrixForm from '@/components/common/PermissionMatrixForm.vue'
 import type { AdminUserItem } from '@/types'
 import { Plus, Loader2, Trash2 } from 'lucide-vue-next'
@@ -85,6 +86,34 @@ const tenantIdParam = computed(() => {
   return {}
 })
 
+/** 組織 API 用租戶 id（平台方須已選租戶） */
+const orgTenantId = computed((): string | undefined => {
+  if (authStore.isPlatformAdmin) return adminStore.selectedTenantId ?? undefined
+  return authStore.user?.tenantId ?? undefined
+})
+
+const orgAssignDialogOpen = ref(false)
+const orgAssignFixedUser = ref<{
+  id: string
+  name: string | null
+  email: string
+  memberType?: string
+} | null>(null)
+
+function openOrgAssignDialog(member: AdminUserItem) {
+  orgAssignFixedUser.value = {
+    id: member.id,
+    name: member.name ?? null,
+    email: member.email,
+    memberType: member.memberType,
+  }
+  orgAssignDialogOpen.value = true
+}
+
+function onOrgAssignmentCreated() {
+  void loadMembers()
+}
+
 /** 權限範本 API 用的租戶 id（平台方須已選租戶） */
 const tenantIdForPermissionTemplate = computed((): string | undefined => {
   if (authStore.isPlatformAdmin) return adminStore.selectedTenantId ?? undefined
@@ -93,7 +122,7 @@ const tenantIdForPermissionTemplate = computed((): string | undefined => {
 
 const systemRoleOptions = computed<{ value: SystemRoleOption; label: string }[]>(() => {
   const base = [
-    { value: 'project_user' as const, label: '專案使用者' },
+    { value: 'project_user' as const, label: '系統使用者' },
     { value: 'tenant_admin' as const, label: '租戶管理員' },
   ]
   if (authStore.isPlatformAdmin) {
@@ -104,7 +133,7 @@ const systemRoleOptions = computed<{ value: SystemRoleOption; label: string }[]>
 
 function systemRoleLabel(role: string): string {
   const map: Record<string, string> = {
-    project_user: '專案使用者',
+    project_user: '系統使用者',
     tenant_admin: '租戶管理員',
     platform_admin: '平台管理員',
   }
@@ -201,6 +230,7 @@ const membersGlobalFilterFn: FilterFn<AdminUserItem> = (row, _columnId, filterVa
     u.name ?? '',
     u.email,
     systemRoleLabel(u.systemRole).toLowerCase(),
+    ...(u.systemRole === 'project_user' ? ['專案使用者'] : []),
     u.systemRole.toLowerCase(),
     memberTypeLabel(u.memberType).toLowerCase(),
     u.memberType.toLowerCase(),
@@ -404,9 +434,14 @@ const columns = computed<ColumnDef<AdminUserItem, unknown>[]>(() => [
         h(AdminMembersRowActions, {
           row: row.original,
           showPermissionTemplate: row.original.systemRole !== 'platform_admin',
+          showOrgAssign:
+            !!orgTenantId.value &&
+            row.original.memberType === 'internal' &&
+            (row.original.status ?? 'active') !== 'suspended',
           onView: openViewDialog,
           onToggleStatus: toggleMemberStatus,
           onPermissionTemplate: openPermissionTemplateDialog,
+          onOrgAssign: openOrgAssignDialog,
         }),
       ]),
     enableSorting: false,
@@ -620,14 +655,15 @@ async function confirmBatchDelete() {
     batchDeleteLoading.value = false
   }
 }
+
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex flex-col gap-1">
-      <h1 class="text-xl font-semibold tracking-tight text-foreground">成員管理</h1>
+      <h1 class="text-xl font-semibold tracking-tight text-foreground">租戶成員</h1>
       <p class="text-sm text-muted-foreground">
-        管理本租戶使用者：區分內部／外部成員。可於「權限範本」設定加入專案時複製的模組權限；專案內亦可由租戶／平台管理員覆寫單一成員。可搜尋姓名、Email、角色、類型、狀態與日期。
+        管理本租戶使用者：<strong class="font-medium text-foreground">內部成員</strong>為組織內人力，可於「組織管理」指派部門與職位；<strong class="font-medium text-foreground">外部成員</strong>為組織外協力（廠商、顧問等），不列入組織圖與部門職位。可於「權限範本」設定加入專案時複製的模組權限；專案內亦可由租戶／平台管理員覆寫。可搜尋姓名、Email、角色、類型、狀態與日期。
       </p>
     </div>
 
@@ -945,5 +981,12 @@ async function confirmBatchDelete() {
         </template>
       </DialogContent>
     </Dialog>
+
+    <AdminOrgAssignmentDialog
+      v-model:open="orgAssignDialogOpen"
+      :tenant-id="orgTenantId"
+      :fixed-user="orgAssignFixedUser"
+      @created="onOrgAssignmentCreated"
+    />
   </div>
 </template>

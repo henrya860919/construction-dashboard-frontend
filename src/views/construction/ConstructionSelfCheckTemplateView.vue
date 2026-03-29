@@ -241,8 +241,8 @@ const table = useVueTable({
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex flex-wrap items-center gap-3">
-        <Button variant="outline" class="gap-1.5" @click="goBack">
-          <ArrowLeft class="size-4" />
+        <Button variant="outline" type="button" class="gap-2" @click="goBack">
+          <ArrowLeft class="size-4" aria-hidden="true" />
           樣板列表
         </Button>
         <h1 class="text-xl font-semibold text-foreground">

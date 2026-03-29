@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-import { ArrowLeft, FolderKanban, Users, Settings, Layers } from 'lucide-vue-next'
+import { ArrowLeft, FolderKanban, Building2, Settings, Layers } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ROUTE_PATH } from '@/constants'
 
 const navItems = [
   { path: ROUTE_PATH.ADMIN_PROJECTS, label: '專案管理', icon: FolderKanban },
-  { path: ROUTE_PATH.ADMIN_MEMBERS, label: '成員管理', icon: Users },
+  { path: ROUTE_PATH.ADMIN_ORG, label: '組織管理', icon: Building2 },
   { path: ROUTE_PATH.ADMIN_TENANT_FEATURE_DEFINITIONS, label: '自訂系統功能', icon: Layers },
   { path: ROUTE_PATH.ADMIN_SETTINGS, label: '公司設定', icon: Settings },
 ]

@@ -256,6 +256,21 @@ export function useBreadcrumb() {
 
     // 租戶後台：系統層已為「後台」，下層從 /admin 之後逐段堆疊（避免重複後台）
     if (segments[0] === 'admin') {
+      if (
+        segments[1] === 'org' &&
+        segments[2] === 'assignments' &&
+        segments.length === 5 &&
+        segments[4] === 'edit'
+      ) {
+        return [
+          getBreadcrumbSystemLayer(path),
+          {
+            label: BREADCRUMB_LABELS['/admin/org'] ?? '組織管理',
+            to: '/admin/org?tab=people',
+          },
+          { label: '組織指派詳情' },
+        ]
+      }
       if (segments.length === 1) {
         return [getBreadcrumbSystemLayer(path)]
       }

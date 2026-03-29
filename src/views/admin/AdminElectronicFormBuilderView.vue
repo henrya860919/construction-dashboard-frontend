@@ -723,7 +723,7 @@ async function doPublish() {
     <div class="flex shrink-0 flex-wrap items-center gap-3">
       <Button variant="outline" size="sm" class="h-8 gap-2" as-child>
         <RouterLink :to="ROUTE_PATH.ADMIN_ELECTRONIC_FORM_DEFINITIONS">
-          <ArrowLeft class="size-4" />
+          <ArrowLeft class="size-4" aria-hidden="true" />
           返回列表
         </RouterLink>
       </Button>

@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Eye, PauseCircle, PlayCircle, Shield } from 'lucide-vue-next'
+import { MoreHorizontal, Eye, PauseCircle, PlayCircle, Shield, Building2 } from 'lucide-vue-next'
 import type { AdminUserItem } from '@/types'
 
 const props = withDefaults(
@@ -15,14 +15,17 @@ const props = withDefaults(
     row: AdminUserItem
     /** 可編輯「加入專案時複製的權限範本」（不適用於平台管理員帳號） */
     showPermissionTemplate?: boolean
+    /** 顯示「組織指派」（例如已停用成員改為 false） */
+    showOrgAssign?: boolean
   }>(),
-  { showPermissionTemplate: false }
+  { showPermissionTemplate: false, showOrgAssign: true }
 )
 
 const emit = defineEmits<{
   view: [row: AdminUserItem]
   toggleStatus: [row: AdminUserItem]
   permissionTemplate: [row: AdminUserItem]
+  orgAssign: [row: AdminUserItem]
 }>()
 </script>
 
@@ -45,6 +48,14 @@ const emit = defineEmits<{
       >
         <Shield class="size-4" />
         權限範本
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        v-if="props.showOrgAssign"
+        class="gap-2 cursor-pointer"
+        @click="emit('orgAssign', row)"
+      >
+        <Building2 class="size-4" />
+        組織指派
       </DropdownMenuItem>
       <DropdownMenuItem
         v-if="(row.status ?? 'active') === 'suspended'"

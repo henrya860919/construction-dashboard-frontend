@@ -94,8 +94,8 @@ const items = computed(() => record.value?.filledPayload?.items ?? {})
 <template>
   <div class="space-y-6">
     <div class="flex flex-wrap items-center gap-3">
-      <Button variant="outline" type="button" class="gap-1.5" @click="goHub">
-        <ArrowLeft class="size-4" />
+      <Button variant="outline" type="button" class="gap-2" @click="goHub">
+        <ArrowLeft class="size-4" aria-hidden="true" />
         返回紀錄列表
       </Button>
       <h1 class="text-xl font-semibold text-foreground">查驗紀錄詳情</h1>

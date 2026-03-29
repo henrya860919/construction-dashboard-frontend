@@ -35,6 +35,8 @@ export const ROUTE_PATH = {
   FINANCE: '/finance',
   /** 專案列表（獨立入口，選專案後進入 /p/:projectId/dashboard） */
   PROJECTS: '/projects',
+  /** 公司組織架構（唯讀，已登入成員） */
+  ORG: '/org',
   /** 手機版（PWA／現場查驗） */
   MOBILE: '/mobile',
   MOBILE_INSPECTION: 'inspection',
@@ -119,6 +121,11 @@ export const ROUTE_PATH = {
   ADMIN_TENANT_INFO: '/admin/tenant-info',
   ADMIN_PROJECTS: '/admin/projects',
   ADMIN_MEMBERS: '/admin/members',
+  /** 後台：組織架構（部門樹、指派；編輯為管理員） */
+  ADMIN_ORG: '/admin/org',
+  /** 編輯單筆內部成員之組織指派 */
+  ADMIN_ORG_ASSIGNMENT_EDIT: '/admin/org/assignments/:assignmentId/edit',
+  ADMIN_POSITIONS: '/admin/positions',
   ADMIN_FORM_TEMPLATES: '/admin/form-templates',
   ADMIN_TENANT_FEATURE_DEFINITIONS: '/admin/tenant-feature-definitions',
   ADMIN_TENANT_FEATURE_DEFINITION_NEW: '/admin/tenant-feature-definitions/new',
@@ -153,6 +160,11 @@ export function buildAdminTenantFeatureDefinitionEditPath(featureId: string): st
   return `${ROUTE_PATH.ADMIN_TENANT_FEATURE_DEFINITIONS}/${encodeURIComponent(featureId)}/edit`
 }
 
+/** 組織管理：編輯單筆指派 */
+export function buildAdminOrgAssignmentEditPath(assignmentId: string): string {
+  return `/admin/org/assignments/${encodeURIComponent(assignmentId)}/edit`
+}
+
 export const ROUTE_NAME = {
   HOME: 'home',
   LOGIN: 'login',
@@ -160,6 +172,7 @@ export const ROUTE_NAME = {
   DYNAMIC_FEATURE_LIST: 'dynamic-feature-list',
   DYNAMIC_FEATURE_DETAIL: 'dynamic-feature-detail',
   PROJECTS: 'projects',
+  ORG: 'org',
   MOBILE: 'mobile',
   MOBILE_PROJECT_PICKER: 'mobile-project-picker',
   MOBILE_INSPECTION: 'mobile-inspection',
@@ -228,6 +241,9 @@ export const ROUTE_NAME = {
   ADMIN_TENANT_INFO: 'admin-tenant-info',
   ADMIN_PROJECTS: 'admin-projects',
   ADMIN_MEMBERS: 'admin-members',
+  ADMIN_ORG: 'admin-org',
+  ADMIN_ORG_ASSIGNMENT_EDIT: 'admin-org-assignment-edit',
+  ADMIN_POSITIONS: 'admin-positions',
   ADMIN_FORM_TEMPLATES: 'admin-form-templates',
   ADMIN_TENANT_FEATURE_DEFINITIONS: 'admin-tenant-feature-definitions',
   ADMIN_TENANT_FEATURE_DEFINITION_NEW: 'admin-tenant-feature-definition-new',

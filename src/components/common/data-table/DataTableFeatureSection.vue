@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="TData">
-import type { Table } from '@tanstack/vue-table'
+import type { Row, Table } from '@tanstack/vue-table'
 import { FlexRender } from '@tanstack/vue-table'
 import { computed } from 'vue'
 import {
@@ -16,11 +16,24 @@ const props = withDefaults(
     table: Table<TData>
     /** 當前分頁無列時顯示於單列（例如篩選後該頁為空） */
     emptyText?: string
+    /** 整列可點擊（略過 checkbox／按鈕／連結） */
+    rowClickable?: boolean
   }>(),
   {
     emptyText: '此頁無資料',
+    rowClickable: false,
   },
 )
+
+const emit = defineEmits<{
+  rowClick: [row: TData]
+}>()
+
+function onRowClick(e: MouseEvent, row: Row<TData>) {
+  const t = e.target as HTMLElement
+  if (t.closest('a, button, [role="checkbox"], input, label')) return
+  emit('rowClick', row.original)
+}
 
 const colspan = computed(
   () => props.table.getVisibleLeafColumns().length || 1,
@@ -55,6 +68,8 @@ const colspan = computed(
             v-for="row in table.getRowModel().rows"
             :key="row.id"
             :data-state="row.getIsSelected() ? 'selected' : undefined"
+            :class="rowClickable ? 'cursor-pointer' : undefined"
+            @click="rowClickable ? onRowClick($event, row) : undefined"
           >
             <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id">
               <FlexRender

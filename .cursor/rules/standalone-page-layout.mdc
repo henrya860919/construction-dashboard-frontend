@@ -1,0 +1,25 @@
+---
+description: 獨立路由頁（整頁詳情／表單）—頁首、載入錯誤、卡片區塊與頁尾操作列
+globs:
+  - "**/views/**/*Detail*.vue"
+  - "**/views/**/*Edit*.vue"
+  - "**/views/**/*New*.vue"
+  - "**/views/**/*Form*.vue"
+alwaysApply: false
+---
+
+# 獨立路由頁版型
+
+由 **`router.push`／`RouterLink`** 進入的整頁（非 Dialog／Sheet），請遵守 **`docs/standalone-page-layout.md`**。
+
+## 摘要
+
+- **根節點**：一般頁 `p-4 md:p-6 space-y-6`；全高情境 `flex h-full min-h-0 flex-col gap-4`。
+- **頁首**：**返回**＝`Button variant="outline"` + `ArrowLeft` + `gap-2`。**詳情頁**（如缺失詳情、組織指派詳情）：下一列 `h1` + 右側僅 **編輯**（`Pencil`）／**刪除**（`Trash2` 紅字 `outline`）；編輯開 **`Dialog`**。**其他可編輯頁**可為右側儲存／取消／破壞性。
+- **載入／錯誤**：`py-16` 置中 spinner；錯誤用 `rounded-lg border bg-card p-8 text-center` 並提供返回。
+- **寬度**：預設**全寬**（吃滿 layout 主區，勿預設 `max-w-lg`）；`max-w-lg` 僅選用。
+- **卡片**：`rounded-lg border border-border bg-card`；區塊標 `h2` → `text-lg font-semibold`；唯讀鍵值用 `dl` + 響應式 `grid`。
+- **主要操作**：詳情型＝編輯／刪除在標題列；表單在 `Dialog` 內。其他頁＝頁首右側儲存等。
+- **主題**：`theme-support.mdc`，禁止硬編碼主結構色。
+
+**列表頁**仍依 **`data-table-list-views.mdc`**、**`ui-ux-principles.mdc`** §1.4。

@@ -20,6 +20,21 @@ export const API_PATH = {
     `${API_V1}/feature-definitions/by-module/${encodeURIComponent(module)}`,
   FEATURE_DEFINITION: (id: string) =>
     `${API_V1}/feature-definitions/${encodeURIComponent(id)}`,
+  /** 組織架構（已登入；platform_admin 須 ?tenantId=） */
+  ORG_TREE: `${API_V1}/org/tree`,
+  ORG_MEMBERS: `${API_V1}/org/members`,
+  ORG_FIND_APPROVER: `${API_V1}/org/find-approver`,
+  /** 後台組織 CRUD（tenant_admin；platform_admin 須 ?tenantId=） */
+  ADMIN_ORG_DEPARTMENTS: `${API_V1}/admin/org/departments`,
+  ADMIN_ORG_DEPARTMENTS_REORDER: `${API_V1}/admin/org/departments/reorder`,
+  ADMIN_ORG_DEPARTMENT: (id: string) =>
+    `${API_V1}/admin/org/departments/${encodeURIComponent(id)}`,
+  ADMIN_ORG_POSITIONS: `${API_V1}/admin/org/positions`,
+  ADMIN_ORG_POSITION: (id: string) =>
+    `${API_V1}/admin/org/positions/${encodeURIComponent(id)}`,
+  ADMIN_ORG_ASSIGNMENTS: `${API_V1}/admin/org/assignments`,
+  ADMIN_ORG_ASSIGNMENT: (id: string) =>
+    `${API_V1}/admin/org/assignments/${encodeURIComponent(id)}`,
   PROJECTS: `${API_V1}/projects`,
   /** 單租後台（需 admin 角色） */
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,

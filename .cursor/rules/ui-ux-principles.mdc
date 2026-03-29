@@ -60,6 +60,10 @@ alwaysApply: true
   - 載入完成後**一律**保留表格外殼：無資料時以表身**單列**顯示說明（**`DataTableFeatureSection` 的 `emptyText`** 或手動 colspan 列），**勿**用整塊空狀態取代表格。
   - **DataTablePagination**：僅在**列表確有資料**時顯示（例 `list.length > 0`）；放在**邊框表格外殼關閉後**的下一層，**`mt-4`**，**勿**放在該邊框容器內。
 
+### 1.5 獨立路由頁（整頁詳情／表單）
+
+由列表或其他入口進入的**獨立路由頁**（非 Dialog／Sheet）：頁首（詳情型為**編輯／刪除**；其他可為**儲存／取消**等）、載入／錯誤狀態、卡片化內容區等見 **`docs/standalone-page-layout.md`** 與 **`standalone-page-layout.mdc`**。
+
 ---
 
 ## 二、按鈕（Button）

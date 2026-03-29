@@ -44,15 +44,15 @@ function onDeleteDept(d: OrgDeptTreeNode) {
     "
   >
     <li v-for="d in nodes" :key="d.id" class="space-y-2">
-      <div
-        role="button"
-        tabindex="0"
-        class="cursor-pointer rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        @click="onOpenDeptDetail(d)"
-        @keydown.enter.prevent="onOpenDeptDetail(d)"
-        @keydown.space.prevent="onOpenDeptDetail(d)"
-      >
-        <div class="flex flex-wrap items-start gap-2">
+      <div class="relative rounded-lg border border-border bg-card px-3 py-2 text-sm">
+        <button
+          type="button"
+          class="absolute inset-0 z-0 rounded-lg text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          @click="onOpenDeptDetail(d)"
+        >
+          <span class="sr-only">查看「{{ d.name }}」部門詳情</span>
+        </button>
+        <div class="pointer-events-none relative z-[1] flex flex-wrap items-start gap-2">
           <div class="min-w-0 flex-1 space-y-1 px-1 py-0.5 text-left">
             <div class="flex flex-wrap items-center gap-2">
               <span aria-hidden="true">{{ d.icon }}</span>
@@ -63,20 +63,20 @@ function onDeleteDept(d: OrgDeptTreeNode) {
               </Badge>
             </div>
           </div>
-          <DropdownMenu v-if="showDeptAdmin">
-            <DropdownMenuTrigger as-child>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="size-8 shrink-0"
-                aria-label="部門操作"
-                @click.stop
-                @pointerdown.stop
-                @mousedown.stop
-              >
-                <MoreHorizontal class="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
+          <div v-if="showDeptAdmin" class="pointer-events-auto shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="size-8 shrink-0"
+                  aria-label="部門操作"
+                  @pointerdown.stop
+                  @mousedown.stop
+                >
+                  <MoreHorizontal class="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-40">
               <DropdownMenuItem class="cursor-pointer gap-2" @click="onEditDept(d)">
                 <Pencil class="size-4" />
@@ -90,11 +90,12 @@ function onDeleteDept(d: OrgDeptTreeNode) {
                 刪除
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+            </DropdownMenu>
+          </div>
         </div>
         <ul
           v-if="d.members.length"
-          class="mt-2 w-full space-y-1 border-t border-border pt-2 text-left text-muted-foreground"
+          class="pointer-events-none relative z-[1] mt-2 w-full space-y-1 border-t border-border pt-2 text-left text-muted-foreground"
         >
           <li
             v-for="m in d.members"

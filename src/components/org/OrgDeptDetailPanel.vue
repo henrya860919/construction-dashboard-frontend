@@ -43,9 +43,7 @@ const membersSorted = computed(() => {
   })
 })
 
-const pad = computed(() =>
-  props.compact ? 'px-4 pb-4 pt-3' : 'px-4 pb-5 pt-4'
-)
+const pad = computed(() => (props.compact ? 'px-4 pb-4 pt-3' : 'px-4 pb-5 pt-4'))
 const headClass = computed(() => {
   const base = props.compact ? 'px-4 pt-4 pb-3' : 'px-4 pt-4 pb-4'
   const right = props.showClose ? ' pr-12' : ' pr-4'
@@ -132,7 +130,10 @@ const headClass = computed(() => {
         <p class="text-[10px] leading-snug text-muted-foreground">
           內部成員之進行中指派；職等為職位層級（外部成員不列入）。
         </p>
-        <div v-if="membersSorted.length" class="overflow-hidden rounded-md border border-border bg-card">
+        <div
+          v-if="membersSorted.length"
+          class="overflow-hidden rounded-md border border-border bg-card"
+        >
           <Table>
             <TableHeader>
               <TableRow class="border-border hover:bg-transparent">

@@ -5,7 +5,7 @@ import type { SidebarPanelId } from '@/types/navigation'
 export type SidebarPanelValue = 'root' | SidebarPanelId
 
 export const useSidebarStore = defineStore('sidebar', () => {
-  /** 桌面：側欄是否收合（只顯示 icon） */
+  /** 桌面：側欄是否收合（寬度為 0，由主內容區左上角按鈕展開） */
   const collapsed = ref(false)
   /** 手機：側欄 Sheet 是否開啟 */
   const mobileOpen = ref(false)

@@ -4,12 +4,17 @@
  */
 export const BREADCRUMB_LABELS: Record<string, string> = {
   '/': '首頁',
+  '/portal': '首頁',
   '/projects': '專案列表',
+  '/procurement': '採購管理',
+  '/hr': '人資管理',
+  '/finance': '財務管理',
   '/admin': '後台',
   '/admin/tenant-info': '租戶資訊',
   '/admin/projects': '專案管理',
   '/admin/members': '成員管理',
   '/admin/form-templates': '表單樣板',
+  '/admin/tenant-feature-definitions': '自訂系統功能',
   '/admin/electronic-form-definitions': '電子表單',
   '/admin/self-inspection-templates': '自主檢查樣板',
   '/admin/settings': '公司設定',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch, onMounted } from 'vue'
+import { computed, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import {
   LayoutDashboard,
@@ -41,6 +41,7 @@ import {
   FileSpreadsheet,
   Calculator,
   TrendingUp,
+  Layers,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -55,17 +56,15 @@ import {
   ADMIN_SIDEBAR_ENTRIES,
   PLATFORM_ADMIN_SIDEBAR_GROUPS,
 } from '@/constants/navigation'
-import { SIDEBAR_HEADER } from '@/constants/branding'
 import { buildProjectPath, ROUTE_PATH } from '@/constants/routes'
 import { useProjectStore } from '@/stores/project'
 import { useAuthStore } from '@/stores/auth'
 import { useProjectPermissionsStore } from '@/stores/projectPermissions'
 import { useProjectPermission } from '@/composables/useProjectPermission'
-import { useTenantBrandingStore } from '@/stores/tenantBranding'
 import { useSidebarStore } from '@/stores/sidebar'
-import { useTenantLogoUrl } from '@/composables/useTenantLogoUrl'
 import { getProject } from '@/api/project'
 import { cn } from '@/lib/utils'
+import { useFeatureDefinitionsStore } from '@/stores/featureDefinitions'
 
 const ICON_MAP: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -106,6 +105,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FileSpreadsheet,
   Calculator,
   TrendingUp,
+  Layers,
 }
 
 withDefaults(
@@ -120,42 +120,8 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const authStore = useAuthStore()
 const permStore = useProjectPermissionsStore()
-const tenantBrandingStore = useTenantBrandingStore()
 const sidebarStore = useSidebarStore()
-
-/** Sidebar 標題：專案內 = 專案名稱，未進專案 = 公司名稱（無則 Construction Dashboard） */
-const sidebarTitle = computed(() => {
-  if (isProjectScope.value && projectStore.currentProjectName) {
-    return projectStore.currentProjectName
-  }
-  return tenantBrandingStore.name || 'Construction Dashboard'
-})
-
-/** 租戶 Logo：僅在有設定時顯示，無則不顯示任何圖片 */
-const hasLogo = computed(() => tenantBrandingStore.hasLogo)
-const { objectUrl: tenantLogoUrl } = useTenantLogoUrl(hasLogo)
-
-const showDefaultLogoIcon = computed(() => !tenantLogoUrl.value)
-
-watch(
-  () => authStore.isAuthenticated && authStore.user?.tenantId,
-  (shouldLoad) => {
-    if (!shouldLoad) {
-      tenantBrandingStore.clear()
-      return
-    }
-    if (!tenantBrandingStore.loaded) {
-      tenantBrandingStore.fetch()
-    }
-  },
-  { immediate: true }
-)
-
-onMounted(() => {
-  if (authStore.isAuthenticated && authStore.user?.tenantId && !tenantBrandingStore.loaded) {
-    tenantBrandingStore.fetch()
-  }
-})
+const featureDefinitionsStore = useFeatureDefinitionsStore()
 
 /** 是否在專案內（URL 為 /p/:projectId/...） */
 const projectId = computed(() => route.params.projectId as string | undefined)
@@ -174,6 +140,16 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () =>
+    [projectId.value, authStore.user?.tenantId, authStore.user?.systemRole] as const,
+  ([id, tenantId, role]) => {
+    if (!id || !tenantId || role === 'platform_admin') return
+    void featureDefinitionsStore.loadModule('engineering')
+  },
+  { immediate: true }
+)
+
 function isProjectNavPathVisible(pathSuffix: string): boolean {
   if (!projectId.value || !authStore.isAuthenticated) return true
   if (authStore.isPlatformAdmin) return true
@@ -188,19 +164,14 @@ const drillPanelHasVisibleItems = computed(() => ({
 
 const isPlatformAdminScope = computed(() => route.path.startsWith('/platform-admin'))
 const isAdminScope = computed(() => route.path.startsWith('/admin'))
+const isDynamicFeatureScope = computed(() => route.path.startsWith('/features/'))
 
-/** Layer 1 條目（未進專案）：專案列表 + 有權限時後台管理 */
-const layer1Entries = computed(() => {
-  const entries = [...LAYER1_ENTRIES]
-  if (authStore.canAccessAdmin && !authStore.isPlatformAdmin) {
-    entries.push({
-      id: 'admin',
-      label: '後台管理',
-      path: ROUTE_PATH.ADMIN_PROJECTS,
-      icon: 'ShieldCheck',
-    })
-  }
-  return entries
+const tenantCustomNavItems = computed(() => featureDefinitionsStore.engineeringTenantFeatures)
+
+/** 側欄頂部顯示用（進入專案後、切換專案列上方） */
+const sidebarProjectTitle = computed(() => {
+  if (!projectId.value) return ''
+  return projectStore.currentProjectName ?? projectId.value
 })
 
 watch(
@@ -330,39 +301,21 @@ function handleDrillOut() {
   sidebarStore.drillOut()
   goToProjectPath(getFirstLayer2PathSuffix())
 }
+
+function tenantFeaturePath(featureId: string): string {
+  return `${ROUTE_PATH.FEATURES}/${encodeURIComponent(featureId)}`
+}
+
+function isTenantFeatureNavActive(featureId: string): boolean {
+  const prefix = tenantFeaturePath(featureId)
+  return route.path === prefix || route.path.startsWith(`${prefix}/`)
+}
+
 </script>
 
 <template>
   <TooltipProvider :delay-duration="0">
     <ScrollArea class="h-full">
-      <header
-        class="flex shrink-0 items-center gap-3 border-border bg-muted/30 px-3 py-4"
-        :class="collapsed ? 'justify-center px-2' : ''"
-      >
-        <div
-          v-if="tenantLogoUrl"
-          class="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-zinc-200 shadow-sm"
-          aria-hidden
-        >
-          <img :src="tenantLogoUrl" alt="" class="size-full object-cover" />
-        </div>
-        <div
-          v-else-if="showDefaultLogoIcon"
-          class="flex size-7 shrink-0 items-center justify-center rounded-full bg-white dark:bg-zinc-200 shadow-sm text-muted-foreground"
-          aria-hidden
-        >
-          <Building2 class="size-4" />
-        </div>
-        <div v-show="!collapsed" class="min-w-0 flex-1">
-          <p class="truncate text-sm font-semibold text-foreground">
-            {{ sidebarTitle }}
-          </p>
-          <p v-if="!isProjectScope" class="truncate text-xs text-muted-foreground">
-            {{ SIDEBAR_HEADER.tagline }}
-          </p>
-        </div>
-      </header>
-
       <nav class="relative flex flex-col gap-2 p-2" :class="collapsed ? 'items-center' : ''">
         <!-- 多租後台（平台方）：不變 -->
         <template v-if="isPlatformAdminScope">
@@ -425,29 +378,8 @@ function handleDrillOut() {
           </template>
         </template>
 
-        <!-- 單租後台（廠商管理員）：不變 -->
+        <!-- 單租後台（廠商管理員）：返回專案列表改由麵包屑／系統模組，側欄僅後台項目 -->
         <template v-else-if="isAdminScope">
-          <RouterLink v-slot="{ navigate }" to="/projects" custom>
-            <div :class="collapsed ? 'flex justify-center' : 'pl-3'">
-              <Tooltip v-if="collapsed">
-                <TooltipTrigger as-child>
-                  <Button variant="ghost" size="icon" class="h-9 w-9 shrink-0" @click="navigate">
-                    <ArrowLeft class="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">專案列表</TooltipContent>
-              </Tooltip>
-              <Button
-                v-else
-                variant="ghost"
-                class="h-9 w-full justify-start gap-3 rounded-md px-3"
-                @click="navigate"
-              >
-                <ArrowLeft class="size-4 shrink-0" />
-                <span class="truncate">專案列表</span>
-              </Button>
-            </div>
-          </RouterLink>
           <div
             v-for="item in ADMIN_SIDEBAR_ENTRIES"
             :key="item.id"
@@ -489,6 +421,24 @@ function handleDrillOut() {
           </div>
         </template>
 
+        <!-- 動態功能（租戶自建）：首頁改由 AppHeader，此處僅說明 -->
+        <template v-else-if="isDynamicFeatureScope">
+          <div
+            class="flex min-h-9 items-center rounded-md"
+            :class="collapsed ? 'justify-center' : 'pl-3'"
+          >
+            <Tooltip v-if="collapsed">
+              <TooltipTrigger as-child>
+                <Button variant="ghost" size="icon" class="h-9 w-9 shrink-0 text-muted-foreground">
+                  <Layers class="size-4 shrink-0" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">自訂功能</TooltipContent>
+            </Tooltip>
+            <div v-else class="px-3 py-2 text-xs text-muted-foreground">此為租戶自建功能，列表與表單將於後續串接。</div>
+          </div>
+        </template>
+
         <!-- 專案內：翻頁式 Layer 2 / Layer 3 -->
         <template v-else-if="isProjectScope">
           <div class="relative min-h-[200px] w-full overflow-hidden">
@@ -503,6 +453,17 @@ function handleDrillOut() {
             >
               <!-- Panel Layer 2（專案內第一層） -->
               <div class="w-1/2 shrink-0 px-1">
+                <div
+                  v-show="!collapsed && sidebarProjectTitle"
+                  class="mb-2 border-b border-border px-3 pb-3 pt-2.5"
+                >
+                  <p
+                    class="truncate text-sm font-semibold leading-snug text-foreground"
+                    :title="sidebarProjectTitle"
+                  >
+                    {{ sidebarProjectTitle }}
+                  </p>
+                </div>
                 <RouterLink v-slot="{ navigate }" to="/projects" custom>
                   <div :class="collapsed ? 'flex justify-center' : 'pl-3'">
                     <Tooltip v-if="collapsed">
@@ -516,7 +477,13 @@ function handleDrillOut() {
                           <ArrowLeft class="size-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent side="right">切換專案</TooltipContent>
+                      <TooltipContent side="right">
+                        {{
+                          sidebarProjectTitle
+                            ? `${sidebarProjectTitle} · 切換專案`
+                            : '切換專案'
+                        }}
+                      </TooltipContent>
                     </Tooltip>
                     <Button
                       v-else
@@ -628,6 +595,60 @@ function handleDrillOut() {
                     </Button>
                   </div>
                 </template>
+
+                <template v-if="tenantCustomNavItems.length && authStore.user?.tenantId">
+                  <div
+                    v-show="!collapsed"
+                    class="mt-2 border-t border-border px-3 pt-2 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                  >
+                    租戶功能
+                  </div>
+                  <div
+                    v-for="feat in tenantCustomNavItems"
+                    :key="feat.id"
+                    class="flex min-h-9 items-center rounded-md"
+                    :class="collapsed ? 'justify-center' : 'pl-3'"
+                  >
+                    <Tooltip v-if="collapsed">
+                      <TooltipTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          :class="
+                            cn(
+                              'h-9 w-9 shrink-0 justify-center rounded-md',
+                              isTenantFeatureNavActive(feat.id) && 'bg-accent text-accent-foreground'
+                            )
+                          "
+                          @click="router.push(tenantFeaturePath(feat.id))"
+                        >
+                          <span v-if="feat.icon" class="text-base leading-none" aria-hidden>{{
+                            feat.icon
+                          }}</span>
+                          <Layers v-else class="size-4 shrink-0" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{{ feat.name }}</TooltipContent>
+                    </Tooltip>
+                    <Button
+                      v-else
+                      variant="ghost"
+                      :class="
+                        cn(
+                          'h-9 w-full justify-start gap-3 rounded-md px-3',
+                          isTenantFeatureNavActive(feat.id) && 'bg-accent text-accent-foreground'
+                        )
+                      "
+                      @click="router.push(tenantFeaturePath(feat.id))"
+                    >
+                      <span v-if="feat.icon" class="text-base leading-none" aria-hidden>{{
+                        feat.icon
+                      }}</span>
+                      <Layers v-else class="size-4 shrink-0 text-muted-foreground" />
+                      <span class="truncate">{{ feat.name }}</span>
+                    </Button>
+                  </div>
+                </template>
               </div>
 
               <!-- Panel Layer 3（與 Layer 2 相同 UI：主畫面 + 項目列表） -->
@@ -710,7 +731,7 @@ function handleDrillOut() {
         <!-- 未進專案（專案列表頁等）：Layer 1 -->
         <template v-else>
           <RouterLink
-            v-for="item in layer1Entries"
+            v-for="item in LAYER1_ENTRIES"
             :key="item.id"
             v-slot="{ navigate }"
             :to="item.path"

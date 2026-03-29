@@ -19,6 +19,8 @@ import { useElectronicFormBuilderBreadcrumbStore } from '@/stores/electronicForm
 import { useSelfCheckBreadcrumbStore } from '@/stores/selfCheckBreadcrumb'
 import { useProjectStore } from '@/stores/project'
 import { useTenantStore } from '@/stores/tenant'
+import { useFeatureDefinitionsStore } from '@/stores/featureDefinitions'
+import { getBreadcrumbSystemLayer } from '@/lib/breadcrumb-system-layer'
 
 import type { BreadcrumbItem } from '@/types'
 
@@ -26,9 +28,8 @@ export type { BreadcrumbItem }
 
 /**
  * 依當前路由 path 組出麵包屑
- * - 首頁 /：首頁
- * - /projects：首頁 > 專案列表
- * - /p/:projectId/...：首頁 > 專案列表 > [專案名稱] > [頁面名稱]
+ * - 第一層固定為「系統層」（工程／採購／人資／財務、租戶後台、平台管理），見 getBreadcrumbSystemLayer
+ * - 其下為功能階層（專案列表、專案內頁等）
  * - 設備詳情最後一層使用 store 的設備名稱
  */
 export function useBreadcrumb() {
@@ -42,6 +43,7 @@ export function useBreadcrumb() {
   const projectStore = useProjectStore()
 
   const tenantStore = useTenantStore()
+  const featureDefinitionsStore = useFeatureDefinitionsStore()
 
   watch(
     () => route.path,
@@ -65,11 +67,44 @@ export function useBreadcrumb() {
 
   const items = computed<BreadcrumbItem[]>(() => {
     const path = route.path
-    if (!path || path === '/') {
-      return [{ label: BREADCRUMB_LABELS['/'] ?? '首頁' }]
+    // 首頁（/portal、根路徑）不顯示麵包屑
+    if (!path || path === '/' || path === '/portal') {
+      return []
     }
 
     const segments = path.split('/').filter(Boolean)
+
+    // 租戶後台：自訂系統功能 新增／編輯
+    if (
+      segments[0] === 'admin' &&
+      segments[1] === 'tenant-feature-definitions' &&
+      segments.length === 3 &&
+      segments[2] === 'new'
+    ) {
+      return [
+        getBreadcrumbSystemLayer(path),
+        {
+          label: BREADCRUMB_LABELS['/admin/tenant-feature-definitions'] ?? '自訂系統功能',
+          to: '/admin/tenant-feature-definitions',
+        },
+        { label: '新增自訂功能' },
+      ]
+    }
+    if (
+      segments[0] === 'admin' &&
+      segments[1] === 'tenant-feature-definitions' &&
+      segments.length === 4 &&
+      segments[3] === 'edit'
+    ) {
+      return [
+        getBreadcrumbSystemLayer(path),
+        {
+          label: BREADCRUMB_LABELS['/admin/tenant-feature-definitions'] ?? '自訂系統功能',
+          to: '/admin/tenant-feature-definitions',
+        },
+        { label: '編輯自訂功能' },
+      ]
+    }
 
     // 租戶後台：電子表單 Builder /admin/electronic-form-definitions/:id/builder
     if (
@@ -84,8 +119,7 @@ export function useBreadcrumb() {
           ? '新增表單'
           : electronicFormBuilderBreadcrumbStore.currentTitle ?? '編輯表單'
       return [
-        { label: BREADCRUMB_LABELS['/'] ?? '首頁', to: '/' },
-        { label: BREADCRUMB_LABELS['/admin'] ?? '後台', to: '/admin/projects' },
+        getBreadcrumbSystemLayer(path),
         {
           label: BREADCRUMB_LABELS['/admin/electronic-form-definitions'] ?? '電子表單',
           to: '/admin/electronic-form-definitions',
@@ -103,8 +137,7 @@ export function useBreadcrumb() {
       const templateName =
         selfInspectionTemplateBreadcrumbStore.currentTitle ?? '樣板詳情'
       return [
-        { label: BREADCRUMB_LABELS['/'] ?? '首頁', to: '/' },
-        { label: BREADCRUMB_LABELS['/admin'] ?? '後台', to: '/admin/projects' },
+        getBreadcrumbSystemLayer(path),
         {
           label: BREADCRUMB_LABELS['/admin/self-inspection-templates'] ?? '自主檢查樣板',
           to: '/admin/self-inspection-templates',
@@ -117,8 +150,11 @@ export function useBreadcrumb() {
     if (segments[0] === 'platform-admin' && segments[1] === 'tenants' && segments.length === 3) {
       const tenantName = tenantStore.currentTenantName ?? segments[2]
       return [
-        { label: BREADCRUMB_LABELS['/'] ?? '首頁', to: '/' },
-        { label: BREADCRUMB_LABELS['/platform-admin/tenants'] ?? '租戶管理', to: '/platform-admin/tenants' },
+        getBreadcrumbSystemLayer(path),
+        {
+          label: BREADCRUMB_LABELS['/platform-admin/tenants'] ?? '租戶管理',
+          to: '/platform-admin/tenants',
+        },
         { label: tenantName },
       ]
     }
@@ -132,7 +168,7 @@ export function useBreadcrumb() {
       const toProject = `/p/${projectId}`
 
       const result: BreadcrumbItem[] = [
-        { label: BREADCRUMB_LABELS['/'] ?? '首頁', to: '/' },
+        getBreadcrumbSystemLayer(path),
         { label: BREADCRUMB_LABELS['/projects'] ?? '專案列表', to: '/projects' },
         { label: projectName, to: toProject },
       ]
@@ -204,7 +240,52 @@ export function useBreadcrumb() {
       return result
     }
 
-    // 非專案內：依 path 一層一層對 BREADCRUMB_LABELS
+    // 動態功能：/features/:featureId、/features/:featureId/:submissionId
+    if (segments[0] === 'features' && segments.length >= 2) {
+      const featureId = segments[1]
+      const featureLabel = featureDefinitionsStore.breadcrumbFeatureTitle ?? '自訂功能'
+      if (segments.length >= 3) {
+        return [
+          getBreadcrumbSystemLayer(path),
+          { label: featureLabel, to: `/features/${featureId}` },
+          { label: '紀錄詳情' },
+        ]
+      }
+      return [getBreadcrumbSystemLayer(path), { label: featureLabel }]
+    }
+
+    // 租戶後台：系統層已為「後台」，下層從 /admin 之後逐段堆疊（避免重複後台）
+    if (segments[0] === 'admin') {
+      if (segments.length === 1) {
+        return [getBreadcrumbSystemLayer(path)]
+      }
+      const adminTrail: BreadcrumbItem[] = []
+      let acc = '/admin'
+      for (let i = 1; i < segments.length; i++) {
+        acc += `/${segments[i]}`
+        const label = BREADCRUMB_LABELS[acc] ?? segments[i]
+        adminTrail.push(i === segments.length - 1 ? { label } : { label, to: acc })
+      }
+      return [getBreadcrumbSystemLayer(path), ...adminTrail]
+    }
+
+    // 平台管理：系統層已為「平台管理」，下層從 /platform-admin 之後逐段堆疊
+    if (segments[0] === 'platform-admin') {
+      if (segments.length === 1) {
+        return [getBreadcrumbSystemLayer(path)]
+      }
+      const platformTrail: BreadcrumbItem[] = []
+      let acc = '/platform-admin'
+      for (let i = 1; i < segments.length; i++) {
+        acc += `/${segments[i]}`
+        const label = BREADCRUMB_LABELS[acc] ?? segments[i]
+        platformTrail.push(i === segments.length - 1 ? { label } : { label, to: acc })
+      }
+      return [getBreadcrumbSystemLayer(path), ...platformTrail]
+    }
+
+    // 其餘（/projects、/procurement…）：完整 path 逐段對應標籤
+    const layer = getBreadcrumbSystemLayer(path)
     const result: BreadcrumbItem[] = []
     let acc = ''
     for (let i = 0; i < segments.length; i++) {
@@ -215,8 +296,12 @@ export function useBreadcrumb() {
       )
     }
 
-    const homeLabel = BREADCRUMB_LABELS['/'] ?? '首頁'
-    return [{ label: homeLabel, to: '/' }, ...result]
+    // 單段 path 且標籤與系統層相同（例：/procurement）不重複兩次
+    if (result.length === 1 && result[0].label === layer.label) {
+      return [{ label: layer.label }]
+    }
+
+    return [layer, ...result]
   })
 
   return { items }

@@ -14,7 +14,7 @@ const { items } = useBreadcrumb()
 </script>
 
 <template>
-  <Breadcrumb>
+  <Breadcrumb v-if="items.length > 0">
     <BreadcrumbList>
       <template v-for="(item, index) in items" :key="index">
         <BreadcrumbItem>

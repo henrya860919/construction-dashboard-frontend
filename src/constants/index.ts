@@ -1,5 +1,6 @@
 export * from './routes'
 export * from './api'
+export * from './modules'
 export * from './navigation'
 export * from './breadcrumb'
 export * from './audit'

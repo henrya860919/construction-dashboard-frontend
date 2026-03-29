@@ -26,6 +26,13 @@ export function buildMobileProjectPath(projectId: string, subPath: string): stri
 export const ROUTE_PATH = {
   HOME: '/',
   LOGIN: '/login',
+  /** 登入後首頁（四大模組入口；側欄不顯示） */
+  PORTAL: '/portal',
+  /** 租戶自建動態功能（列表／詳情） */
+  FEATURES: '/features',
+  PROCUREMENT: '/procurement',
+  HR: '/hr',
+  FINANCE: '/finance',
   /** 專案列表（獨立入口，選專案後進入 /p/:projectId/dashboard） */
   PROJECTS: '/projects',
   /** 手機版（PWA／現場查驗） */
@@ -113,6 +120,9 @@ export const ROUTE_PATH = {
   ADMIN_PROJECTS: '/admin/projects',
   ADMIN_MEMBERS: '/admin/members',
   ADMIN_FORM_TEMPLATES: '/admin/form-templates',
+  ADMIN_TENANT_FEATURE_DEFINITIONS: '/admin/tenant-feature-definitions',
+  ADMIN_TENANT_FEATURE_DEFINITION_NEW: '/admin/tenant-feature-definitions/new',
+  ADMIN_TENANT_FEATURE_DEFINITION_EDIT: '/admin/tenant-feature-definitions/:featureId/edit',
   ADMIN_ELECTRONIC_FORM_DEFINITIONS: '/admin/electronic-form-definitions',
   ADMIN_SELF_INSPECTION_TEMPLATES: '/admin/self-inspection-templates',
   ADMIN_SELF_INSPECTION_TEMPLATE_DETAIL: '/admin/self-inspection-templates/:templateId',
@@ -138,9 +148,17 @@ export function buildAdminElectronicFormBuilderPath(id: string): string {
   return `${ROUTE_PATH.ADMIN_ELECTRONIC_FORM_DEFINITIONS}/${encodeURIComponent(id)}/builder`
 }
 
+/** 租戶後台：編輯自訂系統功能 */
+export function buildAdminTenantFeatureDefinitionEditPath(featureId: string): string {
+  return `${ROUTE_PATH.ADMIN_TENANT_FEATURE_DEFINITIONS}/${encodeURIComponent(featureId)}/edit`
+}
+
 export const ROUTE_NAME = {
   HOME: 'home',
   LOGIN: 'login',
+  PORTAL: 'portal',
+  DYNAMIC_FEATURE_LIST: 'dynamic-feature-list',
+  DYNAMIC_FEATURE_DETAIL: 'dynamic-feature-detail',
   PROJECTS: 'projects',
   MOBILE: 'mobile',
   MOBILE_PROJECT_PICKER: 'mobile-project-picker',
@@ -211,6 +229,9 @@ export const ROUTE_NAME = {
   ADMIN_PROJECTS: 'admin-projects',
   ADMIN_MEMBERS: 'admin-members',
   ADMIN_FORM_TEMPLATES: 'admin-form-templates',
+  ADMIN_TENANT_FEATURE_DEFINITIONS: 'admin-tenant-feature-definitions',
+  ADMIN_TENANT_FEATURE_DEFINITION_NEW: 'admin-tenant-feature-definition-new',
+  ADMIN_TENANT_FEATURE_DEFINITION_EDIT: 'admin-tenant-feature-definition-edit',
   ADMIN_ELECTRONIC_FORM_DEFINITIONS: 'admin-electronic-form-definitions',
   ADMIN_ELECTRONIC_FORM_BUILDER: 'admin-electronic-form-builder',
   ADMIN_SELF_INSPECTION_TEMPLATES: 'admin-self-inspection-templates',

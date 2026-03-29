@@ -24,7 +24,7 @@ export type {
   SidebarPanelId,
 }
 
-/** Layer 1：未進專案時顯示（專案列表、後台管理由 AppSidebar 依權限動態加入） */
+/** Layer 1：未進專案時顯示（首頁改為 AppHeader，不在側欄） */
 export const LAYER1_ENTRIES: NavItem[] = [
   { id: 'projects', label: '專案列表', path: '/projects', icon: 'FolderKanban' },
 ]
@@ -317,6 +317,12 @@ export const ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
     label: '電子表單',
     path: '/admin/electronic-form-definitions',
     icon: 'FileSpreadsheet',
+  },
+  {
+    id: 'admin-tenant-feature-definitions',
+    label: '自訂系統功能',
+    path: '/admin/tenant-feature-definitions',
+    icon: 'Layers',
   },
   {
     id: 'admin-self-inspection-templates',

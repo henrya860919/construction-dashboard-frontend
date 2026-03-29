@@ -134,12 +134,34 @@ const router = createRouter({
       path: ROUTE_PATH.HOME,
       component: DefaultLayout,
       children: [
-        { path: '', name: ROUTE_NAME.HOME, redirect: ROUTE_PATH.PROJECTS },
+        { path: '', name: ROUTE_NAME.HOME, redirect: ROUTE_PATH.PORTAL },
+        {
+          path: 'portal',
+          name: ROUTE_NAME.PORTAL,
+          component: () => import('@/views/portal/PortalView.vue'),
+          meta: { title: '首頁', hideSidebar: true },
+        },
         {
           path: 'projects',
           name: ROUTE_NAME.PROJECTS,
           component: () => import('@/views/ProjectsView.vue'),
+          meta: { hideSidebar: true },
         },
+        {
+          path: 'features/:featureId/:submissionId',
+          name: ROUTE_NAME.DYNAMIC_FEATURE_DETAIL,
+          component: () => import('@/views/dynamic/DynamicFeatureDetailView.vue'),
+          meta: { hideSidebar: true },
+        },
+        {
+          path: 'features/:featureId',
+          name: ROUTE_NAME.DYNAMIC_FEATURE_LIST,
+          component: () => import('@/views/dynamic/DynamicFeatureListView.vue'),
+          meta: { hideSidebar: true },
+        },
+        { path: 'procurement', redirect: ROUTE_PATH.PORTAL },
+        { path: 'hr', redirect: ROUTE_PATH.PORTAL },
+        { path: 'finance', redirect: ROUTE_PATH.PORTAL },
         {
           path: 'lab/electronic-sheet-template',
           redirect: ROUTE_PATH.ADMIN_ELECTRONIC_FORM_DEFINITIONS,
@@ -442,6 +464,21 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminElectronicFormBuilderView.vue'),
         },
         {
+          path: 'admin/tenant-feature-definitions/new',
+          name: ROUTE_NAME.ADMIN_TENANT_FEATURE_DEFINITION_NEW,
+          component: () => import('@/views/admin/AdminTenantFeatureDefinitionFormView.vue'),
+        },
+        {
+          path: 'admin/tenant-feature-definitions/:featureId/edit',
+          name: ROUTE_NAME.ADMIN_TENANT_FEATURE_DEFINITION_EDIT,
+          component: () => import('@/views/admin/AdminTenantFeatureDefinitionFormView.vue'),
+        },
+        {
+          path: 'admin/tenant-feature-definitions',
+          name: ROUTE_NAME.ADMIN_TENANT_FEATURE_DEFINITIONS,
+          component: () => import('@/views/admin/AdminTenantFeatureDefinitionsView.vue'),
+        },
+        {
           path: 'admin/self-inspection-templates',
           name: ROUTE_NAME.ADMIN_SELF_INSPECTION_TEMPLATES,
           component: () => import('@/views/admin/AdminSelfInspectionTemplatesView.vue'),
@@ -528,7 +565,7 @@ router.beforeEach((to, _from, next) => {
       if (isMobileApp.value && !appPreference.preferDesktopOnMobile) {
         next(ROUTE_PATH.MOBILE)
       } else {
-        next(auth.isPlatformAdmin ? ROUTE_PATH.PLATFORM_ADMIN_TENANTS : ROUTE_PATH.PROJECTS)
+        next(auth.isPlatformAdmin ? ROUTE_PATH.PLATFORM_ADMIN_TENANTS : ROUTE_PATH.PORTAL)
       }
     } else {
       next()
@@ -542,7 +579,7 @@ router.beforeEach((to, _from, next) => {
   // 手機版路由：桌面裝置誤入則導回專案列表
   if (to.path.startsWith(ROUTE_PATH.MOBILE)) {
     if (!isMobileApp.value) {
-      next(ROUTE_PATH.PROJECTS)
+      next(ROUTE_PATH.PORTAL)
       return
     }
     next()
@@ -555,7 +592,7 @@ router.beforeEach((to, _from, next) => {
   }
   if (to.path.startsWith('/admin')) {
     if (!auth.canAccessAdmin) {
-      next(ROUTE_PATH.PROJECTS)
+      next(ROUTE_PATH.PORTAL)
       return
     }
     if (auth.isPlatformAdmin) {
@@ -564,7 +601,7 @@ router.beforeEach((to, _from, next) => {
     }
   }
   if (to.path.startsWith('/platform-admin') && !auth.isPlatformAdmin) {
-    next(ROUTE_PATH.PROJECTS)
+    next(ROUTE_PATH.PORTAL)
     return
   }
   next()

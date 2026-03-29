@@ -15,6 +15,11 @@ export const API_PATH = {
   AUTH_TENANT_BRANDING: `${API_V1}/auth/me/tenant-branding`,
   /** 當前使用者所屬租戶 Logo 圖片 */
   AUTH_TENANT_LOGO: `${API_V1}/auth/me/tenant-logo`,
+  /** 功能定義（ERP 動態側欄／Portal） */
+  FEATURE_DEFINITIONS_BY_MODULE: (module: string) =>
+    `${API_V1}/feature-definitions/by-module/${encodeURIComponent(module)}`,
+  FEATURE_DEFINITION: (id: string) =>
+    `${API_V1}/feature-definitions/${encodeURIComponent(id)}`,
   PROJECTS: `${API_V1}/projects`,
   /** 單租後台（需 admin 角色） */
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,
@@ -41,6 +46,9 @@ export const API_PATH = {
   ) =>
     `${API_V1}/admin/self-inspection-templates/${templateId}/blocks/${blockId}/items/${itemId}`,
   /** 電子表單定義（動態表單 Builder） */
+  ADMIN_TENANT_FEATURE_DEFINITIONS: `${API_V1}/admin/tenant-feature-definitions`,
+  ADMIN_TENANT_FEATURE_DEFINITION: (id: string) =>
+    `${API_V1}/admin/tenant-feature-definitions/${encodeURIComponent(id)}`,
   ADMIN_ELECTRONIC_FORM_DEFINITIONS: `${API_V1}/admin/electronic-form-definitions`,
   ADMIN_ELECTRONIC_FORM_DEFINITION: (id: string) =>
     `${API_V1}/admin/electronic-form-definitions/${id}`,

@@ -121,11 +121,14 @@ export const ROUTE_PATH = {
   ADMIN_TENANT_INFO: '/admin/tenant-info',
   ADMIN_PROJECTS: '/admin/projects',
   ADMIN_MEMBERS: '/admin/members',
-  /** 後台：組織架構（部門樹、指派；編輯為管理員） */
-  ADMIN_ORG: '/admin/org',
-  /** 編輯單筆內部成員之組織指派 */
-  ADMIN_ORG_ASSIGNMENT_EDIT: '/admin/org/assignments/:assignmentId/edit',
-  ADMIN_POSITIONS: '/admin/positions',
+  /** 人資：組織架構（部門樹、網路圖） */
+  HR_ORG: '/hr/org',
+  /** 人資：內部成員組織指派列表 */
+  HR_ORG_MEMBERS: '/hr/org/members',
+  /** 人資：編輯單筆組織指派 */
+  HR_ORG_ASSIGNMENT_EDIT: '/hr/org/assignments/:assignmentId/edit',
+  /** 人資：職位管理 */
+  HR_POSITIONS: '/hr/positions',
   ADMIN_FORM_TEMPLATES: '/admin/form-templates',
   ADMIN_TENANT_FEATURE_DEFINITIONS: '/admin/tenant-feature-definitions',
   ADMIN_TENANT_FEATURE_DEFINITION_NEW: '/admin/tenant-feature-definitions/new',
@@ -160,9 +163,9 @@ export function buildAdminTenantFeatureDefinitionEditPath(featureId: string): st
   return `${ROUTE_PATH.ADMIN_TENANT_FEATURE_DEFINITIONS}/${encodeURIComponent(featureId)}/edit`
 }
 
-/** 組織管理：編輯單筆指派 */
-export function buildAdminOrgAssignmentEditPath(assignmentId: string): string {
-  return `/admin/org/assignments/${encodeURIComponent(assignmentId)}/edit`
+/** 人資／組織：編輯單筆指派 */
+export function buildHrOrgAssignmentEditPath(assignmentId: string): string {
+  return `/hr/org/assignments/${encodeURIComponent(assignmentId)}/edit`
 }
 
 export const ROUTE_NAME = {
@@ -241,9 +244,10 @@ export const ROUTE_NAME = {
   ADMIN_TENANT_INFO: 'admin-tenant-info',
   ADMIN_PROJECTS: 'admin-projects',
   ADMIN_MEMBERS: 'admin-members',
-  ADMIN_ORG: 'admin-org',
-  ADMIN_ORG_ASSIGNMENT_EDIT: 'admin-org-assignment-edit',
-  ADMIN_POSITIONS: 'admin-positions',
+  HR_ORG: 'hr-org',
+  HR_ORG_MEMBERS: 'hr-org-members',
+  HR_ORG_ASSIGNMENT_EDIT: 'hr-org-assignment-edit',
+  HR_POSITIONS: 'hr-positions',
   ADMIN_FORM_TEMPLATES: 'admin-form-templates',
   ADMIN_TENANT_FEATURE_DEFINITIONS: 'admin-tenant-feature-definitions',
   ADMIN_TENANT_FEATURE_DEFINITION_NEW: 'admin-tenant-feature-definition-new',

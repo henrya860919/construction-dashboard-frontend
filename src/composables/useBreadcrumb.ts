@@ -254,8 +254,8 @@ export function useBreadcrumb() {
       return [getBreadcrumbSystemLayer(path), { label: featureLabel }]
     }
 
-    // 租戶後台：系統層已為「後台」，下層從 /admin 之後逐段堆疊（避免重複後台）
-    if (segments[0] === 'admin') {
+    // 人資：系統層為「人資管理」，下層從 /hr 之後逐段堆疊
+    if (segments[0] === 'hr') {
       if (
         segments[1] === 'org' &&
         segments[2] === 'assignments' &&
@@ -265,12 +265,27 @@ export function useBreadcrumb() {
         return [
           getBreadcrumbSystemLayer(path),
           {
-            label: BREADCRUMB_LABELS['/admin/org'] ?? '組織管理',
-            to: '/admin/org?tab=people',
+            label: BREADCRUMB_LABELS['/hr/org/members'] ?? '組織成員',
+            to: '/hr/org/members',
           },
           { label: '組織指派詳情' },
         ]
       }
+      if (segments.length === 1) {
+        return [getBreadcrumbSystemLayer(path)]
+      }
+      const hrTrail: BreadcrumbItem[] = []
+      let accHr = '/hr'
+      for (let i = 1; i < segments.length; i++) {
+        accHr += `/${segments[i]}`
+        const label = BREADCRUMB_LABELS[accHr] ?? segments[i]
+        hrTrail.push(i === segments.length - 1 ? { label } : { label, to: accHr })
+      }
+      return [getBreadcrumbSystemLayer(path), ...hrTrail]
+    }
+
+    // 租戶後台：系統層已為「後台」，下層從 /admin 之後逐段堆疊（避免重複後台）
+    if (segments[0] === 'admin') {
       if (segments.length === 1) {
         return [getBreadcrumbSystemLayer(path)]
       }

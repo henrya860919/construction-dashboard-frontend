@@ -166,7 +166,6 @@ const router = createRouter({
           meta: { hideSidebar: true },
         },
         { path: 'procurement', redirect: ROUTE_PATH.PORTAL },
-        { path: 'hr', redirect: ROUTE_PATH.PORTAL },
         { path: 'finance', redirect: ROUTE_PATH.PORTAL },
         {
           path: 'lab/electronic-sheet-template',
@@ -455,24 +454,42 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminMembersView.vue'),
           meta: { title: '租戶成員' },
         },
+        /** 人資：組織與職位（原 /admin/org、/admin/positions） */
+        { path: 'hr', redirect: ROUTE_PATH.HR_ORG },
         {
-          path: 'admin/org',
-          name: ROUTE_NAME.ADMIN_ORG,
-          component: () => import('@/views/admin/AdminOrgView.vue'),
-          meta: { title: '組織管理' },
+          path: 'hr/org/members',
+          name: ROUTE_NAME.HR_ORG_MEMBERS,
+          component: () => import('@/views/admin/AdminOrgMembersView.vue'),
+          meta: { title: '組織成員' },
         },
         {
-          path: 'admin/org/assignments/:assignmentId/edit',
-          name: ROUTE_NAME.ADMIN_ORG_ASSIGNMENT_EDIT,
+          path: 'hr/org/assignments/:assignmentId/edit',
+          name: ROUTE_NAME.HR_ORG_ASSIGNMENT_EDIT,
           component: () => import('@/views/admin/AdminOrgAssignmentEditView.vue'),
           meta: { title: '組織指派詳情' },
         },
         {
-          path: 'admin/positions',
-          name: ROUTE_NAME.ADMIN_POSITIONS,
+          path: 'hr/org',
+          name: ROUTE_NAME.HR_ORG,
+          component: () => import('@/views/admin/AdminOrgView.vue'),
+          meta: { title: '組織管理' },
+        },
+        {
+          path: 'hr/positions',
+          name: ROUTE_NAME.HR_POSITIONS,
           component: () => import('@/views/admin/AdminPositionsView.vue'),
           meta: { title: '職位管理' },
         },
+        /** 舊網址導向人資 */
+        { path: 'admin/org/members', redirect: ROUTE_PATH.HR_ORG_MEMBERS },
+        {
+          path: 'admin/org/assignments/:assignmentId/edit',
+          redirect: (to) => ({
+            path: `/hr/org/assignments/${String(to.params.assignmentId)}/edit`,
+          }),
+        },
+        { path: 'admin/org', redirect: ROUTE_PATH.HR_ORG },
+        { path: 'admin/positions', redirect: ROUTE_PATH.HR_POSITIONS },
         {
           path: 'admin/form-templates',
           name: ROUTE_NAME.ADMIN_FORM_TEMPLATES,
@@ -615,7 +632,7 @@ router.beforeEach((to, _from, next) => {
     next(ROUTE_PATH.MOBILE)
     return
   }
-  if (to.path.startsWith('/admin')) {
+  if (to.path.startsWith('/admin') || to.path.startsWith('/hr')) {
     if (!auth.canAccessAdmin) {
       next(ROUTE_PATH.PORTAL)
       return

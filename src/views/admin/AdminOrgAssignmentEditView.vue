@@ -97,10 +97,7 @@ const hasAnyPositions = computed(
   () => positionsGrouped.value.deptOnly.length + positionsGrouped.value.shared.length > 0
 )
 
-const backToOrgPeople = computed(() => ({
-  path: ROUTE_PATH.ADMIN_ORG,
-  query: { tab: 'people' },
-}))
+const backToOrgMembers = computed(() => ({ path: ROUTE_PATH.HR_ORG_MEMBERS }))
 
 const assignmentDetailGrid = computed(() => {
   const a = assignment.value
@@ -264,7 +261,7 @@ async function confirmRemove() {
   try {
     await adminRemoveOrgAssignment(aid, tid)
     removeOpen.value = false
-    await router.push(backToOrgPeople.value)
+    await router.push(backToOrgMembers.value)
   } catch (e: unknown) {
     const ax = e as { response?: { data?: { error?: { message?: string } } } }
     removeError.value = ax.response?.data?.error?.message ?? '刪除失敗'
@@ -283,9 +280,9 @@ function approvalLabel(limit: string | null) {
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <Button variant="outline" type="button" class="gap-2" as-child>
-        <RouterLink :to="backToOrgPeople">
+        <RouterLink :to="backToOrgMembers">
           <ArrowLeft class="size-4" aria-hidden="true" />
-          返回組織管理（成員）
+          返回組織成員
         </RouterLink>
       </Button>
     </div>
@@ -311,9 +308,9 @@ function approvalLabel(limit: string | null) {
     >
       <p class="text-sm text-destructive">{{ loadError || '無法顯示此指派' }}</p>
       <Button variant="outline" type="button" class="mt-4 gap-2" as-child>
-        <RouterLink :to="backToOrgPeople">
+        <RouterLink :to="backToOrgMembers">
           <ArrowLeft class="size-4" aria-hidden="true" />
-          返回組織管理（成員）
+          返回組織成員
         </RouterLink>
       </Button>
     </div>

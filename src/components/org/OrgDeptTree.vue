@@ -2,7 +2,6 @@
 import { computed, inject } from 'vue'
 import type { OrgDeptTreeNode } from '@/api/organization'
 import { orgDeptAdminKey } from '@/composables/org-dept-admin-context'
-import { orgDeptDetailKey } from '@/composables/org-dept-detail-context'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,12 +19,7 @@ defineProps<{
 }>()
 
 const admin = inject(orgDeptAdminKey, undefined)
-const detail = inject(orgDeptDetailKey, undefined)
 const showDeptAdmin = computed(() => !!admin && !admin.disabled.value)
-
-function onOpenDeptDetail(node: OrgDeptTreeNode) {
-  detail?.openDetail(node)
-}
 
 function onEditDept(d: OrgDeptTreeNode) {
   admin?.edit(d)
@@ -44,15 +38,8 @@ function onDeleteDept(d: OrgDeptTreeNode) {
     "
   >
     <li v-for="d in nodes" :key="d.id" class="space-y-2">
-      <div class="relative rounded-lg border border-border bg-card px-3 py-2 text-sm">
-        <button
-          type="button"
-          class="absolute inset-0 z-0 rounded-lg text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          @click="onOpenDeptDetail(d)"
-        >
-          <span class="sr-only">查看「{{ d.name }}」部門詳情</span>
-        </button>
-        <div class="pointer-events-none relative z-[1] flex flex-wrap items-start gap-2">
+      <div class="rounded-lg border border-border bg-card px-3 py-2 text-sm">
+        <div class="flex flex-wrap items-start gap-2">
           <div class="min-w-0 flex-1 space-y-1 px-1 py-0.5 text-left">
             <div class="flex flex-wrap items-center gap-2">
               <span aria-hidden="true">{{ d.icon }}</span>
@@ -63,7 +50,7 @@ function onDeleteDept(d: OrgDeptTreeNode) {
               </Badge>
             </div>
           </div>
-          <div v-if="showDeptAdmin" class="pointer-events-auto shrink-0">
+          <div v-if="showDeptAdmin" class="shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
                 <Button
@@ -95,7 +82,7 @@ function onDeleteDept(d: OrgDeptTreeNode) {
         </div>
         <ul
           v-if="d.members.length"
-          class="pointer-events-none relative z-[1] mt-2 w-full space-y-1 border-t border-border pt-2 text-left text-muted-foreground"
+          class="mt-2 w-full space-y-1 border-t border-border pt-2 text-left text-muted-foreground"
         >
           <li
             v-for="m in d.members"

@@ -13,6 +13,7 @@ import type {
   NavLayer2Item,
   SidebarPanelId,
 } from '@/types/navigation'
+import { ROUTE_PATH } from './routes'
 
 export type {
   NavItem,
@@ -302,19 +303,23 @@ export const GLOBAL_SIDEBAR_ENTRIES: NavItem[] = [
   { id: 'org', label: '組織架構', path: '/org', icon: 'Building2' },
 ]
 
-/** 單租後台側欄：組織圖／職位等（標題「組織」） */
-export const ADMIN_SIDEBAR_GROUPS: NavGroup[] = [
+/** 人資模組側欄：組織（組織圖、成員、職位） */
+export const HR_SIDEBAR_GROUPS: NavGroup[] = [
   {
-    id: 'admin-org-section',
+    id: 'hr-org-section',
     label: '組織',
     children: [
-      { id: 'admin-org', label: '組織管理', path: '/admin/org', icon: 'Building2' },
-      { id: 'admin-positions', label: '職位管理', path: '/admin/positions', icon: 'Briefcase' },
+      { id: 'hr-org', label: '組織管理', path: ROUTE_PATH.HR_ORG, icon: 'Building2' },
+      { id: 'hr-org-members', label: '組織成員', path: ROUTE_PATH.HR_ORG_MEMBERS, icon: 'UserCircle' },
+      { id: 'hr-positions', label: '職位管理', path: ROUTE_PATH.HR_POSITIONS, icon: 'Briefcase' },
     ],
   },
 ]
 
-/** 單租後台側欄（廠商管理員點「後台管理」後顯示）；組織管理／職位管理見 {@link ADMIN_SIDEBAR_GROUPS} */
+/** 單租後台側欄分組（組織已移至人資 {@link HR_SIDEBAR_GROUPS}） */
+export const ADMIN_SIDEBAR_GROUPS: NavGroup[] = []
+
+/** 單租後台側欄（廠商管理員點「後台管理」後顯示） */
 export const ADMIN_SIDEBAR_ENTRIES: NavItem[] = [
   { id: 'admin-tenant-info', label: '租戶資訊', path: '/admin/tenant-info', icon: 'Info' },
   { id: 'admin-projects', label: '專案管理', path: '/admin/projects', icon: 'FolderKanban' },

@@ -7,7 +7,7 @@ import { ROUTE_PATH } from '@/constants'
 
 const navItems = [
   { path: ROUTE_PATH.ADMIN_PROJECTS, label: '專案管理', icon: FolderKanban },
-  { path: ROUTE_PATH.ADMIN_ORG, label: '組織管理', icon: Building2 },
+  { path: ROUTE_PATH.HR_ORG, label: '組織管理', icon: Building2 },
   { path: ROUTE_PATH.ADMIN_TENANT_FEATURE_DEFINITIONS, label: '自訂系統功能', icon: Layers },
   { path: ROUTE_PATH.ADMIN_SETTINGS, label: '公司設定', icon: Settings },
 ]

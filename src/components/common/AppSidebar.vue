@@ -43,6 +43,7 @@ import {
   TrendingUp,
   Layers,
   Briefcase,
+  UserCircle,
   type LucideIcon,
 } from 'lucide-vue-next'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -56,6 +57,7 @@ import {
   LAYER3_REPAIR,
   ADMIN_SIDEBAR_ENTRIES,
   ADMIN_SIDEBAR_GROUPS,
+  HR_SIDEBAR_GROUPS,
   PLATFORM_ADMIN_SIDEBAR_GROUPS,
 } from '@/constants/navigation'
 import { buildProjectPath, ROUTE_PATH } from '@/constants/routes'
@@ -109,6 +111,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   TrendingUp,
   Layers,
   Briefcase,
+  UserCircle,
 }
 
 withDefaults(
@@ -167,6 +170,7 @@ const drillPanelHasVisibleItems = computed(() => ({
 
 const isPlatformAdminScope = computed(() => route.path.startsWith('/platform-admin'))
 const isAdminScope = computed(() => route.path.startsWith('/admin'))
+const isHrScope = computed(() => route.path.startsWith('/hr'))
 const isDynamicFeatureScope = computed(() => route.path.startsWith('/features/'))
 
 const tenantCustomNavItems = computed(() => featureDefinitionsStore.engineeringTenantFeatures)
@@ -207,6 +211,45 @@ watch(
 
 function isItemActive(path: string) {
   return route.path === path || (path !== '/' && route.path.startsWith(path))
+}
+
+/** 單租後台側欄所有連結 path（最長前綴決定 active） */
+const adminSidebarNavPaths = computed(() => {
+  const fromEntries = ADMIN_SIDEBAR_ENTRIES.map((i) => i.path)
+  const fromGroups = ADMIN_SIDEBAR_GROUPS.flatMap((g) => g.children.map((c) => c.path))
+  return [...new Set([...fromEntries, ...fromGroups])]
+})
+
+const hrSidebarNavPaths = computed(() =>
+  [...new Set(HR_SIDEBAR_GROUPS.flatMap((g) => g.children.map((c) => c.path)))]
+)
+
+/** 組織指派編輯頁歸在「組織成員」底下（人資） */
+function hrSidebarRouteMatchKey(path: string): string {
+  if (path.startsWith(`${ROUTE_PATH.HR_ORG}/assignments/`)) {
+    return ROUTE_PATH.HR_ORG_MEMBERS
+  }
+  return path
+}
+
+function isHrSidebarItemActive(itemPath: string): boolean {
+  const key = hrSidebarRouteMatchKey(route.path)
+  const matches = hrSidebarNavPaths.value.filter(
+    (p) => key === p || (p !== '/' && key.startsWith(`${p}/`))
+  )
+  if (matches.length === 0) return false
+  const longest = matches.reduce((a, b) => (a.length >= b.length ? a : b))
+  return itemPath === longest
+}
+
+function isAdminSidebarItemActive(itemPath: string): boolean {
+  const key = route.path
+  const matches = adminSidebarNavPaths.value.filter(
+    (p) => key === p || (p !== '/' && key.startsWith(`${p}/`))
+  )
+  if (matches.length === 0) return false
+  const longest = matches.reduce((a, b) => (a.length >= b.length ? a : b))
+  return itemPath === longest
 }
 
 function isPlatformItemActive(path: string) {
@@ -397,7 +440,7 @@ function isTenantFeatureNavActive(featureId: string): boolean {
                   :class="
                     cn(
                       'h-9 w-9 shrink-0 justify-center rounded-md',
-                      isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                      isAdminSidebarItemActive(item.path) && 'bg-accent text-accent-foreground'
                     )
                   "
                   @click="router.push(item.path)"
@@ -413,7 +456,7 @@ function isTenantFeatureNavActive(featureId: string): boolean {
               :class="
                 cn(
                   'h-9 w-full justify-start gap-3 rounded-md px-3',
-                  isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                  isAdminSidebarItemActive(item.path) && 'bg-accent text-accent-foreground'
                 )
               "
               @click="router.push(item.path)"
@@ -444,7 +487,7 @@ function isTenantFeatureNavActive(featureId: string): boolean {
                       :class="
                         cn(
                           'h-9 w-9 shrink-0 justify-center rounded-md',
-                          isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                          isAdminSidebarItemActive(item.path) && 'bg-accent text-accent-foreground'
                         )
                       "
                       @click="router.push(item.path)"
@@ -463,7 +506,63 @@ function isTenantFeatureNavActive(featureId: string): boolean {
                   :class="
                     cn(
                       'h-9 w-full justify-start gap-3 rounded-md px-3',
-                      isItemActive(item.path) && 'bg-accent text-accent-foreground'
+                      isAdminSidebarItemActive(item.path) && 'bg-accent text-accent-foreground'
+                    )
+                  "
+                  @click="router.push(item.path)"
+                >
+                  <component :is="ICON_MAP[item.icon] ?? LayoutDashboard" class="size-4 shrink-0" />
+                  <span class="truncate">{{ item.label }}</span>
+                </Button>
+              </div>
+            </div>
+          </template>
+        </template>
+
+        <!-- 人資模組：組織／職位 -->
+        <template v-else-if="isHrScope">
+          <template v-for="group in HR_SIDEBAR_GROUPS" :key="group.id">
+            <div class="space-y-1">
+              <div
+                v-show="!collapsed"
+                class="px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+              >
+                {{ group.label }}
+              </div>
+              <div
+                v-for="item in group.children"
+                :key="item.id"
+                class="flex min-h-9 items-center rounded-md"
+                :class="collapsed ? 'justify-center' : 'pl-3'"
+              >
+                <Tooltip v-if="collapsed">
+                  <TooltipTrigger as-child>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      :class="
+                        cn(
+                          'h-9 w-9 shrink-0 justify-center rounded-md',
+                          isHrSidebarItemActive(item.path) && 'bg-accent text-accent-foreground'
+                        )
+                      "
+                      @click="router.push(item.path)"
+                    >
+                      <component
+                        :is="ICON_MAP[item.icon] ?? LayoutDashboard"
+                        class="size-4 shrink-0"
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{{ item.label }}</TooltipContent>
+                </Tooltip>
+                <Button
+                  v-else
+                  variant="ghost"
+                  :class="
+                    cn(
+                      'h-9 w-full justify-start gap-3 rounded-md px-3',
+                      isHrSidebarItemActive(item.path) && 'bg-accent text-accent-foreground'
                     )
                   "
                   @click="router.push(item.path)"

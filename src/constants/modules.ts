@@ -39,8 +39,8 @@ export const SYSTEM_MODULES: SystemModule[] = [
     name: '人資管理',
     icon: 'Users',
     path: '/hr',
-    description: '員工、出勤、薪資',
-    available: false,
+    description: '組織、職位、員工',
+    available: true,
   },
   {
     key: 'finance',

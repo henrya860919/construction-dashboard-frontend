@@ -38,7 +38,7 @@ import AdminMembersRowActions from '@/views/admin/AdminMembersRowActions.vue'
 import AdminOrgAssignmentDialog from '@/components/org/AdminOrgAssignmentDialog.vue'
 import PermissionMatrixForm from '@/components/common/PermissionMatrixForm.vue'
 import type { AdminUserItem } from '@/types'
-import { Plus, Loader2, Trash2 } from 'lucide-vue-next'
+import { Plus, Loader2, Trash2, Download, Upload } from 'lucide-vue-next'
 import {
   fetchTenantPermissionTemplate,
   replaceTenantPermissionTemplate,
@@ -52,7 +52,14 @@ import {
   effectivePlatformDisabledModuleIds,
   type PermissionModuleId,
 } from '@/constants/permission-modules'
-import { getAdminTenantModuleEntitlements } from '@/api/admin'
+import {
+  bulkImportTenantMembers,
+  downloadTenantMembersImportTemplate,
+  getAdminTenantModuleEntitlements,
+} from '@/api/admin'
+import { parseTenantMembersImportFile } from '@/lib/tenant-members-import'
+import { getApiErrorMessage } from '@/lib/api-error'
+import { toast } from '@/components/ui/sonner'
 
 type SystemRoleOption = 'project_user' | 'tenant_admin' | 'platform_admin'
 type MemberTypeOption = 'internal' | 'external'
@@ -633,6 +640,103 @@ async function savePermissionTemplate() {
   }
 }
 
+const importDialogOpen = ref(false)
+const importFileInputRef = ref<HTMLInputElement | null>(null)
+const importFileName = ref('')
+const importRows = ref<Record<string, unknown>[]>([])
+const importParseError = ref('')
+const importSubmitting = ref(false)
+const importResult = ref<{
+  created: number
+  failed: { rowNumber: number; email: string; message: string }[]
+} | null>(null)
+
+function resetImportState() {
+  importFileName.value = ''
+  importRows.value = []
+  importParseError.value = ''
+  importSubmitting.value = false
+  importResult.value = null
+  if (importFileInputRef.value) importFileInputRef.value.value = ''
+}
+
+function openImportDialog() {
+  if (authStore.isPlatformAdmin && !adminStore.selectedTenantId) {
+    toast.error('請先於後台頂部選擇租戶')
+    return
+  }
+  resetImportState()
+  importDialogOpen.value = true
+}
+
+function onImportDialogOpenChange(open: boolean) {
+  importDialogOpen.value = open
+  if (!open) resetImportState()
+}
+
+async function handleDownloadMemberTemplate() {
+  try {
+    const blob = await downloadTenantMembersImportTemplate()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '租戶成員匯入樣板.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('已下載樣板')
+  } catch (e: unknown) {
+    toast.error('下載樣板失敗', { description: getApiErrorMessage(e) })
+  }
+}
+
+function triggerPickImportFile() {
+  importFileInputRef.value?.click()
+}
+
+async function onImportFileSelected(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  importParseError.value = ''
+  importResult.value = null
+  if (!file) {
+    importFileName.value = ''
+    importRows.value = []
+    return
+  }
+  importFileName.value = file.name
+  try {
+    const parsed = await parseTenantMembersImportFile(file)
+    if (parsed.error) {
+      importParseError.value = parsed.error
+      importRows.value = []
+      return
+    }
+    importRows.value = parsed.rows
+  } catch {
+    importParseError.value = '無法讀取檔案'
+    importRows.value = []
+  }
+}
+
+async function submitBulkImport() {
+  if (importRows.value.length === 0) return
+  importSubmitting.value = true
+  importResult.value = null
+  try {
+    const tid = authStore.isPlatformAdmin ? adminStore.selectedTenantId ?? undefined : undefined
+    const { created, failed } = await bulkImportTenantMembers(importRows.value, tid)
+    importResult.value = { created: created.length, failed }
+    await loadMembers()
+    toast.success(
+      `匯入完成：成功 ${created.length} 筆${failed.length > 0 ? `，失敗 ${failed.length} 筆` : ''}`
+    )
+  } catch (e: unknown) {
+    toast.error('匯入失敗', { description: getApiErrorMessage(e) })
+  } finally {
+    importSubmitting.value = false
+  }
+}
+
 async function confirmBatchDelete() {
   const ids = selectedRows.value.map((r) => r.original.id)
   if (!ids.length) return
@@ -703,6 +807,95 @@ async function confirmBatchDelete() {
                   </Button>
                 </ButtonGroup>
               </template>
+              <input
+                ref="importFileInputRef"
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                class="sr-only"
+                @change="onImportFileSelected"
+              />
+              <Button variant="outline" size="sm" class="gap-2" @click="openImportDialog">
+                <Upload class="size-4" />
+                匯入成員
+              </Button>
+              <Dialog :open="importDialogOpen" @update:open="onImportDialogOpenChange">
+                <DialogContent class="flex max-h-[90vh] max-w-lg flex-col gap-4 overflow-hidden sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>批次匯入成員</DialogTitle>
+                    <DialogDescription>
+                      請下載 Excel 樣板（中文欄位）填寫後上傳。必填：<span class="font-medium text-foreground"
+                        >電子郵件</span
+                      >、<span class="font-medium text-foreground">密碼</span>（至少 6 碼）；選填：<span
+                        class="font-medium text-foreground"
+                        >姓名</span
+                      >。批次匯入一律建立為<span class="font-medium text-foreground">系統使用者</span>、<span
+                        class="font-medium text-foreground"
+                        >內部成員</span
+                      >；若需租戶管理員、外部成員等，請匯入後於成員列表再調整。請刪除樣板中的範例列再匯入。亦支援
+                      .csv。單次最多 500 筆。
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div class="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" class="gap-2" @click="handleDownloadMemberTemplate">
+                      <Download class="size-4" />
+                      下載樣板
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" class="gap-2" @click="triggerPickImportFile">
+                      <Upload class="size-4" />
+                      選擇檔案
+                    </Button>
+                  </div>
+                  <p v-if="importFileName" class="text-sm text-muted-foreground">
+                    已選檔案：{{ importFileName }}
+                  </p>
+                  <p v-if="importRows.length > 0 && !importParseError" class="text-sm text-foreground">
+                    已解析 {{ importRows.length }} 筆，可按下「開始匯入」。
+                  </p>
+                  <p v-if="importParseError" class="text-sm text-destructive">{{ importParseError }}</p>
+                  <p v-if="importResult" class="text-sm text-foreground">
+                    成功 {{ importResult.created }} 筆<span v-if="importResult.failed.length === 0">，無失敗列。</span>
+                  </p>
+                  <div
+                    v-if="importResult && importResult.failed.length > 0"
+                    class="min-h-0 flex-1 overflow-y-auto rounded-md border border-border"
+                  >
+                    <p class="border-b border-border bg-muted/40 px-3 py-2 text-sm font-medium text-foreground">
+                      失敗列（共 {{ importResult.failed.length }} 筆）
+                    </p>
+                    <table class="w-full text-left text-sm">
+                      <thead>
+                        <tr class="border-b border-border text-muted-foreground">
+                          <th class="px-3 py-2 font-medium">列號</th>
+                          <th class="px-3 py-2 font-medium">Email</th>
+                          <th class="px-3 py-2 font-medium">原因</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="f in importResult.failed"
+                          :key="f.rowNumber + f.email + f.message"
+                          class="border-b border-border last:border-0"
+                        >
+                          <td class="px-3 py-2 tabular-nums text-foreground">{{ f.rowNumber }}</td>
+                          <td class="px-3 py-2 text-foreground">{{ f.email || '—' }}</td>
+                          <td class="px-3 py-2 text-destructive">{{ f.message }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <DialogFooter class="gap-2 sm:justify-end">
+                    <Button type="button" variant="outline" @click="importDialogOpen = false">關閉</Button>
+                    <Button
+                      type="button"
+                      :disabled="importRows.length === 0 || !!importParseError || importSubmitting"
+                      @click="submitBulkImport"
+                    >
+                      <Loader2 v-if="importSubmitting" class="mr-2 size-4 animate-spin" />
+                      {{ importSubmitting ? '匯入中…' : '開始匯入' }}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               <Dialog :open="dialogOpen" @update:open="onOpenChange">
                 <DialogTrigger as-child>
                   <Button size="sm" class="gap-2">

@@ -12,6 +12,7 @@ import type {
   SidebarEntry,
   NavLayer2Item,
   SidebarPanelId,
+  Layer3ConstructionEntry,
 } from '@/types/navigation'
 import { ROUTE_PATH } from './routes'
 
@@ -23,6 +24,7 @@ export type {
   SidebarEntry,
   NavLayer2Item,
   SidebarPanelId,
+  Layer3ConstructionEntry,
 }
 
 /** Layer 1：未進專案時顯示（首頁改為 AppHeader，不在側欄） */
@@ -116,8 +118,12 @@ export const LAYER3_PROJECT_MGMT: NavItemProject[] = [
   },
 ]
 
-/** Layer 3-B：施工管理（監測、上傳、設備、自主檢查、施工日誌、缺失改善、圖說管理、報表、照片） */
-export const LAYER3_CONSTRUCTION: NavItemProject[] = [
+/**
+ * Layer 3-B：施工管理
+ * 監測 → 執行 → 檔案 → 其餘（進度／估驗／PCCES）無群組標題
+ */
+export const LAYER3_CONSTRUCTION: Layer3ConstructionEntry[] = [
+  { type: 'group', label: '監測' },
   {
     id: 'monitoring-history',
     label: '監測數據',
@@ -125,7 +131,9 @@ export const LAYER3_CONSTRUCTION: NavItemProject[] = [
     icon: 'Activity',
   },
   { id: 'monitoring-upload', label: '數據上傳', pathSuffix: '/monitoring/upload', icon: 'Upload' },
-  { id: 'monitoring-devices', label: '設備管理', pathSuffix: '/monitoring/devices', icon: 'Cpu' },
+  { id: 'monitoring-devices', label: '監測設備', pathSuffix: '/monitoring/devices', icon: 'Cpu' },
+  { id: 'monitoring-reports', label: '報表', pathSuffix: '/monitoring/reports', icon: 'FileText' },
+  { type: 'group', label: '執行' },
   {
     id: 'construction-self-check',
     label: '自主檢查',
@@ -133,16 +141,30 @@ export const LAYER3_CONSTRUCTION: NavItemProject[] = [
     icon: 'ClipboardCheck',
   },
   {
-    id: 'construction-progress',
-    label: '進度管理',
-    pathSuffix: '/construction/progress',
-    icon: 'TrendingUp',
-  },
-  {
     id: 'construction-diary',
     label: '施工日誌',
     pathSuffix: '/construction/diary',
     icon: 'BookOpen',
+  },
+  {
+    id: 'construction-defects',
+    label: '缺失改善',
+    pathSuffix: '/construction/defects',
+    icon: 'AlertCircle',
+  },
+  { type: 'group', label: '檔案' },
+  { id: 'files-photos', label: '照片管理', pathSuffix: '/files/photos', icon: 'Image' },
+  {
+    id: 'construction-drawings',
+    label: '圖說管理',
+    pathSuffix: '/construction/drawings',
+    icon: 'DraftingCompass',
+  },
+  {
+    id: 'construction-progress',
+    label: '進度管理',
+    pathSuffix: '/construction/progress',
+    icon: 'TrendingUp',
   },
   {
     id: 'construction-valuation',
@@ -156,20 +178,6 @@ export const LAYER3_CONSTRUCTION: NavItemProject[] = [
     pathSuffix: '/construction/diary/pcces/versions',
     icon: 'FileSpreadsheet',
   },
-  {
-    id: 'construction-defects',
-    label: '缺失改善',
-    pathSuffix: '/construction/defects',
-    icon: 'AlertCircle',
-  },
-  {
-    id: 'construction-drawings',
-    label: '圖說管理',
-    pathSuffix: '/construction/drawings',
-    icon: 'DraftingCompass',
-  },
-  { id: 'monitoring-reports', label: '報表', pathSuffix: '/monitoring/reports', icon: 'FileText' },
-  { id: 'files-photos', label: '照片管理', pathSuffix: '/files/photos', icon: 'Image' },
 ]
 
 /** Layer 3-C：報修管理（總覽、報修紀錄表） */

@@ -19,6 +19,11 @@ export interface NavItemProject {
   icon: string
 }
 
+/** 施工管理 Layer 3：群組標籤 + 連結列（與 NavItemProject 交錯） */
+export type NavLayer3Group = { type: 'group'; label: string }
+
+export type Layer3ConstructionEntry = NavItemProject | NavLayer3Group
+
 export interface NavGroup {
   id: string
   label: string

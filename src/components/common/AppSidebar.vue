@@ -69,6 +69,11 @@ import { useSidebarStore } from '@/stores/sidebar'
 import { getProject } from '@/api/project'
 import { cn } from '@/lib/utils'
 import { useFeatureDefinitionsStore } from '@/stores/featureDefinitions'
+import type { Layer3ConstructionEntry, NavItemProject } from '@/types/navigation'
+
+type Layer3ListEntry =
+  | { kind: 'group'; label: string }
+  | { kind: 'link'; item: NavItemProject }
 
 const ICON_MAP: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -162,9 +167,17 @@ function isProjectNavPathVisible(pathSuffix: string): boolean {
   return canReadPath(pathSuffix)
 }
 
+function isLayer3ConstructionGroup(
+  e: Layer3ConstructionEntry
+): e is { type: 'group'; label: string } {
+  return 'type' in e && e.type === 'group'
+}
+
 const drillPanelHasVisibleItems = computed(() => ({
   'project-mgmt': LAYER3_PROJECT_MGMT.some((c) => isProjectNavPathVisible(c.pathSuffix)),
-  construction: LAYER3_CONSTRUCTION.some((c) => isProjectNavPathVisible(c.pathSuffix)),
+  construction: LAYER3_CONSTRUCTION.some(
+    (c) => !isLayer3ConstructionGroup(c) && isProjectNavPathVisible(c.pathSuffix)
+  ),
   repair: LAYER3_REPAIR.some((c) => isProjectNavPathVisible(c.pathSuffix)),
 }))
 
@@ -289,38 +302,77 @@ function goToProjectPath(pathSuffix: string) {
   }
 }
 
-/** Layer 3 目前列表（依權限過濾 read） */
-const layer3Items = computed(() => {
+/** Layer 3 目前列表（依權限過濾 read；施工管理含群組標題） */
+const layer3Items = computed((): Layer3ListEntry[] => {
   const panel = sidebarStore.currentPanel
-  const raw =
-    panel === 'project-mgmt'
-      ? LAYER3_PROJECT_MGMT
-      : panel === 'construction'
-        ? LAYER3_CONSTRUCTION
-        : panel === 'repair'
-          ? LAYER3_REPAIR
-          : []
-  return raw.filter((c) => isProjectNavPathVisible(c.pathSuffix))
+  if (panel === 'project-mgmt') {
+    return LAYER3_PROJECT_MGMT.filter((c) => isProjectNavPathVisible(c.pathSuffix)).map((item) => ({
+      kind: 'link' as const,
+      item,
+    }))
+  }
+  if (panel === 'repair') {
+    return LAYER3_REPAIR.filter((c) => isProjectNavPathVisible(c.pathSuffix)).map((item) => ({
+      kind: 'link' as const,
+      item,
+    }))
+  }
+  if (panel === 'construction') {
+    const out: Layer3ListEntry[] = []
+    let i = 0
+    while (i < LAYER3_CONSTRUCTION.length) {
+      const e = LAYER3_CONSTRUCTION[i]!
+      if (isLayer3ConstructionGroup(e)) {
+        const visible: NavItemProject[] = []
+        i++
+        while (i < LAYER3_CONSTRUCTION.length && !isLayer3ConstructionGroup(LAYER3_CONSTRUCTION[i]!)) {
+          const item = LAYER3_CONSTRUCTION[i]! as NavItemProject
+          if (isProjectNavPathVisible(item.pathSuffix)) visible.push(item)
+          i++
+        }
+        if (visible.length > 0) {
+          out.push({ kind: 'group', label: e.label })
+          for (const item of visible) out.push({ kind: 'link', item })
+        }
+      } else {
+        const item = e as NavItemProject
+        if (isProjectNavPathVisible(item.pathSuffix)) out.push({ kind: 'link', item })
+        i++
+      }
+    }
+    return out
+  }
+  return []
 })
 
 const layer3ActiveSuffix = computed(() =>
-  resolveActiveProjectPathSuffix(layer3Items.value.map((c) => c.pathSuffix))
+  resolveActiveProjectPathSuffix(
+    layer3Items.value.filter((e) => e.kind === 'link').map((e) => e.item.pathSuffix)
+  )
 )
 
 function isLayer3NavActive(pathSuffix: string): boolean {
   return layer3ActiveSuffix.value === pathSuffix
 }
 
+function l3EntryKey(entry: Layer3ListEntry, idx: number): string {
+  if (entry.kind === 'group') return `g-${idx}-${entry.label}`
+  return entry.item.id
+}
+
 /** 各 Layer 3 模組的第一個可見頁 pathSuffix，drill 進入時導向該頁 */
 function getFirstPathSuffixForPanel(panelId: 'project-mgmt' | 'construction' | 'repair'): string {
-  const list =
-    panelId === 'project-mgmt'
-      ? LAYER3_PROJECT_MGMT
-      : panelId === 'construction'
-        ? LAYER3_CONSTRUCTION
-        : LAYER3_REPAIR
-  const first = list.find((c) => isProjectNavPathVisible(c.pathSuffix))
-  if (first) return first.pathSuffix
+  if (panelId === 'construction') {
+    for (const e of LAYER3_CONSTRUCTION) {
+      if (!isLayer3ConstructionGroup(e) && isProjectNavPathVisible(e.pathSuffix)) {
+        return e.pathSuffix
+      }
+    }
+  } else {
+    const list = panelId === 'project-mgmt' ? LAYER3_PROJECT_MGMT : LAYER3_REPAIR
+    const first = list.find((c) => isProjectNavPathVisible(c.pathSuffix))
+    if (first) return first.pathSuffix
+  }
   const fallback = {
     'project-mgmt': '/management/overview',
     construction: '/monitoring/history',
@@ -831,52 +883,61 @@ function isTenantFeatureNavActive(featureId: string): boolean {
                     <span class="truncate">主畫面</span>
                   </Button>
                 </div>
-                <div
-                  v-for="child in layer3Items"
-                  :key="child.id"
-                  class="flex min-h-9 items-center rounded-md"
-                  :class="collapsed ? 'justify-center' : 'pl-3'"
-                >
-                  <Tooltip v-if="collapsed">
-                    <TooltipTrigger as-child>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        :class="
-                          cn(
-                            'h-9 w-9 shrink-0 justify-center rounded-md',
-                            isLayer3NavActive(child.pathSuffix) &&
-                              'bg-accent text-accent-foreground'
-                          )
-                        "
-                        @click="goToProjectPath(child.pathSuffix)"
-                      >
-                        <component
-                          :is="ICON_MAP[child.icon] ?? LayoutDashboard"
-                          class="size-4 shrink-0"
-                        />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">{{ child.label }}</TooltipContent>
-                  </Tooltip>
-                  <Button
-                    v-else
-                    variant="ghost"
-                    :class="
-                      cn(
-                        'h-9 w-full justify-start gap-3 rounded-md px-3',
-                        isLayer3NavActive(child.pathSuffix) && 'bg-accent text-accent-foreground'
-                      )
-                    "
-                    @click="goToProjectPath(child.pathSuffix)"
+                <template v-for="(entry, l3Idx) in layer3Items" :key="l3EntryKey(entry, l3Idx)">
+                  <div
+                    v-if="entry.kind === 'group'"
+                    v-show="!collapsed"
+                    class="px-3 py-1.5 text-xs font-medium text-muted-foreground"
                   >
-                    <component
-                      :is="ICON_MAP[child.icon] ?? LayoutDashboard"
-                      class="size-4 shrink-0"
-                    />
-                    <span class="truncate">{{ child.label }}</span>
-                  </Button>
-                </div>
+                    {{ entry.label }}
+                  </div>
+                  <div
+                    v-else
+                    class="flex min-h-9 items-center rounded-md"
+                    :class="collapsed ? 'justify-center' : 'pl-3'"
+                  >
+                    <Tooltip v-if="collapsed">
+                      <TooltipTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          :class="
+                            cn(
+                              'h-9 w-9 shrink-0 justify-center rounded-md',
+                              isLayer3NavActive(entry.item.pathSuffix) &&
+                                'bg-accent text-accent-foreground'
+                            )
+                          "
+                          @click="goToProjectPath(entry.item.pathSuffix)"
+                        >
+                          <component
+                            :is="ICON_MAP[entry.item.icon] ?? LayoutDashboard"
+                            class="size-4 shrink-0"
+                          />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{{ entry.item.label }}</TooltipContent>
+                    </Tooltip>
+                    <Button
+                      v-else
+                      variant="ghost"
+                      :class="
+                        cn(
+                          'h-9 w-full justify-start gap-3 rounded-md px-3',
+                          isLayer3NavActive(entry.item.pathSuffix) &&
+                            'bg-accent text-accent-foreground'
+                        )
+                      "
+                      @click="goToProjectPath(entry.item.pathSuffix)"
+                    >
+                      <component
+                        :is="ICON_MAP[entry.item.icon] ?? LayoutDashboard"
+                        class="size-4 shrink-0"
+                      />
+                      <span class="truncate">{{ entry.item.label }}</span>
+                    </Button>
+                  </div>
+                </template>
               </div>
             </div>
           </div>

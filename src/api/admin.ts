@@ -1,6 +1,7 @@
 import { apiClient } from './client'
 import { API_PATH } from '@/constants/api'
 import type { ApiResponse } from '@/types/api'
+import type { AdminUserItem } from '@/types/user'
 
 /** 當前使用者所屬租戶品牌（供 header 顯示，僅需登入） */
 export interface TenantBranding {
@@ -75,4 +76,29 @@ export async function getTenantLogoBlob(): Promise<Blob> {
     responseType: 'blob',
   })
   return res.data
+}
+
+export type BulkImportTenantMemberFailedRow = {
+  rowNumber: number
+  email: string
+  message: string
+}
+
+/** 下載租戶成員批次匯入 Excel 樣板（中文表頭 .xlsx） */
+export async function downloadTenantMembersImportTemplate(): Promise<Blob> {
+  const res = await apiClient.get<Blob>(API_PATH.ADMIN_USERS_IMPORT_TEMPLATE, {
+    responseType: 'blob',
+  })
+  return res.data
+}
+
+/** 批次匯入租戶成員；platform_admin 須傳 tenantId */
+export async function bulkImportTenantMembers(
+  rows: Record<string, unknown>[],
+  tenantId?: string
+): Promise<{ created: AdminUserItem[]; failed: BulkImportTenantMemberFailedRow[] }> {
+  const { data } = await apiClient.post<
+    ApiResponse<{ created: AdminUserItem[]; failed: BulkImportTenantMemberFailedRow[] }>
+  >(API_PATH.ADMIN_USERS_IMPORT, { rows }, { params: tenantId ? { tenantId } : undefined })
+  return data.data
 }

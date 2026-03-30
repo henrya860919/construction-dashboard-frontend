@@ -39,6 +39,9 @@ export const API_PATH = {
   /** 單租後台（需 admin 角色） */
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,
   ADMIN_USERS: `${API_V1}/admin/users`,
+  /** 租戶成員批次匯入：GET 下載 CSV 樣板、POST 送出 rows */
+  ADMIN_USERS_IMPORT_TEMPLATE: `${API_V1}/admin/users/import-template`,
+  ADMIN_USERS_IMPORT: `${API_V1}/admin/users/import`,
   ADMIN_TENANT_INFO: `${API_V1}/admin/tenant-info`,
   /** 本租戶模組開通狀態（唯讀）；platform_admin 須帶 query tenantId */
   ADMIN_TENANT_MODULE_ENTITLEMENTS: `${API_V1}/admin/tenant/module-entitlements`,

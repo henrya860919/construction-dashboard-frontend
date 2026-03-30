@@ -24,9 +24,63 @@ export const PERMISSION_MODULES = [
   'construction.electronic_form',
   'repair.overview',
   'repair.record',
+  /** 租戶人資：組織架構（部門樹／維護） */
+  'hr.organization',
+  /** 租戶人資：組織成員與職務指派 */
+  'hr.org_members',
+  /** 租戶人資：職位主檔 */
+  'hr.positions',
 ] as const
 
 export type PermissionModuleId = (typeof PERMISSION_MODULES)[number]
+
+/**
+ * 租戶／成員權限範本 UI：左欄「系統層」分類（採購／財務預留尚無對應模組 id）
+ */
+export const PERMISSION_SYSTEM_LAYER_IDS = ['engineering', 'procurement', 'hr', 'finance'] as const
+export type PermissionSystemLayerId = (typeof PERMISSION_SYSTEM_LAYER_IDS)[number]
+
+export const PERMISSION_SYSTEM_LAYERS: readonly {
+  id: PermissionSystemLayerId
+  label: string
+}[] = [
+  { id: 'engineering', label: '工程管理' },
+  { id: 'procurement', label: '採購管理' },
+  { id: 'hr', label: '人資管理' },
+  { id: 'finance', label: '財務管理' },
+] as const
+
+const HR_LAYER_MODULE_IDS = new Set<PermissionModuleId>([
+  'hr.organization',
+  'hr.org_members',
+  'hr.positions',
+])
+
+/**
+ * 各功能模組所屬系統層（租戶權限範本左欄）。
+ * `hr.*` 對應人資後台（/hr/...）；其餘專案內模組歸工程管理；採購／財務待模組上線。
+ */
+export const PERMISSION_MODULE_SYSTEM_LAYER: Record<PermissionModuleId, PermissionSystemLayerId> =
+  Object.fromEntries(
+    PERMISSION_MODULES.map((id) => [
+      id,
+      (HR_LAYER_MODULE_IDS.has(id) ? 'hr' : 'engineering') satisfies PermissionSystemLayerId,
+    ])
+  ) as Record<PermissionModuleId, PermissionSystemLayerId>
+
+export function permissionModulesForSystemLayer(
+  layerId: PermissionSystemLayerId
+): PermissionModuleId[] {
+  return PERMISSION_MODULES.filter((id) => PERMISSION_MODULE_SYSTEM_LAYER[id] === layerId)
+}
+
+/** 矩陣左欄預設選中：第一個含有模組的系統層 */
+export function defaultSystemLayerForMatrix(): PermissionSystemLayerId {
+  for (const { id } of PERMISSION_SYSTEM_LAYERS) {
+    if (permissionModulesForSystemLayer(id).length > 0) return id
+  }
+  return 'engineering'
+}
 
 /** 平台尚未儲存開通時視為全部關閉；已開通時僅關閉列於 disabledModuleIds 者 */
 export function effectivePlatformDisabledModuleIds(
@@ -154,6 +208,9 @@ export const PERMISSION_MODULE_LABELS: Record<PermissionModuleId, string> = {
   'construction.electronic_form': '電子表單（填寫／審核）',
   'repair.overview': '報修總覽',
   'repair.record': '報修紀錄',
+  'hr.organization': '組織管理（部門）',
+  'hr.org_members': '組織成員與指派',
+  'hr.positions': '職位管理',
 }
 
 export const PERMISSION_PRESET_OPTIONS = [

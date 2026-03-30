@@ -1113,8 +1113,8 @@ async function confirmBatchDelete() {
             >權限範本 — {{ permMember?.name || permMember?.email || '成員' }}</DialogTitle
           >
           <DialogDescription>
-            此矩陣為「加入專案時」複製到該成員的預設模組權限；不影響已存在專案內已覆寫的權限。表頭勾選可全選／取消該欄（略過不可編輯的儲存格）。
-            標示「平台未開通」之列由平台設定關閉，與租戶資訊頁模組開通狀態一致，無法在此勾選。
+            此矩陣為「加入專案時」複製到該成員的預設模組權限；不影響已存在專案內已覆寫的權限。左側為系統層分類，右側為該層各功能的
+            新增／讀取／更新／刪除；表頭勾選可全選／取消該欄（略過不可編輯的儲存格）。標示「平台未開通」之列由平台設定關閉，與租戶資訊頁模組開通狀態一致，無法在此勾選。
           </DialogDescription>
         </DialogHeader>
         <div v-if="permLoading" class="flex shrink-0 justify-center py-12">
@@ -1149,11 +1149,12 @@ async function confirmBatchDelete() {
                 套用至表單
               </Button>
             </div>
-            <div class="min-h-0 flex-1 overflow-hidden">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
               <PermissionMatrixForm
                 v-model="permModules"
+                variant="systemLayers"
                 :platform-disabled-module-ids="platformDisabledModuleIds"
-                class="min-h-[200px]"
+                class="min-h-0 flex-1"
               />
             </div>
             <p v-if="permError" class="shrink-0 text-sm text-destructive">{{ permError }}</p>

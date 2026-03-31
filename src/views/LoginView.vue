@@ -24,7 +24,7 @@ async function onSubmit() {
   loading.value = true
   try {
     const data = await login({ email: form.email.trim(), password: form.password })
-    authStore.setAuth(data.accessToken, data.user)
+    authStore.setAuth(data.accessToken, data.refreshToken, data.user)
     router.push(authStore.isPlatformAdmin ? ROUTE_PATH.PLATFORM_ADMIN_TENANTS : ROUTE_PATH.PROJECTS)
   } catch (e: unknown) {
     const err = e as { response?: { data?: { error?: { message?: string } } } }

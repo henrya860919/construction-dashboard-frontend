@@ -21,11 +21,12 @@ export async function logout() {
   await apiClient.post(API_PATH.AUTH_LOGOUT)
 }
 
-export async function refreshToken() {
-  const { data } = await apiClient.post<ApiResponse<{ accessToken: string }>>(
-    API_PATH.AUTH_REFRESH
+export async function callRefreshToken(currentRefreshToken: string) {
+  const { data } = await apiClient.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
+    API_PATH.AUTH_REFRESH,
+    { refreshToken: currentRefreshToken }
   )
-  return data.data.accessToken
+  return data.data
 }
 
 export interface ChangePasswordPayload {

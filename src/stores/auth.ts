@@ -4,11 +4,20 @@ import type { User } from '@/types/auth'
 import { useProjectPermissionsStore } from '@/stores/projectPermissions'
 
 const TOKEN_KEY = 'construction_dashboard_access_token'
+const REFRESH_TOKEN_KEY = 'construction_dashboard_refresh_token'
 const USER_KEY = 'construction_dashboard_user'
 
 function getStoredToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+function getStoredRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY)
   } catch {
     return null
   }
@@ -25,6 +34,7 @@ function getStoredUser(): User | null {
 
 export const useAuthStore = defineStore('auth', () => {
   const accessToken = ref<string | null>(getStoredToken())
+  const refreshToken = ref<string | null>(getStoredRefreshToken())
   const user = ref<User | null>(getStoredUser())
 
   const isAuthenticated = computed(() => !!accessToken.value)
@@ -41,11 +51,13 @@ export const useAuthStore = defineStore('auth', () => {
       user.value?.systemRole === 'tenant_admin'
   )
 
-  function setAuth(token: string, userData: User) {
+  function setAuth(token: string, newRefreshToken: string, userData: User) {
     accessToken.value = token
+    refreshToken.value = newRefreshToken
     user.value = userData
     try {
       localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken)
       localStorage.setItem(USER_KEY, JSON.stringify(userData))
     } catch {}
   }
@@ -54,6 +66,13 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = token
     try {
       localStorage.setItem(TOKEN_KEY, token)
+    } catch {}
+  }
+
+  function setRefreshToken(token: string) {
+    refreshToken.value = token
+    try {
+      localStorage.setItem(REFRESH_TOKEN_KEY, token)
     } catch {}
   }
 
@@ -66,6 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function clearAuth() {
     accessToken.value = null
+    refreshToken.value = null
     user.value = null
     try {
       useProjectPermissionsStore().clearAll()
@@ -74,12 +94,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
     try {
       localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(REFRESH_TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
     } catch {}
   }
 
   return {
     accessToken,
+    refreshToken,
     user,
     isAuthenticated,
     isPlatformAdmin,
@@ -87,6 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
     canAccessAdmin,
     setAuth,
     setToken,
+    setRefreshToken,
     setUser,
     clearAuth,
   }

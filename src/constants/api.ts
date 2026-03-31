@@ -35,6 +35,8 @@ export const API_PATH = {
   ADMIN_ORG_ASSIGNMENTS: `${API_V1}/admin/org/assignments`,
   ADMIN_ORG_ASSIGNMENT: (id: string) =>
     `${API_V1}/admin/org/assignments/${encodeURIComponent(id)}`,
+  /** 當前使用者頂部 Header 系統層顯示（project_user） */
+  USERS_ME_HEADER_SYSTEM_LAYERS: `${API_V1}/users/me/header-system-layers`,
   PROJECTS: `${API_V1}/projects`,
   /** 單租後台（需 admin 角色） */
   ADMIN_PROJECTS: `${API_V1}/admin/projects`,

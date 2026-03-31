@@ -2,6 +2,7 @@
 import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectRoutePermissionGuard } from '@/composables/useProjectRoutePermissionGuard'
+import { useHeaderSystemLayersSync } from '@/composables/useHeaderSystemLayersSync'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
@@ -34,6 +35,7 @@ const showMainToolbarRow = computed(
 )
 
 useProjectRoutePermissionGuard()
+useHeaderSystemLayersSync()
 
 watch(
   () => route.path,

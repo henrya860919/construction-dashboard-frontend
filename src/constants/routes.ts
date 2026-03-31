@@ -31,6 +31,9 @@ export const ROUTE_PATH = {
   /** 租戶自建動態功能（列表／詳情） */
   FEATURES: '/features',
   PROCUREMENT: '/procurement',
+  BIDDING: '/bidding',
+  CUSTOMER: '/customer',
+  WORKS: '/works',
   HR: '/hr',
   FINANCE: '/finance',
   /** 專案列表（獨立入口，選專案後進入 /p/:projectId/dashboard） */

@@ -3,7 +3,11 @@ import { API_PATH } from '@/constants'
 import type { ApiResponse } from '@/types'
 import type { ProjectPermissionsPayload } from '@/types/permissions'
 import type { PermissionModuleId } from '@/constants/permission-modules'
-import { PERMISSION_MODULES } from '@/constants/permission-modules'
+import {
+  PERMISSION_MODULES,
+  mergeHeaderSystemLayersFromApi,
+  type PermissionSystemLayerId,
+} from '@/constants/permission-modules'
 import type { ModulePermissionFlags } from '@/types/permissions'
 
 export type ModulesMap = Partial<Record<PermissionModuleId, ModulePermissionFlags>> &
@@ -52,29 +56,60 @@ export async function fetchMyProjectPermissions(
   return (data.data?.modules ?? {}) as Record<PermissionModuleId, ProjectPermissionsPayload['modules'][string]>
 }
 
+export type TenantPermissionTemplateApi = {
+  modules: ModulesMap
+  headerSystemLayers: Record<PermissionSystemLayerId, boolean>
+}
+
+/** GET /api/v1/users/me/header-system-layers */
+export async function fetchMyHeaderSystemLayers(): Promise<
+  Record<PermissionSystemLayerId, boolean>
+> {
+  const { data } = await apiClient.get<
+    ApiResponse<{ headerSystemLayers: Record<string, boolean> }>
+  >(API_PATH.USERS_ME_HEADER_SYSTEM_LAYERS)
+  return mergeHeaderSystemLayersFromApi(data.data?.headerSystemLayers)
+}
+
 /** GET /api/v1/admin/users/:id/permission-template */
 export async function fetchTenantPermissionTemplate(
   userId: string,
   tenantId?: string
-): Promise<ModulesMap> {
+): Promise<TenantPermissionTemplateApi> {
   const q = tenantQuery(tenantId)
   const { data } = await apiClient.get<
-    ApiResponse<{ modules: Record<string, ModulePermissionFlags> }>
+    ApiResponse<{
+      modules: Record<string, ModulePermissionFlags>
+      headerSystemLayers: Record<string, boolean>
+    }>
   >(`${API_PATH.ADMIN_USERS}/${encodeURIComponent(userId)}/permission-template${q}`)
-  return mergeAllModules(data.data?.modules)
+  return {
+    modules: mergeAllModules(data.data?.modules),
+    headerSystemLayers: mergeHeaderSystemLayersFromApi(data.data?.headerSystemLayers),
+  }
 }
 
 /** PUT /api/v1/admin/users/:id/permission-template */
 export async function replaceTenantPermissionTemplate(
   userId: string,
   modules: Record<string, ModulePermissionFlags>,
+  headerSystemLayers: Record<PermissionSystemLayerId, boolean>,
   tenantId?: string
-): Promise<ModulesMap> {
+): Promise<TenantPermissionTemplateApi> {
   const q = tenantQuery(tenantId)
   const { data } = await apiClient.put<
-    ApiResponse<{ modules: Record<string, ModulePermissionFlags> }>
-  >(`${API_PATH.ADMIN_USERS}/${encodeURIComponent(userId)}/permission-template${q}`, { modules })
-  return mergeAllModules(data.data?.modules)
+    ApiResponse<{
+      modules: Record<string, ModulePermissionFlags>
+      headerSystemLayers: Record<string, boolean>
+    }>
+  >(`${API_PATH.ADMIN_USERS}/${encodeURIComponent(userId)}/permission-template${q}`, {
+    modules,
+    headerSystemLayers,
+  })
+  return {
+    modules: mergeAllModules(data.data?.modules),
+    headerSystemLayers: mergeHeaderSystemLayersFromApi(data.data?.headerSystemLayers),
+  }
 }
 
 export type PresetKey = 'site_supervisor' | 'equipment_manager' | 'owner_viewer' | 'project_engineer'
@@ -84,15 +119,21 @@ export async function applyTenantPermissionPreset(
   userId: string,
   presetKey: PresetKey,
   tenantId?: string
-): Promise<ModulesMap> {
+): Promise<TenantPermissionTemplateApi> {
   const q = tenantQuery(tenantId)
   const { data } = await apiClient.post<
-    ApiResponse<{ modules: Record<string, ModulePermissionFlags> }>
+    ApiResponse<{
+      modules: Record<string, ModulePermissionFlags>
+      headerSystemLayers: Record<string, boolean>
+    }>
   >(
     `${API_PATH.ADMIN_USERS}/${encodeURIComponent(userId)}/permission-template/apply-preset${q}`,
     { presetKey }
   )
-  return mergeAllModules(data.data?.modules)
+  return {
+    modules: mergeAllModules(data.data?.modules),
+    headerSystemLayers: mergeHeaderSystemLayersFromApi(data.data?.headerSystemLayers),
+  }
 }
 
 export type ProjectMemberPermissionsWithBaseline = {

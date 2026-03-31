@@ -49,8 +49,10 @@ import {
 } from '@/api/project-permissions'
 import {
   PERMISSION_PRESET_OPTIONS,
+  defaultHeaderSystemLayersVisible,
   effectivePlatformDisabledModuleIds,
   type PermissionModuleId,
+  type PermissionSystemLayerId,
 } from '@/constants/permission-modules'
 import {
   bulkImportTenantMembers,
@@ -564,6 +566,9 @@ function onOpenChange(open: boolean) {
 const permDialogOpen = ref(false)
 const permMember = ref<AdminUserItem | null>(null)
 const permModules = ref<ModulesMap>({})
+const permHeaderLayers = ref<Record<PermissionSystemLayerId, boolean>>(
+  defaultHeaderSystemLayersVisible()
+)
 const permLoading = ref(false)
 const permSaving = ref(false)
 const permPresetLoading = ref(false)
@@ -583,10 +588,13 @@ async function openPermissionTemplateDialog(member: AdminUserItem) {
     return
   }
   try {
-    permModules.value = await fetchTenantPermissionTemplate(member.id, tid)
+    const payload = await fetchTenantPermissionTemplate(member.id, tid)
+    permModules.value = payload.modules
+    permHeaderLayers.value = payload.headerSystemLayers
   } catch {
     permError.value = '無法載入權限範本'
     permModules.value = {}
+    permHeaderLayers.value = defaultHeaderSystemLayersVisible()
   } finally {
     permLoading.value = false
   }
@@ -597,6 +605,7 @@ function closePermissionTemplateDialog() {
   permMember.value = null
   permError.value = ''
   permModules.value = {}
+  permHeaderLayers.value = defaultHeaderSystemLayersVisible()
 }
 
 async function applyPermissionPreset() {
@@ -607,7 +616,9 @@ async function applyPermissionPreset() {
   permPresetLoading.value = true
   permError.value = ''
   try {
-    permModules.value = await applyTenantPermissionPreset(member.id, key, tid)
+    const payload = await applyTenantPermissionPreset(member.id, key, tid)
+    permModules.value = payload.modules
+    permHeaderLayers.value = payload.headerSystemLayers
   } catch (e: unknown) {
     const res =
       e && typeof e === 'object' && 'response' in e
@@ -627,7 +638,14 @@ async function savePermissionTemplate() {
   permError.value = ''
   try {
     const payload = toFullModulesPayload(permModules.value)
-    permModules.value = await replaceTenantPermissionTemplate(member.id, payload, tid)
+    const saved = await replaceTenantPermissionTemplate(
+      member.id,
+      payload,
+      permHeaderLayers.value,
+      tid
+    )
+    permModules.value = saved.modules
+    permHeaderLayers.value = saved.headerSystemLayers
     closePermissionTemplateDialog()
   } catch (e: unknown) {
     const res =
@@ -1114,7 +1132,7 @@ async function confirmBatchDelete() {
           >
           <DialogDescription>
             此矩陣為「加入專案時」複製到該成員的預設模組權限；不影響已存在專案內已覆寫的權限。左側為系統層分類，右側為該層各功能的
-            新增／讀取／更新／刪除；表頭勾選可全選／取消該欄（略過不可編輯的儲存格）。標示「平台未開通」之列由平台設定關閉，與租戶資訊頁模組開通狀態一致，無法在此勾選。
+            新增／讀取／更新／刪除；表頭勾選可全選／取消該欄（略過不可編輯的儲存格）。左側每列右邊開關可控制該系統是否顯示於頂部「系統模組」列（僅影響此成員）。標示「平台未開通」之列由平台設定關閉，與租戶資訊頁模組開通狀態一致，無法在此勾選。
           </DialogDescription>
         </DialogHeader>
         <div v-if="permLoading" class="flex shrink-0 justify-center py-12">
@@ -1152,6 +1170,7 @@ async function confirmBatchDelete() {
             <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
               <PermissionMatrixForm
                 v-model="permModules"
+                v-model:header-layer-visible="permHeaderLayers"
                 variant="systemLayers"
                 :platform-disabled-module-ids="platformDisabledModuleIds"
                 class="min-h-0 flex-1"

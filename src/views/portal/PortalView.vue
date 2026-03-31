@@ -19,7 +19,7 @@ const pendingCount = ref(0)
       </h1>
       <p v-if="tenantName" class="mt-1 text-sm text-muted-foreground">{{ tenantName }}</p>
       <p class="mt-2 text-sm text-muted-foreground">
-        請使用頂部列的<strong class="font-medium text-foreground">系統模組</strong>切換工程／採購／人資／財務（採購、人資、財務將陸續開放）。
+        請使用頂部列的<strong class="font-medium text-foreground">系統模組</strong>切換工程、採購、投標、客戶、工務、人資、財務等（部分模組功能將陸續開放）。
       </p>
     </div>
 

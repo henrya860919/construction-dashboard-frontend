@@ -166,6 +166,9 @@ const router = createRouter({
           meta: { hideSidebar: true },
         },
         { path: 'procurement', redirect: ROUTE_PATH.PORTAL },
+        { path: 'bidding', redirect: ROUTE_PATH.PORTAL },
+        { path: 'customer', redirect: ROUTE_PATH.PORTAL },
+        { path: 'works', redirect: ROUTE_PATH.PORTAL },
         { path: 'finance', redirect: ROUTE_PATH.PORTAL },
         {
           path: 'lab/electronic-sheet-template',

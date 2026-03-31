@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '@/types/auth'
 import { useProjectPermissionsStore } from '@/stores/projectPermissions'
+import { useSystemModuleHeaderStore } from '@/stores/systemModuleHeader'
 
 const TOKEN_KEY = 'construction_dashboard_access_token'
 const USER_KEY = 'construction_dashboard_user'
@@ -69,6 +70,11 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     try {
       useProjectPermissionsStore().clearAll()
+    } catch {
+      /* pinia 尚未就緒時略過 */
+    }
+    try {
+      useSystemModuleHeaderStore().resetHeaderLayerVisibility()
     } catch {
       /* pinia 尚未就緒時略過 */
     }

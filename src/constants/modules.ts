@@ -1,14 +1,30 @@
-/** 四大系統（Header、之後側欄第一層）；icon 為 lucide-vue-next 元件名稱，見 AppHeader MODULE_ICONS */
+/**
+ * Header「系統模組」與權限矩陣「系統層」對齊：`layerId` 對應 {@link PermissionSystemLayerId}。
+ * 顯示與否由 {@link useSystemModuleHeaderStore} 控制（預設全顯，日後可接租戶設定／權限）。
+ */
+import type { PermissionSystemLayerId } from './permission-modules'
+
+/** Lucide 圖示鍵，與 AppHeader 內 MODULE_ICONS 對齊 */
+export type SystemModuleIconKey =
+  | 'HardHat'
+  | 'Package'
+  | 'Gavel'
+  | 'Handshake'
+  | 'ClipboardList'
+  | 'Users'
+  | 'Wallet'
 
 export interface SystemModule {
+  /** 與 layerId 一致，供路由／除錯辨識 */
   key: string
   name: string
-  /** Lucide 圖示鍵，與 AppHeader 內 MODULE_ICONS 對齊 */
-  icon: 'HardHat' | 'Package' | 'Users' | 'Wallet'
+  icon: SystemModuleIconKey
   path: string
   description: string
   /** false = 即將推出，顯示但不可進入 */
   available: boolean
+  /** 對應權限設定左欄系統層；Header 可依此層一併隱藏 */
+  layerId: PermissionSystemLayerId
 }
 
 export interface SubModule {
@@ -17,6 +33,7 @@ export interface SubModule {
   systemModule: string
 }
 
+/** 順序與 `permission-modules` 的 PERMISSION_SYSTEM_LAYERS 一致 */
 export const SYSTEM_MODULES: SystemModule[] = [
   {
     key: 'engineering',
@@ -25,6 +42,7 @@ export const SYSTEM_MODULES: SystemModule[] = [
     path: '/projects',
     description: '專案、施工、合約、報修',
     available: true,
+    layerId: 'engineering',
   },
   {
     key: 'procurement',
@@ -33,6 +51,34 @@ export const SYSTEM_MODULES: SystemModule[] = [
     path: '/procurement',
     description: '請購、供應商、庫存',
     available: false,
+    layerId: 'procurement',
+  },
+  {
+    key: 'bidding',
+    name: '投標管理',
+    icon: 'Gavel',
+    path: '/bidding',
+    description: '標案、投標、開標',
+    available: false,
+    layerId: 'bidding',
+  },
+  {
+    key: 'customer',
+    name: '客戶管理',
+    icon: 'Handshake',
+    path: '/customer',
+    description: '客戶、聯絡、商機',
+    available: false,
+    layerId: 'customer',
+  },
+  {
+    key: 'works',
+    name: '工務管理',
+    icon: 'ClipboardList',
+    path: '/works',
+    description: '工務、派工、現場事務',
+    available: false,
+    layerId: 'works',
   },
   {
     key: 'hr',
@@ -41,6 +87,7 @@ export const SYSTEM_MODULES: SystemModule[] = [
     path: '/hr',
     description: '組織、職位、員工',
     available: true,
+    layerId: 'hr',
   },
   {
     key: 'finance',
@@ -49,6 +96,7 @@ export const SYSTEM_MODULES: SystemModule[] = [
     path: '/finance',
     description: '預算、帳款、報表',
     available: false,
+    layerId: 'finance',
   },
 ]
 

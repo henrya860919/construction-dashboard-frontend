@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import {
   Menu,
   User,
@@ -10,6 +11,9 @@ import {
   House,
   HardHat,
   Package,
+  Gavel,
+  Handshake,
+  ClipboardList,
   Users,
   Wallet,
   ChevronDown,
@@ -40,6 +44,7 @@ import { useDevice } from '@/composables/useDevice'
 import { useAppPreferenceStore } from '@/stores/appPreference'
 import { ROUTE_PATH } from '@/constants/routes'
 import { SYSTEM_MODULES, type SystemModule } from '@/constants/modules'
+import { useSystemModuleHeaderStore } from '@/stores/systemModuleHeader'
 import { useUploadQueueStore } from '@/stores/uploadQueue'
 import { useAuth } from '@/composables/useAuth'
 import UploadQueuePanel from '@/components/common/UploadQueuePanel.vue'
@@ -52,6 +57,9 @@ import { useTenantLogoUrl } from '@/composables/useTenantLogoUrl'
 const MODULE_ICONS: Record<SystemModule['icon'], LucideIcon> = {
   HardHat,
   Package,
+  Gavel,
+  Handshake,
+  ClipboardList,
   Users,
   Wallet,
 }
@@ -63,6 +71,8 @@ const sidebarStore = useSidebarStore()
 const { isMobileApp } = useDevice()
 const appPreference = useAppPreferenceStore()
 const authStore = useAuthStore()
+const systemModuleHeaderStore = useSystemModuleHeaderStore()
+const { visibleSystemModules } = storeToRefs(systemModuleHeaderStore)
 const uploadQueueStore = useUploadQueueStore()
 const announcementStore = useAnnouncementStore()
 const tenantBrandingStore = useTenantBrandingStore()
@@ -125,6 +135,9 @@ function isSystemModuleActive(mod: SystemModule): boolean {
     )
   }
   if (mod.key === 'procurement') return path.startsWith(ROUTE_PATH.PROCUREMENT)
+  if (mod.key === 'bidding') return path.startsWith(ROUTE_PATH.BIDDING)
+  if (mod.key === 'customer') return path.startsWith(ROUTE_PATH.CUSTOMER)
+  if (mod.key === 'works') return path.startsWith(ROUTE_PATH.WORKS)
   if (mod.key === 'hr') return path.startsWith(ROUTE_PATH.HR)
   if (mod.key === 'finance') return path.startsWith(ROUTE_PATH.FINANCE)
   return false
@@ -146,12 +159,19 @@ function moduleNavIconClass(mod: SystemModule): string {
 
 const isPortalRoute = computed(() => route.path === ROUTE_PATH.PORTAL)
 
-/** 小螢幕選單觸發器：/portal 顯示首頁；否則顯示目前作用中模組（無則預設工程） */
-const activeSystemModule = computed(() => SYSTEM_MODULES.find((m) => isSystemModuleActive(m)) ?? null)
+/** 小螢幕選單觸發器：/portal 顯示首頁；否則顯示目前作用中模組（僅計入 Header 可見者） */
+const activeSystemModule = computed(
+  () => visibleSystemModules.value.find((m) => isSystemModuleActive(m)) ?? null
+)
+
+/** 手機版觸發列圖示／後備：可見清單為空時退回工程管理常數 */
+const mobileTriggerModule = computed(
+  () => activeSystemModule.value ?? visibleSystemModules.value[0] ?? SYSTEM_MODULES[0]
+)
 
 const mobileModuleTriggerLabel = computed(() => {
   if (isPortalRoute.value) return '首頁'
-  return activeSystemModule.value?.name ?? SYSTEM_MODULES[0].name
+  return mobileTriggerModule.value.name
 })
 
 /** 租戶管理員：單租後台入口（置於使用者選單，非平台管理員） */
@@ -236,11 +256,11 @@ function goToTenantAdmin() {
               />
               <component
                 v-else
-                :is="MODULE_ICONS[(activeSystemModule ?? SYSTEM_MODULES[0]).icon]"
+                :is="MODULE_ICONS[mobileTriggerModule.icon]"
                 :class="
                   cn(
                     'size-4 shrink-0',
-                    (activeSystemModule ?? SYSTEM_MODULES[0]).available
+                    mobileTriggerModule.available
                       ? 'text-foreground'
                       : 'text-muted-foreground/60'
                   )
@@ -254,7 +274,7 @@ function goToTenantAdmin() {
           <DropdownMenuContent align="center" class="w-56" :side-offset="6">
             <DropdownMenuLabel>系統模組</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <template v-for="mod in SYSTEM_MODULES" :key="mod.key">
+            <template v-for="mod in visibleSystemModules" :key="mod.key">
               <DropdownMenuItem
                 v-if="mod.available"
                 :class="
@@ -297,11 +317,11 @@ function goToTenantAdmin() {
 
       <!-- md 以上：維持橫向模組按鈕 -->
       <nav
-        class="hidden max-w-[min(100vw-12rem,48rem)] items-center justify-center gap-1 overflow-x-auto px-0.5 [scrollbar-width:thin] md:flex"
+        class="hidden max-w-[min(100vw-12rem,56rem)] items-center justify-center gap-1 overflow-x-auto px-0.5 [scrollbar-width:thin] md:flex"
         role="navigation"
         aria-label="系統模組"
       >
-        <template v-for="mod in SYSTEM_MODULES" :key="mod.key">
+        <template v-for="mod in visibleSystemModules" :key="mod.key">
           <Button
             v-if="mod.available"
             type="button"

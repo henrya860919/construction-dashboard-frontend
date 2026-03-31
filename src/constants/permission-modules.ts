@@ -30,14 +30,28 @@ export const PERMISSION_MODULES = [
   'hr.org_members',
   /** 租戶人資：職位主檔 */
   'hr.positions',
+  /** 投標管理（預留；功能上線後掛路由與 assert） */
+  'bidding.overview',
+  /** 客戶管理（預留） */
+  'customer.overview',
+  /** 工務管理（預留） */
+  'works.overview',
 ] as const
 
 export type PermissionModuleId = (typeof PERMISSION_MODULES)[number]
 
 /**
- * 租戶／成員權限範本 UI：左欄「系統層」分類（採購／財務預留尚無對應模組 id）
+ * 租戶／成員權限範本 UI：左欄「系統層」分類（採購／財務等可尚無對應模組 id，右欄為空狀態）
  */
-export const PERMISSION_SYSTEM_LAYER_IDS = ['engineering', 'procurement', 'hr', 'finance'] as const
+export const PERMISSION_SYSTEM_LAYER_IDS = [
+  'engineering',
+  'procurement',
+  'bidding',
+  'customer',
+  'works',
+  'hr',
+  'finance',
+] as const
 export type PermissionSystemLayerId = (typeof PERMISSION_SYSTEM_LAYER_IDS)[number]
 
 export const PERMISSION_SYSTEM_LAYERS: readonly {
@@ -46,25 +60,34 @@ export const PERMISSION_SYSTEM_LAYERS: readonly {
 }[] = [
   { id: 'engineering', label: '工程管理' },
   { id: 'procurement', label: '採購管理' },
+  { id: 'bidding', label: '投標管理' },
+  { id: 'customer', label: '客戶管理' },
+  { id: 'works', label: '工務管理' },
   { id: 'hr', label: '人資管理' },
   { id: 'finance', label: '財務管理' },
 ] as const
 
-const HR_LAYER_MODULE_IDS = new Set<PermissionModuleId>([
-  'hr.organization',
-  'hr.org_members',
-  'hr.positions',
-])
+/** 非「工程管理」預設層的模組 id → 系統層 */
+const PERMISSION_MODULE_LAYER_OVERRIDES: Partial<
+  Record<PermissionModuleId, PermissionSystemLayerId>
+> = {
+  'hr.organization': 'hr',
+  'hr.org_members': 'hr',
+  'hr.positions': 'hr',
+  'bidding.overview': 'bidding',
+  'customer.overview': 'customer',
+  'works.overview': 'works',
+}
 
 /**
  * 各功能模組所屬系統層（租戶權限範本左欄）。
- * `hr.*` 對應人資後台（/hr/...）；其餘專案內模組歸工程管理；採購／財務待模組上線。
+ * `hr.*`、`bidding.*`、`customer.*`、`works.*` 對應各系統層；其餘專案內模組歸工程管理。
  */
 export const PERMISSION_MODULE_SYSTEM_LAYER: Record<PermissionModuleId, PermissionSystemLayerId> =
   Object.fromEntries(
     PERMISSION_MODULES.map((id) => [
       id,
-      (HR_LAYER_MODULE_IDS.has(id) ? 'hr' : 'engineering') satisfies PermissionSystemLayerId,
+      (PERMISSION_MODULE_LAYER_OVERRIDES[id] ?? 'engineering') satisfies PermissionSystemLayerId,
     ])
   ) as Record<PermissionModuleId, PermissionSystemLayerId>
 
@@ -72,6 +95,27 @@ export function permissionModulesForSystemLayer(
   layerId: PermissionSystemLayerId
 ): PermissionModuleId[] {
   return PERMISSION_MODULES.filter((id) => PERMISSION_MODULE_SYSTEM_LAYER[id] === layerId)
+}
+
+/** 頂部 Header 各系統層預設皆顯示（與後端 default 一致） */
+export function defaultHeaderSystemLayersVisible(): Record<PermissionSystemLayerId, boolean> {
+  const out = {} as Record<PermissionSystemLayerId, boolean>
+  for (const id of PERMISSION_SYSTEM_LAYER_IDS) {
+    out[id] = true
+  }
+  return out
+}
+
+/** 合併 API 回傳之 headerSystemLayers（缺漏鍵視為 true） */
+export function mergeHeaderSystemLayersFromApi(
+  raw: Record<string, boolean> | undefined | null
+): Record<PermissionSystemLayerId, boolean> {
+  const out = defaultHeaderSystemLayersVisible()
+  if (!raw || typeof raw !== 'object') return out
+  for (const id of PERMISSION_SYSTEM_LAYER_IDS) {
+    if (typeof raw[id] === 'boolean') out[id] = raw[id] as boolean
+  }
+  return out
 }
 
 /** 矩陣左欄預設選中：第一個含有模組的系統層 */
@@ -211,6 +255,9 @@ export const PERMISSION_MODULE_LABELS: Record<PermissionModuleId, string> = {
   'hr.organization': '組織管理（部門）',
   'hr.org_members': '組織成員與指派',
   'hr.positions': '職位管理',
+  'bidding.overview': '投標管理（總覽／預留）',
+  'customer.overview': '客戶管理（總覽／預留）',
+  'works.overview': '工務管理（總覽／預留）',
 }
 
 export const PERMISSION_PRESET_OPTIONS = [

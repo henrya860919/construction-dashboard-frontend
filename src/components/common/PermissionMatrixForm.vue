@@ -4,6 +4,7 @@ import type { HTMLAttributes } from 'vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import {
   PERMISSION_MODULES,
@@ -30,12 +31,17 @@ const props = withDefaults(
      * systemLayers：左欄系統層、右欄該層 CRUD（租戶成員權限範本）
      */
     variant?: 'flat' | 'systemLayers'
+    /**
+     * 租戶權限範本：各系統層是否在頂部 Header 顯示；與 variant=systemLayers 併用
+     */
+    headerLayerVisible?: Record<PermissionSystemLayerId, boolean>
     class?: HTMLAttributes['class']
   }>(),
   {
     highlightModuleIds: () => [],
     platformDisabledModuleIds: () => [],
     variant: 'flat',
+    headerLayerVisible: undefined,
   }
 )
 
@@ -44,6 +50,7 @@ const platformDisabledSet = computed(() => new Set(props.platformDisabledModuleI
 
 const emit = defineEmits<{
   'update:modelValue': [v: Partial<Record<PermissionModuleId, ModulePermissionFlags>>]
+  'update:headerLayerVisible': [v: Record<PermissionSystemLayerId, boolean>]
 }>()
 
 const defaultFlags: ModulePermissionFlags = {
@@ -81,7 +88,14 @@ const rows = computed(() =>
   }))
 )
 
+/** 目前選取之系統層已關閉頂部顯示時，不允許編輯該層功能模組 CRUD（與左側開關語意一致） */
+const isCurrentSystemLayerHeaderOff = computed(() => {
+  if (!isSystemLayers.value || !props.headerLayerVisible) return false
+  return props.headerLayerVisible[selectedSystemLayer.value] === false
+})
+
 function cellDisabled(module: PermissionModuleId, key: PermissionMatrixFlagKey): boolean {
+  if (isCurrentSystemLayerHeaderOff.value) return true
   if (platformDisabledSet.value.has(module)) return true
   return !!PERMISSION_MATRIX_UI_DISABLED[module]?.[key]
 }
@@ -128,6 +142,14 @@ function onHeaderColumnUpdate(flag: PermissionMatrixFlagKey, v: boolean | 'indet
   const checked = boolFromChecked(v)
   toggleColumnAll(flag, checked)
 }
+
+function onHeaderLayerSwitch(layerId: PermissionSystemLayerId, v: boolean | string) {
+  const cur = props.headerLayerVisible
+  if (!cur) return
+  /** Reka Switch 以 modelValue 更新；勿用 checked／update:checked，否則父層狀態不會變、儲存永遠是預設全開 */
+  const visible = v === true || v === 'true'
+  emit('update:headerLayerVisible', { ...cur, [layerId]: visible })
+}
 </script>
 
 <template>
@@ -143,24 +165,35 @@ function onHeaderColumnUpdate(flag: PermissionMatrixFlagKey, v: boolean | 'indet
     <!-- 左欄：系統層（僅租戶權限範本等） -->
     <aside
       v-if="isSystemLayers"
-      class="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-border bg-muted/30 p-2 md:w-52 md:flex-col md:gap-0.5 md:border-b-0 md:border-r md:border-border"
+      class="flex shrink-0 flex-row gap-2 overflow-x-auto border-b border-border bg-muted/30 p-2 md:w-60 md:flex-col md:gap-1.5 md:border-b-0 md:border-r md:border-border"
       aria-label="系統層"
     >
-      <Button
+      <div
         v-for="layer in PERMISSION_SYSTEM_LAYERS"
         :key="layer.id"
-        type="button"
-        size="sm"
-        variant="ghost"
-        class="h-9 shrink-0 justify-start px-3 md:w-full"
-        :class="
-          selectedSystemLayer === layer.id && 'bg-accent font-medium text-accent-foreground'
-        "
-        :aria-pressed="selectedSystemLayer === layer.id"
-        @click="selectSystemLayer(layer.id)"
+        class="flex min-w-[148px] shrink-0 items-center gap-2 md:min-w-0 md:w-full"
       >
-        {{ layer.label }}
-      </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          class="h-9 min-w-0 flex-1 justify-start px-2"
+          :class="
+            selectedSystemLayer === layer.id && 'bg-accent font-medium text-accent-foreground'
+          "
+          :aria-pressed="selectedSystemLayer === layer.id"
+          @click="selectSystemLayer(layer.id)"
+        >
+          <span class="truncate">{{ layer.label }}</span>
+        </Button>
+        <Switch
+          v-if="headerLayerVisible"
+          :model-value="headerLayerVisible[layer.id] !== false"
+          class="shrink-0"
+          :aria-label="`${layer.label}：頂部系統列顯示`"
+          @update:model-value="(v: boolean | string) => onHeaderLayerSwitch(layer.id, v)"
+        />
+      </div>
     </aside>
 
     <!-- 右欄：功能模組 × CRUD（min-h-0 + overflow-auto 才能出現垂直捲軸） -->
@@ -169,9 +202,17 @@ function onHeaderColumnUpdate(flag: PermissionMatrixFlagKey, v: boolean | 'indet
         v-if="isSystemLayers && rows.length === 0"
         class="flex flex-1 items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground"
       >
-        此系統層尚無可設定的功能模組。採購管理等將於後續模組上線後顯示於此。
+        此系統層尚無可設定的功能模組。後續上線之功能模組將顯示於此。
       </div>
-      <div v-else class="min-h-0 flex-1 overflow-auto">
+      <template v-else>
+        <div
+          v-if="isSystemLayers && headerLayerVisible && isCurrentSystemLayerHeaderOff"
+          class="shrink-0 border-b border-border bg-muted/40 px-3 py-2.5 text-sm leading-relaxed text-muted-foreground"
+          role="status"
+        >
+          此系統層已關閉「頂部系統列顯示」。請先開啟左側開關後，才可編輯本層功能模組權限；下方勾選為唯讀，已儲存資料不變。
+        </div>
+        <div class="min-h-0 flex-1 overflow-auto">
         <table class="w-full min-w-[640px] text-sm">
           <thead>
             <tr class="sticky top-0 z-[1] border-b border-border bg-muted/95 backdrop-blur-sm">
@@ -302,7 +343,8 @@ function onHeaderColumnUpdate(flag: PermissionMatrixFlagKey, v: boolean | 'indet
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
